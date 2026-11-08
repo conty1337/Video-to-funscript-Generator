@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, QUrl
 
-try:  # Qt Multimedia is part of PySide6-Essentials, but its backend may be missing
+try:  # Qt Multimedia is part of PySide6-Essentials, but needs libpulse.so.0 from the system
     from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-except ImportError:  # pragma: no cover - depends on the installation
+    IMPORT_ERROR = ""
+except ImportError as e:  # pragma: no cover - depends on the installation
     QAudioOutput = QMediaPlayer = None
+    IMPORT_ERROR = str(e)
 
 #: re-sync the audio when it is further than this from the video clock
 MAX_DRIFT_MS = 120

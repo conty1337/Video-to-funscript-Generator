@@ -49,6 +49,9 @@ def _run_selftest(app, win, out: str) -> None:
         track = "mit Tonspur" if win.audio.has_audio else "ohne Tonspur"
         print(f"selftest: {len(win.curve.actions)} Punkte, Ton {'ok' if sound else 'FEHLT'} ({track}), "
               f"Screenshot {out}")
+        if not sound:
+            from .audio import IMPORT_ERROR
+            print(f"selftest: Qt Multimedia nicht ladbar: {IMPORT_ERROR or 'unbekannter Fehler'}")
         win.dirty = False
         app.exit(0 if ok else 1)
 
