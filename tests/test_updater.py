@@ -128,3 +128,30 @@ def test_restart_resets_pyinstaller_env(monkeypatch, tmp_path):
     assert argv[1:] == ["video.mp4"]
     assert env["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
     assert "APPIMAGE" not in env and env["LD_LIBRARY_PATH"] == "/orig"
+
+
+def test_ssl_context_prefers_system_bundle_then_certifi(monkeypatch, tmp_path):
+    import certifi
+
+    loaded = []
+
+    class Ctx:
+        def load_verify_locations(self, cafile):
+            loaded.append(cafile)
+
+    monkeypatch.setattr(updater.ssl, "create_default_context", lambda: Ctx())
+    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    bundle = tmp_path / "ca-bundle.crt"
+    bundle.write_text("x")
+    # Fedora-like: system bundle exists -> used
+    monkeypatch.setattr(updater, "SYSTEM_CA_FILES", (str(tmp_path / "missing.pem"), str(bundle)))
+    monkeypatch.setattr(updater, "_ssl_ctx", None)
+    updater.ssl_context()
+    assert loaded == [str(bundle)]
+    # nothing on the system -> certifi
+    loaded.clear()
+    monkeypatch.setattr(updater, "SYSTEM_CA_FILES", (str(tmp_path / "missing.pem"),))
+    monkeypatch.setattr(updater, "_ssl_ctx", None)
+    updater.ssl_context()
+    assert loaded == [certifi.where()]
+    monkeypatch.setattr(updater, "_ssl_ctx", None)

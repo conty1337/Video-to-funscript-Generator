@@ -39,6 +39,12 @@ cat > "$APPDIR/AppRun" <<'RUN'
 HERE="$(dirname "$(readlink -f "$0")")"
 # Mesa rusticl-OpenCL für AMD-GPUs (z. B. RX 5700 XT) aktivieren, falls installiert
 export RUSTICL_ENABLE="${RUSTICL_ENABLE:-radeonsi}"
+# OpenCV sucht "libOpenCL.so"; Fedora/Nobara liefern ohne -devel-Paket nur ".so.1"
+if [ -z "${OPENCV_OPENCL_RUNTIME:-}" ]; then
+  for lib in /usr/lib64/libOpenCL.so.1 /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /usr/lib/libOpenCL.so.1; do
+    if [ -e "$lib" ]; then export OPENCV_OPENCL_RUNTIME="$lib"; break; fi
+  done
+fi
 exec "$HERE/usr/lib-vtf/vtf-gui" "$@"
 RUN
 chmod +x "$APPDIR/AppRun"

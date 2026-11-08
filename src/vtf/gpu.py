@@ -33,3 +33,25 @@ def opencl_device_name() -> str | None:
         return name
     except (cv2.error, AttributeError):
         return None
+
+
+_LOADER_PATHS = ("/usr/lib64/libOpenCL.so.1", "/usr/lib/x86_64-linux-gnu/libOpenCL.so.1",
+                 "/usr/lib/libOpenCL.so.1", "/usr/lib64/libOpenCL.so", "/usr/lib/libOpenCL.so")
+_ICD_DIR = "/etc/OpenCL/vendors"
+
+
+def opencl_hint() -> str:
+    """Why OpenCL is unavailable, with the fix for Fedora/Nobara (empty if it works)."""
+    import os
+
+    if opencl_device_name():
+        return ""
+    if not any(os.path.exists(p) for p in _LOADER_PATHS):
+        return "Kein OpenCL-Loader gefunden. Installieren: sudo dnf install ocl-icd mesa-libOpenCL"
+    icds = os.listdir(_ICD_DIR) if os.path.isdir(_ICD_DIR) else []
+    if not icds:
+        return "Kein OpenCL-Treiber installiert. Für AMD: sudo dnf install mesa-libOpenCL"
+    if any("rusticl" in n for n in icds) and not os.environ.get("RUSTICL_ENABLE"):
+        return "Mesa rusticl ist installiert, aber nicht aktiv: mit RUSTICL_ENABLE=radeonsi starten"
+    return ("OpenCL-Treiber vorhanden (" + ", ".join(sorted(icds)) + "), aber kein Gerät gefunden. "
+            "Prüfen mit: RUSTICL_ENABLE=radeonsi clinfo -l")

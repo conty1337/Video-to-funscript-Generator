@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -79,10 +80,47 @@ def can_self_update() -> bool:
     return p is not None and os.access(p.parent, os.W_OK)
 
 
+# CA bundles of common distributions. The AppImage ships Ubuntu's OpenSSL,
+# which only looks in /usr/lib/ssl, so on Fedora/Nobara we must point it here.
+SYSTEM_CA_FILES = (
+    "/etc/pki/tls/certs/ca-bundle.crt",                    # Fedora, Nobara, RHEL
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",   # Fedora (extracted)
+    "/etc/ssl/certs/ca-certificates.crt",                  # Debian, Ubuntu, Arch
+    "/etc/ssl/ca-bundle.pem",                              # openSUSE
+    "/etc/ssl/cert.pem",                                   # Alpine, macOS
+)
+_ssl_ctx: ssl.SSLContext | None = None
+
+
+def ssl_context() -> ssl.SSLContext:
+    """Verifying TLS context: system CA bundle if found, else certifi, else OpenSSL defaults."""
+    global _ssl_ctx
+    if _ssl_ctx is None:
+        ctx = ssl.create_default_context()
+        loaded = False
+        for path in ([os.environ["SSL_CERT_FILE"]] if os.environ.get("SSL_CERT_FILE") else []) + list(SYSTEM_CA_FILES):
+            if os.path.isfile(path):
+                try:
+                    ctx.load_verify_locations(cafile=path)
+                    loaded = True
+                    break
+                except (ssl.SSLError, OSError):
+                    continue
+        if not loaded:
+            try:
+                import certifi
+                ctx.load_verify_locations(cafile=certifi.where())
+            except (ImportError, ssl.SSLError, OSError):
+                pass
+        _ssl_ctx = ctx
+    return _ssl_ctx
+
+
 def _get(url: str, accept: str = "application/octet-stream"):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": accept})
     try:
-        return urllib.request.urlopen(req, timeout=TIMEOUT)
+        ctx = ssl_context() if url.startswith("https:") else None
+        return urllib.request.urlopen(req, timeout=TIMEOUT, context=ctx)
     except urllib.error.HTTPError as e:
         raise UpdateError(f"HTTP {e.code}") from e
     except (urllib.error.URLError, OSError) as e:
