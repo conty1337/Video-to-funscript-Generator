@@ -4,7 +4,8 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 22.04 hat Python 3.10–3.13 vorinstalliert, kein Download von GitHub-Releases nötig
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         python: ["3.10", "3.13"]
