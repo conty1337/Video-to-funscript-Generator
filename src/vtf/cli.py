@@ -70,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"vtf {__version__}")
         print(f"FFmpeg: {'ja' if has_ffmpeg() else 'nein'}")
         print(f"OpenCL: {gpu.opencl_device_name() or 'nicht verfügbar'}")
+        hint = gpu.opencl_hint()
+        if hint:
+            print(f"        {hint}")
         return 0
 
     an, gen = _settings(a)

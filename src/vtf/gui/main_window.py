@@ -164,7 +164,9 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(ocl_label)
         if not ocl:
             self.panel.opencl.setEnabled(False)
-            self.panel.opencl.setToolTip("Kein OpenCL-Gerät gefunden, siehe README: ROCm oder rusticl")
+            hint = gpu.opencl_hint()
+            self.panel.opencl.setToolTip(hint)
+            ocl_label.setToolTip(hint)
 
         self.updates = UpdateController(self, self.qsettings)
         self._build_menu()

@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["--check-update"]:   # ohne Oberfläche, z. B. zur Fehlersuche
+        return _check_update_cli()
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
@@ -60,3 +62,18 @@ def _run_selftest(app, win, out: str) -> None:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def _check_update_cli() -> int:
+    from .. import __version__, updater
+
+    try:
+        rel = updater.fetch_latest()
+    except updater.UpdateError as e:
+        print(f"Fehler bei der Update-Suche: {e}")
+        return 1
+    if updater.is_newer(rel.version):
+        print(f"Neue Version {rel.version} verfügbar (installiert: {__version__})")
+    else:
+        print(f"Version {__version__} ist aktuell (neuestes Release: {rel.tag})")
+    return 0
