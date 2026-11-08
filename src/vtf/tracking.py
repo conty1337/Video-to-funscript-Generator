@@ -27,10 +27,25 @@ FB_MAX_ERR = 1.0         # px, forward-backward consistency
 MAX_AREAS = 3
 
 
-def _features(gray: np.ndarray, mask: np.ndarray, n: int) -> np.ndarray | None:
+def _features(gray: np.ndarray, mask: np.ndarray | None, n: int,
+              rect: tuple[int, int, int, int] | None = None) -> np.ndarray | None:
+    """Corner points; with `rect` only that part of the image is searched (much
+    cheaper than masking the whole frame)."""
+    off = (0, 0)
+    if rect is not None:
+        x0, y0, x1, y1 = rect
+        if x1 - x0 < 8 or y1 - y0 < 8:
+            return None
+        gray = gray[y0:y1, x0:x1]
+        off = (x0, y0)
     pts = cv2.goodFeaturesToTrack(gray, maxCorners=n, qualityLevel=0.01, minDistance=3, mask=mask,
                                   blockSize=5)
-    return None if pts is None else pts.astype(np.float32)
+    if pts is None:
+        return None
+    pts = pts.astype(np.float32)
+    pts[..., 0] += off[0]
+    pts[..., 1] += off[1]
+    return pts
 
 
 def _lk(prev: np.ndarray, cur: np.ndarray, pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -63,7 +78,7 @@ class AreaTracker:
         return m
 
     def _refill(self, gray: np.ndarray) -> None:
-        new = _features(gray, self.mask(), MAX_POINTS)
+        new = _features(gray, None, MAX_POINTS, rect=self.rect())
         if new is None:
             return
         self.pts = new if self.pts is None or not len(self.pts) else np.vstack([self.pts, new])[:MAX_POINTS * 2]
@@ -101,22 +116,37 @@ class MultiTracker:
         self.shape = shape
         self.areas = [AreaTracker(b, shape) for b in boxes_px[:MAX_AREAS]]
         self.compensate = compensate_camera
+        self._bg: np.ndarray | None = None     # background points, kept from frame to frame
 
     def centers(self) -> np.ndarray:
         return np.array([a.center for a in self.areas])
 
     def _camera(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
-        mask = np.full(self.shape, 255, np.uint8)
-        for a in self.areas:
-            x0, y0, x1, y1 = a.rect()
-            mask[y0:y1, x0:x1] = 0
-        pts = _features(prev, mask, 120)
-        if pts is None or len(pts) < 8:
+        """Camera motion = median motion of points outside the areas. The points
+        are reused from frame to frame and only searched again when too few are left."""
+        if self._bg is None or len(self._bg) < 40:
+            mask = np.full(self.shape, 255, np.uint8)
+            for a in self.areas:
+                x0, y0, x1, y1 = a.rect()
+                mask[y0:y1, x0:x1] = 0
+            self._bg = _features(prev, mask, 120)
+        if self._bg is None or len(self._bg) < 8:
+            self._bg = None
             return np.zeros(2)
+        pts = self._bg
         nxt, good = _lk(prev, cur, pts)
         if good.sum() < 8:
+            self._bg = None
             return np.zeros(2)
-        return np.median((nxt[good] - pts[good]).reshape(-1, 2), axis=0).astype(np.float64)
+        d = np.median((nxt[good] - pts[good]).reshape(-1, 2), axis=0).astype(np.float64)
+        kept = nxt[good].reshape(-1, 2)
+        h, w = self.shape
+        inside = (kept[:, 0] >= 0) & (kept[:, 0] < w) & (kept[:, 1] >= 0) & (kept[:, 1] < h)
+        for a in self.areas:                     # points that walked into an area are dropped
+            x0, y0, x1, y1 = a.rect()
+            inside &= ~((kept[:, 0] >= x0) & (kept[:, 0] < x1) & (kept[:, 1] >= y0) & (kept[:, 1] < y1))
+        self._bg = kept[inside].reshape(-1, 1, 2).astype(np.float32)
+        return d
 
     def step(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
         """Returns the motion vector (dx, dy) for the script for this frame pair."""
