@@ -36,8 +36,11 @@ Eine Datei, keine Installation, Python wird nicht benötigt:
    ./Video-to-Funscript-*.AppImage
    ```
    Oder in Dolphin: Rechtsklick → Eigenschaften → Berechtigungen → „Ausführbar“.
-3. Optional ins Startmenü aufnehmen: mit **Gear Lever** (Flatpak, in Discover)
-   die AppImage-Datei öffnen und „Unlock / Move to the app menu“ wählen.
+3. Beim ersten Start trägt sich die App selbst ins Startmenü ein (abschaltbar
+   unter Hilfe → „Im Startmenü anzeigen“). Am besten legst du die Datei vorher
+   an ihren festen Platz, z. B. `~/Applications`. Wird sie verschoben, passt
+   der nächste Start den Eintrag an. Wer **Gear Lever** nutzt, bekommt keinen
+   doppelten Eintrag.
 
 **Updates kommen automatisch:** Beim Start sucht die App nach einer neuen
 Version, lädt sie im Hintergrund, prüft sie per SHA-256 und ersetzt die

@@ -29,6 +29,15 @@ rm -rf build/pyinstaller dist/vtf-gui
   --exclude-module tkinter --exclude-module pytest \
   "$ROOT/scripts/vtf_gui_entry.py"
 
+echo "==> Basis-Bibliotheken entfernen"
+# Diese Bibliotheken hat jedes Linux, und neuer als die aus Ubuntu 22.04.
+# Gebündelt würden sie zuerst geladen und Grafiktreiber, die zur Laufzeit
+# nachgeladen werden (Mesa rusticl/OpenCL), scheitern an der zu alten
+# libstdc++ (GLIBCXX-Version). Daher nimmt die App die des Systems.
+for lib in libstdc++.so.6 libgcc_s.so.1 libz.so.1 libzstd.so.1 libexpat.so.1 libffi.so.8 libtinfo.so.6; do
+  rm -f "dist/vtf-gui/_internal/$lib"
+done
+
 echo "==> AppDir"
 APPDIR=build/AppDir
 rm -rf "$APPDIR"
