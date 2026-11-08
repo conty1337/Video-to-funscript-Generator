@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
                                QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
@@ -19,7 +19,7 @@ from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
 from ..generator import generate, generate_axes
-from ..video import probe
+from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
@@ -322,6 +322,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
+        self._act(m, "Dekodierung testen…", self.test_decoding)
         self.updates.add_menu_entries(m)
         self._setup_desktop_integration(m)
 
@@ -742,7 +743,12 @@ class MainWindow(QMainWindow):
         self.regenerate()
         self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt")
+        dec = motion.meta.get("decoder")
+        dec_txt = f" · Dekodierung: {DECODER_LABELS.get(dec, dec)}" if dec else " · aus dem Zwischenspeicher"
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{dec_txt}")
+        errs = motion.meta.get("decoder_errors") or []
+        self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
+                                     if errs else "")
 
     def _analysis_failed(self, msg: str):
         self._analysis_end("Analyse fehlgeschlagen")
@@ -1003,6 +1009,38 @@ class MainWindow(QMainWindow):
             msg = di.auto_integrate(self._appimage)
             if msg:
                 self._status(msg)
+
+    def test_decoding(self):
+        """Try every decoder on the open video and show which one works and how fast."""
+        if not self.video_path:
+            QMessageBox.information(self, "Dekodierung testen", "Erst ein Video öffnen.")
+            return
+        self._status("Teste Dekodierung…")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            results = test_decoders(probe(self.video_path), self.panel.analysis_settings().width)
+        finally:
+            QApplication.restoreOverrideCursor()
+        lines = []
+        for r in results:
+            if r["ok"]:
+                lines.append(f"✓ {r['label']}: {r['fps']:.0f} Bilder/s")
+            else:
+                err = (r["error"] or "keine Bilder").replace("FFmpeg lieferte keine Frames: ", "")
+                lines.append(f"✗ {r['label']}:\n    {err[:300]}")
+        gpu_ok = any(r["ok"] and r["mode"] == "vaapi-gpu" for r in results)
+        lines.append("")
+        lines.append("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder "
+                     "„VAAPI“ wird das genutzt." if gpu_ok else
+                     "Die Grafikkarte kann dieses Video nicht dekodieren (Treiber, Codec oder "
+                     "ffmpeg ohne VAAPI). Unter Nobara hilft meist: sudo dnf install ffmpeg "
+                     "libva-utils mesa-va-drivers-freeworld")
+        lines.append("")
+        lines.append("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das "
+                     "Dekodieren läuft im eigenen Video-Block der Karte (VCN) und taucht dort kaum "
+                     "auf – sichtbar z.B. mit amdgpu_top. Das Tracking selbst rechnet die CPU.")
+        QMessageBox.information(self, "Dekodierung testen", "\n".join(lines))
+        self._status("Dekodierungstest fertig")
 
     def show_help(self):
         QMessageBox.information(self, "Bedienung", (

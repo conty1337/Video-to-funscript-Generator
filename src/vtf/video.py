@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
+import time
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +31,22 @@ class VideoInfo:
     @property
     def duration(self) -> float:
         return self.frame_count / self.fps if self.fps > 0 else 0.0
+
+
+def system_env() -> dict[str, str]:
+    """Environment for the system's own tools (ffmpeg, ffprobe).
+
+    Inside the AppImage, PyInstaller points LD_LIBRARY_PATH at the bundled
+    libraries (built on Ubuntu 22.04). The system ffmpeg must not load those:
+    older libssl/glib/X11 can keep it from starting or break its VAAPI driver,
+    and the app would silently fall back to decoding on the CPU."""
+    env = dict(os.environ)
+    if getattr(sys, "frozen", False) or "LD_LIBRARY_PATH_ORIG" in env:
+        if "LD_LIBRARY_PATH_ORIG" in env:
+            env["LD_LIBRARY_PATH"] = env.pop("LD_LIBRARY_PATH_ORIG")
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
 
 
 def has_ffmpeg() -> bool:
@@ -52,7 +70,8 @@ def _probe_ffprobe(path: str) -> VideoInfo | None:
         "-of", "json", path,
     ]
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=True).stdout
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=True,
+                             env=system_env()).stdout
         data = json.loads(out)
         stream = data["streams"][0]
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError):
@@ -139,7 +158,8 @@ def ffmpeg_command(path: str, w: int, h: int, mode: str, step: int) -> list[str]
 
 def _iter_ffmpeg(info: VideoInfo, w: int, h: int, hwaccel: str, step: int) -> Iterator[np.ndarray]:
     cmd = ffmpeg_command(info.path, w, h, hwaccel, step)
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=w * h * 8)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=w * h * 8,
+                            env=system_env())
     frame_size = w * h
     produced = 0
     try:
@@ -180,27 +200,73 @@ def _iter_cv2(info: VideoInfo, w: int, h: int, step: int) -> Iterator[np.ndarray
         cap.release()
 
 
+DECODER_LABELS = {
+    "vaapi-gpu": "Grafikkarte (VAAPI: dekodieren und verkleinern)",
+    "vaapi": "Grafikkarte dekodiert, CPU verkleinert (VAAPI)",
+    "auto": "FFmpeg mit automatischer Hardware-Beschleunigung",
+    "none": "CPU (FFmpeg)",
+    "opencv": "CPU (OpenCV, ohne FFmpeg)",
+}
+
+
 def iter_gray_frames(info: VideoInfo, width: int, hwaccel: str = "auto",
-                     step: int = 1, backend: str = "auto") -> Iterator[np.ndarray]:
+                     step: int = 1, backend: str = "auto",
+                     report: dict | None = None) -> Iterator[np.ndarray]:
     """Yield downscaled grayscale frames (every ``step``-th frame).
 
     Tries the decoder setups from :func:`decode_attempts` in order; one that
-    yields no frame at all (no GPU, codec not supported by it, ...) is skipped."""
+    yields no frame at all (no GPU, codec not supported by it, ...) is skipped.
+    ``report`` (optional) receives the decoder used and why others failed."""
     w, h = scaled_size(info, width)
     step = max(1, int(step))
+    if report is not None:
+        report.setdefault("errors", [])
+    if backend in ("auto", "ffmpeg") and not has_ffmpeg() and report is not None:
+        report["errors"].append(("ffmpeg", "ffmpeg/ffprobe nicht gefunden"))
     if backend in ("auto", "ffmpeg") and has_ffmpeg():
         attempts = decode_attempts(hwaccel, os.path.exists(VAAPI_DEVICE))
         for k, mode in enumerate(attempts):
             gen = _iter_ffmpeg(info, w, h, mode, step)
             try:
                 first = next(gen)
-            except (RuntimeError, StopIteration):
+            except (RuntimeError, StopIteration) as e:
+                if report is not None:
+                    report["errors"].append((mode, str(e) or "keine Bilder"))
                 if backend == "ffmpeg" and k == len(attempts) - 1:
                     raise
                 continue
+            if report is not None:
+                report["decoder"] = mode
             yield first
             yield from gen
             return
         if backend == "ffmpeg":
             raise RuntimeError("FFmpeg konnte das Video nicht dekodieren")
+    if report is not None:
+        report["decoder"] = "opencv"
     yield from _iter_cv2(info, w, h, step)
+
+
+def test_decoders(info: VideoInfo, width: int = 640, frames: int = 90) -> list[dict]:
+    """Try every decoder setup on the first frames of the video:
+    [{"mode", "label", "ok", "fps", "error"}, ...] (for the help menu)."""
+    w, h = scaled_size(info, width)
+    modes = ["vaapi-gpu", "vaapi", "none"] if has_ffmpeg() else []
+    out = []
+    for mode in modes:
+        t0 = time.perf_counter()
+        n, err = 0, ""
+        try:
+            for _ in _iter_ffmpeg(info, w, h, mode, 1):
+                n += 1
+                if n >= frames:
+                    break
+        except RuntimeError as e:
+            err = str(e)
+        dt = max(time.perf_counter() - t0, 1e-6)
+        out.append({"mode": mode, "label": DECODER_LABELS[mode], "ok": n > 0,
+                    "fps": n / dt if n else 0.0, "error": err})
+    if not has_ffmpeg():
+        out.append({"mode": "ffmpeg", "label": "FFmpeg", "ok": False, "fps": 0.0,
+                    "error": "ffmpeg/ffprobe nicht gefunden – sudo dnf install ffmpeg"})
+    return out

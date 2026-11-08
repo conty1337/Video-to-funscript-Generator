@@ -13,6 +13,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .video import system_env
+
 APP_ID = "video-to-funscript"
 RESOURCES = Path(__file__).resolve().parent / "gui" / "resources"
 ICON_SRC = RESOURCES / "vtf.svg"
@@ -125,7 +127,7 @@ def _refresh_menus() -> None:
         if shutil.which(cmd[0]):
             try:
                 subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                 start_new_session=True)
+                                 start_new_session=True, env=system_env())
             except OSError:
                 pass
 

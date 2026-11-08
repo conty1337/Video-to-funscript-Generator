@@ -23,3 +23,36 @@ def test_vaapi_falls_back_without_gpu(sine_video):
     gpu = list(iter_gray_frames(info, 160, "vaapi"))       # no GPU in CI: falls back
     assert len(gpu) == len(soft) > 0
     assert gpu[0].shape == soft[0].shape
+
+
+def test_system_env_drops_bundled_libraries(monkeypatch):
+    import sys
+
+    from vtf.video import system_env
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/.mount_x/usr/lib-vtf/_internal")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    assert "LD_LIBRARY_PATH" not in system_env()
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/mine")
+    assert system_env()["LD_LIBRARY_PATH"] == "/opt/mine"
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/usr/local/lib")          # not frozen: untouched
+    assert system_env()["LD_LIBRARY_PATH"] == "/usr/local/lib"
+
+
+def test_report_names_decoder_and_failures(sine_video):
+    info = probe(sine_video)
+    rep = {}
+    frames = list(iter_gray_frames(info, 160, "vaapi", report=rep))
+    assert frames and rep["decoder"] in ("vaapi-gpu", "vaapi", "none")
+    if rep["decoder"] == "none":                    # no GPU here: both GPU setups are reported
+        assert [m for m, _e in rep["errors"]] == ["vaapi-gpu", "vaapi"]
+
+
+def test_decoder_test_lists_every_setup(sine_video):
+    from vtf.video import test_decoders
+    res = test_decoders(probe(sine_video), 160, frames=10)
+    assert [r["mode"] for r in res] == ["vaapi-gpu", "vaapi", "none"]
+    soft = res[-1]
+    assert soft["ok"] and soft["fps"] > 0

@@ -240,6 +240,10 @@ aktualisieren sich daraufhin selbst.
    dekodiert *und* verkleinert die Grafikkarte, zur CPU gehen nur die kleinen
    Analysebilder. Klappt das nicht (z.B. Codec von der Karte nicht unterstützt),
    wird automatisch auf CPU-Dekodierung zurückgefallen.
+   Hilfe → „Dekodierung testen…“ zeigt, welcher Weg bei einem Video klappt und
+   wie schnell. Die „GPU-Auslastung“ in Systemmonitoren zeigt meist nur die
+   3D-Einheit; das Dekodieren läuft im Video-Block (VCN), sichtbar z.B. mit
+   `amdgpu_top`. Das Tracking selbst rechnet die CPU.
 2. Für jedes Bildpaar berechnet OpenCV den dichten optischen Fluss
    (Farnebäck). Die globale Kamerabewegung (Median) wird abgezogen und aus den
    am stärksten bewegten Pixeln ein Bewegungsvektor gebildet.
