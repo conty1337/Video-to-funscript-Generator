@@ -64,6 +64,8 @@ _ICONS = {
     "check": '<path d="M20 6 9 17l-5-5"/>',
     "chevron-down": '<path d="m6 9 6 6 6-6"/>',
     "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    "volume": '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+    "volume-x": '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/>',
     "film": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/>'
             '<path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/>'
             '<path d="M17 16.5h4"/>',
@@ -174,12 +176,16 @@ QSlider::handle:horizontal:hover {{ background: #ffffff; }}
 QSlider::sub-page:horizontal:disabled {{ background: {RAISED}; }}
 QSlider::handle:horizontal:disabled {{ background: {MUTED}; }}
 QSlider#timeline::sub-page:horizontal {{ background: {ACCENT}; }}
+QSlider#volume {{ min-width: 72px; max-width: 88px; }}
 
 QProgressBar {{ background: {RAISED}; border: none; border-radius: 2px; max-height: 4px; min-height: 4px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 2px; }}
 
 QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
 QScrollBar::handle:vertical {{ background: {RAISED}; border-radius: 4px; min-height: 24px; }}
+QScrollBar:horizontal {{ background: {RAISED}; height: 10px; margin: 0; border-radius: 5px; }}
+QScrollBar::handle:horizontal {{ background: {MUTED}; border-radius: 5px; min-width: 32px; }}
+QScrollBar::handle:horizontal:hover {{ background: {TEXT_2}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 

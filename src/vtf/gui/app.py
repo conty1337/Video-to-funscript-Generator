@@ -43,9 +43,12 @@ def _run_selftest(app, win, out: str) -> None:
     from PySide6.QtCore import QTimer
 
     def finish():
-        ok = bool(win.curve.actions)
+        sound = win.audio.available            # Qt Multimedia mitgepackt?
+        ok = bool(win.curve.actions) and sound
         win.grab().save(out)
-        print(f"selftest: {len(win.curve.actions)} Punkte, Screenshot {out}")
+        track = "mit Tonspur" if win.audio.has_audio else "ohne Tonspur"
+        print(f"selftest: {len(win.curve.actions)} Punkte, Ton {'ok' if sound else 'FEHLT'} ({track}), "
+              f"Screenshot {out}")
         win.dirty = False
         app.exit(0 if ok else 1)
 

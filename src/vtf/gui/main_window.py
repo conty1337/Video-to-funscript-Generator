@@ -19,10 +19,12 @@ from ..funscript import Action, Funscript, funscript_path_for, position_at
 from ..generator import generate
 from ..video import probe
 from . import theme
+from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
+from .timeline import TimelineSlider
 from .video_view import VideoView
 from .device_ui import DeviceController
 from .update_ui import UpdateController
@@ -51,7 +53,7 @@ class MainWindow(QMainWindow):
         self.rail = StrokeRail()
         self.curve = CurveWidget()
         self.panel = SettingsPanel()
-        self.slider = QSlider(Qt.Horizontal)
+        self.slider = TimelineSlider()
         self.slider.setObjectName("timeline")
         self.slider.setEnabled(False)
         self.time_label = QLabel("0:00.00 / 0:00.00")
@@ -60,6 +62,14 @@ class MainWindow(QMainWindow):
         self.play_btn = self._transport("play", "Abspielen (Leertaste)")
         self.back_btn = self._transport("chevron-left", "Frame zurück (←)")
         self.fwd_btn = self._transport("chevron-right", "Frame vor (→)")
+        self.audio = AudioPlayer(self)
+        self.mute_btn = self._transport("volume", "Ton an/aus (M)")
+        self.mute_btn.setEnabled(self.audio.available)
+        self.volume = QSlider(Qt.Horizontal)
+        self.volume.setObjectName("volume")
+        self.volume.setRange(0, 100)
+        self.volume.setToolTip("Lautstärke")
+        self.volume.setEnabled(self.audio.available)
         self.analyze_btn = QPushButton(theme.icon("activity", theme.ON_ACCENT), "Analysieren")
         self.analyze_btn.setObjectName("primary")
         self.analyze_btn.setEnabled(False)
@@ -78,7 +88,8 @@ class MainWindow(QMainWindow):
         self.curve_meta = QLabel("Noch nicht analysiert")
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
-        curve_hint = QLabel("Ziehen verschiebt · Doppelklick fügt hinzu · Rechtsklick löscht · Mausrad zoomt")
+        curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
+                           "Rechtsklick löscht · Mausrad zoomt")
         curve_hint.setObjectName("caption")
 
         controls = QHBoxLayout()
@@ -91,6 +102,9 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.slider, 1)
         controls.addSpacing(12)
         controls.addWidget(self.time_label)
+        controls.addSpacing(12)
+        controls.addWidget(self.mute_btn)
+        controls.addWidget(self.volume)
         stage = QHBoxLayout()
         stage.setContentsMargins(0, 0, 0, 0)
         stage.setSpacing(1)
@@ -188,6 +202,9 @@ class MainWindow(QMainWindow):
         self.play_btn.clicked.connect(self.toggle_play)
         self.back_btn.clicked.connect(lambda: self.step_frames(-1))
         self.fwd_btn.clicked.connect(lambda: self.step_frames(1))
+        self.mute_btn.clicked.connect(self.toggle_mute)
+        self.volume.valueChanged.connect(self._volume_changed)
+        self._load_audio_settings()
         self.slider.sliderMoved.connect(self.seek_frame)
         self.slider.sliderPressed.connect(lambda: self.seek_frame(self.slider.value()))
         self.analyze_btn.clicked.connect(self.start_analysis)
@@ -227,6 +244,8 @@ class MainWindow(QMainWindow):
         self._act(m, "Frame zurück", lambda: self.step_frames(-1), "Left")
         self._act(m, "1 s vor", lambda: self.step_frames(int(self.fps)), "Shift+Right")
         self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
+        m.addSeparator()
+        self._act(m, "Ton an/aus", self.toggle_mute, "M")
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
@@ -299,6 +318,7 @@ class MainWindow(QMainWindow):
             self.cap.release()
         self.cap = cap
         self.video_path = path
+        self.audio.load(path)
         self.qsettings.setValue("last_dir", str(Path(path).parent))
         self.fps = info.fps
         self.frame_count = max(1, info.frame_count)
@@ -307,6 +327,7 @@ class MainWindow(QMainWindow):
         self.redo_stack.clear()
         self.dirty = False
         self.slider.setRange(0, self.frame_count - 1)
+        self.slider.wheel_step = max(1, int(round(self.fps)))     # 1 s per wheel notch
         self.slider.setEnabled(True)
         for b in (self.play_btn, self.back_btn, self.fwd_btn, self.analyze_btn):
             b.setEnabled(True)
@@ -356,6 +377,7 @@ class MainWindow(QMainWindow):
         if self.timer.isActive():   # keep playing from the new position
             self._play_origin_ms = idx / self.fps * 1000
             self._clock.restart()
+            self.audio.seek(self._play_origin_ms)
 
     def seek_ms(self, ms: int):
         self.curve.follow = True
@@ -388,6 +410,7 @@ class MainWindow(QMainWindow):
                     break
             self._read_frame()
         if self.timer.isActive():
+            self.audio.sync(media_ms)
             self.devices.tick(media_ms, True)
             self.rail.set_device_position(self.devices.device_position())
 
@@ -404,13 +427,40 @@ class MainWindow(QMainWindow):
             self._clock.start()
             self.devices.set_actions(self.curve.actions)
             self.timer.start(10)
+            self.audio.play(self._play_origin_ms)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
 
     def pause(self):
         self.timer.stop()
+        self.audio.pause()
         self.devices.tick(0, False)
         self.rail.set_device_position(self.devices.device_position())
         self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
+
+    # ------------------------------------------------------------ sound
+    def _load_audio_settings(self):
+        try:
+            vol = int(self.qsettings.value("audio/volume", 80))
+        except (TypeError, ValueError):
+            vol = 80
+        muted = str(self.qsettings.value("audio/muted", "false")).lower() == "true"
+        self.volume.setValue(max(0, min(100, vol)))
+        self.audio.set_volume(self.volume.value() / 100)
+        self._set_muted(muted)
+
+    def _volume_changed(self, v: int):
+        self.audio.set_volume(v / 100)
+        self.qsettings.setValue("audio/volume", v)
+        if v > 0 and self.audio.muted:
+            self._set_muted(False)
+
+    def toggle_mute(self):
+        self._set_muted(not self.audio.muted)
+
+    def _set_muted(self, muted: bool):
+        self.audio.set_muted(muted)
+        self.qsettings.setValue("audio/muted", "true" if muted else "false")
+        self.mute_btn.setIcon(theme.icon("volume-x" if muted else "volume", theme.TEXT_2, 16))
 
     def emergency_stop(self):
         """Esc: stop the device immediately and pause playback."""
@@ -600,9 +650,11 @@ class MainWindow(QMainWindow):
             "3. 'Analysieren' klicken.\n"
             "4. Empfindlichkeit, Glättung usw. anpassen – die Kurve aktualisiert sich sofort.\n"
             "5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = hinzufügen,\n"
-            "   Rechtsklick/Entf = löschen, Mausrad = Zoom, Umschalt+Mausrad = scrollen.\n"
+            "   Rechtsklick/Entf = löschen, Mausrad = Zoom.\n"
+            "   Kurve verschieben: freie Fläche ziehen, Scrollleiste darunter,\n"
+            "   Umschalt+Mausrad oder waagrecht wischen (Touchpad).\n"
             "6. Strg+S speichert <Video>.funscript neben dem Video.\n\n"
-            "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück."))
+            "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus."))
 
     # ------------------------------------------------------------ misc
     def _status(self, msg: str):
@@ -647,6 +699,7 @@ class MainWindow(QMainWindow):
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         self.qsettings.sync()
         self.devices.shutdown()
+        self.audio.shutdown()
         if self.cap:
             self.cap.release()
         return True
@@ -658,6 +711,7 @@ class MainWindow(QMainWindow):
         self.cancel_analysis()
         self.updates.shutdown()
         self.devices.shutdown()
+        self.audio.shutdown()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         if self.cap:
             self.cap.release()
