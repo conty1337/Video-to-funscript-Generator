@@ -4,17 +4,22 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
-        python: ["3.10", "3.13"]
+        # "system" = Python 3.10 von Ubuntu 22.04 (ältestes unterstütztes Python),
+        # ohne Download von GitHub-Releases
+        python: ["system", "3.13"]
+    name: test (${{ matrix.python == 'system' && '3.10' || matrix.python }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        if: matrix.python != 'system'
         with:
           python-version: ${{ matrix.python }}
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
-      - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - run: python3 --version && python3 -m pip install --upgrade pip && python3 -m pip install -e ".[dev]"
+      - run: python3 -m pytest -q
         env:
           QT_QPA_PLATFORM: offscreen

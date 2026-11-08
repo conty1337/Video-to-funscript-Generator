@@ -13,7 +13,8 @@ dependencies = [
     "numpy>=1.24",
     # headless: avoids Qt plugin clashes with PySide6
     "opencv-python-headless>=4.8",
-    "PySide6>=6.5",
+    # Essentials = QtCore/Gui/Widgets/Svg, ohne WebEngine & Co. (deutlich kleiner)
+    "PySide6-Essentials>=6.5",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,9 @@ vtf-gui = "vtf.gui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"vtf.gui" = ["resources/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

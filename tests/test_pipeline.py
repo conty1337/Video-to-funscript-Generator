@@ -68,7 +68,7 @@ def test_funscript_roundtrip(tmp_path):
 
 def test_batch_skips_existing(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    from conftest import make_video
+    from videogen import make_video
     folder = tmp_path / "videos"
     (folder / "sub").mkdir(parents=True)
     v1 = make_video(folder / "a.avi", seconds=2)
