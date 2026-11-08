@@ -8,7 +8,7 @@ Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.1)
+## Funktionen (Stand 0.3)
 
 | | Funktion | Status |
 |---|---|---|
@@ -22,6 +22,11 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 8 | Stapelverarbeitung ganzer Ordner (GUI + Kommandozeile) | ✅ |
 | 9 | Bereits analysierte Videos überspringen | ✅ |
 | 10 | Gerätesteuerung (Fredorch F21S über Intiface Central, Simulation) | ✅ Teil 1, Test mit echtem Gerät steht aus |
+| 11 | Ton bei der Wiedergabe | ✅ |
+| 12 | Player-Modus mit Playlist | ✅ |
+| 13 | Tracking: markierte Körperteile/Objekte mit vielen Punkten verfolgen | ✅ |
+| 14 | Editor: Mehrfachauswahl, Kopieren/Einfügen, Abschnitt glätten/verstärken | ✅ |
+| 15 | Weitere Achsen (Surge, Sway, Twist, Roll, Pitch) | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -103,6 +108,11 @@ Auflösungen lohnt sich OpenCL eher.
 5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = neuer Punkt,
    Rechtsklick oder Entf = löschen, Mausrad = Zoom, Klick in die Kurve = zu
    dieser Stelle springen. Strg+Z / Strg+Umschalt+Z.
+   **Mehrere Punkte**: Umschalt- oder Strg+Ziehen auf freier Fläche zieht ein
+   Auswahlrechteck, Strg+Klick schaltet einzelne Punkte um, Strg+A wählt alle.
+   Ausgewählte Punkte werden zusammen verschoben. Strg+X/C/V schneidet aus,
+   kopiert und fügt an der Abspielposition ein (auch in ein anderes Video),
+   Strg+G glättet die Auswahl, Strg+↑/↓ verstärkt oder schwächt den Hub.
    Kurve verschieben: freie Fläche ziehen (oder mittlere Maustaste), die
    Scrollleiste darunter, Umschalt+Mausrad oder waagrecht wischen (Touchpad).
    Video-Zeitleiste: Klick springt direkt an die Stelle und lässt sich gleich
@@ -113,6 +123,35 @@ Auflösungen lohnt sich OpenCL eher.
 **Ton**: Beim Abspielen läuft der Ton des Videos mit, synchron zum Bild und
 zum Gerät. Lautsprecher-Knopf oder **M** schaltet ihn stumm, der Regler daneben
 stellt die Lautstärke ein. Beides merkt sich die App.
+
+**Tracking** (genauer bei unruhigen Videos): In den Analyse-Einstellungen
+„Methode: Tracking“ wählen, an eine Stelle spulen, wo alles gut zu sehen ist,
+und im Video bis zu 3 Bereiche aufziehen, z.B. um Hüfte und Oberschenkel.
+Jeder Bereich wird mit vielen Bildpunkten verfolgt.
+* 1 Bereich: dessen Bewegung (Kamerabewegung wird abgezogen).
+* 2–3 Bereiche: Bereich 1 relativ zu den anderen. Dann spielt die Kamera keine
+  Rolle mehr, auch Zoom und Schwenks stören kaum.
+
+Verfolgt wird ab dem Bild, auf dem markiert wurde. Beim Abspielen zeigt die
+Vorschau, wo die Bereiche gerade sind. Rechtsklick ins Video entfernt sie.
+
+**Weitere Achsen**: Über der Kurve wählst du die Achse: Hub (L0), Surge (L1),
+Sway (L2), Twist (R0), Roll (R1) oder Pitch (R2). Jede Achse hat eigene Punkte
+und wird beim Speichern als `<Video>.roll.funscript` usw. neben dem Video
+abgelegt, wie es Mehrachsen-Player (MultiFunPlayer, OFS) erwarten.
+Bearbeiten → „Weitere Achsen aus Analyse erzeugen“ berechnet Sway aus der
+seitlichen Bewegung und Roll aus dem Winkel zwischen den Tracking-Bereichen 1
+und 2. Twist und Pitch setzt du von Hand. Der Fredorch F21S hat nur eine Achse,
+das Gerät folgt deshalb immer „Hub“.
+
+**Player-Modus**: Oben auf **Player** (Strg+P). Die Seitenleiste zeigt dann die
+Playlist: Videos oder Ordner mit + hinzufügen oder hineinziehen, per Ziehen
+umsortieren, Entf entfernt. Abgespielt wird jeweils das Funscript neben dem
+Video, auf dem verbundenen Gerät, eins nach dem anderen. Optionen:
+wiederholen, zufällige Reihenfolge, Videos ohne Script überspringen. Bild ↑/↓
+springt zum vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es,
+zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
+speichern, die letzte merkt sich die App.
 
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
@@ -192,6 +231,11 @@ aktualisieren sich daraufhin selbst.
    Position aufsummiert, Drift wird entfernt, geglättet und normalisiert.
 4. Hoch- und Tiefpunkte (mit Hysterese = Empfindlichkeit) werden zu
    Funscript-Punkten.
+
+Beim **Tracking** ersetzt Schritt 2 der optische Fluss nur innerhalb der
+markierten Bereiche: Bis zu 60 Merkmalspunkte je Bereich werden mit
+Lucas-Kanade verfolgt, eine Vorwärts-Rückwärts-Prüfung verwirft abgerutschte
+Punkte, und der Bereich bewegt sich um den Median der übrigen.
 
 Da Schritt 1–2 (teuer) von 3–4 (billig) getrennt sind, wirken
 Script-Einstellungen sofort ohne neue Analyse.

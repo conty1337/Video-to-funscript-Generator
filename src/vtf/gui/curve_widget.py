@@ -15,6 +15,7 @@ Mouse:
 from __future__ import annotations
 
 import bisect
+from typing import ClassVar
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
@@ -36,7 +37,7 @@ class CurveWidget(QWidget):
     actionsEdited = Signal()           # user changed actions
     editStarted = Signal()             # before a change (for undo)
     selectionChanged = Signal(int)     # number of selected points
-    clipboard: list = []               # copied points, shared by all curves (editing.Clip)
+    clipboard: ClassVar[list] = []     # copied points, shared by all curves (editing.Clip)
 
     def __init__(self, parent=None):
         super().__init__(parent)

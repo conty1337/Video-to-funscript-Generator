@@ -19,8 +19,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-LK_PARAMS = dict(winSize=(21, 21), maxLevel=3,
-                 criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.03))
+LK_PARAMS = {"winSize": (21, 21), "maxLevel": 3,
+             "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.03)}
 MAX_POINTS = 60
 MIN_POINTS = 12          # fewer left -> search new points in the area
 FB_MAX_ERR = 1.0         # px, forward-backward consistency

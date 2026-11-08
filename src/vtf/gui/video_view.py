@@ -16,7 +16,6 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from . import theme
 
-
 TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
 MAX_TRACKS = 3
 

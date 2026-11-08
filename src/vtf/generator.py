@@ -199,3 +199,48 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None) -> Generate
     s = s or GeneratorSettings()
     t_ms, sig = build_signal(motion, s)
     return GeneratedScript(t_ms, sig, extract_actions(t_ms, sig, s))
+
+
+# ------------------------------------------------------------- further axes
+
+def roll_signal(motion: MotionData, s: GeneratorSettings) -> tuple[np.ndarray, np.ndarray] | None:
+    """Roll from tracking: the angle of the line from area 1 to area 2.
+    None without at least two tracked areas."""
+    tr = motion.tracks
+    if tr is None or tr.ndim != 3 or tr.shape[1] < 2 or len(tr) < 3:
+        return None
+    w = float(motion.meta.get("width", 1) or 1)
+    h = float(motion.meta.get("height", 1) or 1)
+    vec = (tr[:, 1] - tr[:, 0]) * np.array([w, h])
+    ang = np.unwrap(np.arctan2(vec[:, 1], vec[:, 0]))
+    fps = motion.fps
+    drift_n = int(round(s.drift_window_ms / 1000.0 * fps))
+    if drift_n > 2:
+        ang = ang - moving_average(ang, drift_n)
+    ang = gaussian_smooth(ang, s.smoothing_ms / 1000.0 * fps / 2.0)
+    if s.invert:
+        ang = -ang
+    # +-30 degrees (or the actual range, if smaller) -> 0..1
+    span = max(float(np.percentile(np.abs(ang), 98)), np.radians(5))
+    span = min(span, np.radians(30))
+    sig = np.clip(ang / (2 * span) + 0.5, 0.0, 1.0)
+    return np.arange(len(ang)) * (1000.0 / fps), sig
+
+
+def generate_axes(motion: MotionData, s: GeneratorSettings | None = None) -> dict[str, list[Action]]:
+    """Further axes that can be derived from the analysis:
+
+    * L2 sway: the horizontal motion
+    * R1 roll: the angle between tracked areas 1 and 2 (tracking with >= 2 areas)
+    """
+    from dataclasses import replace
+
+    s = s or GeneratorSettings()
+    out: dict[str, list[Action]] = {}
+    sway = replace(s, axis="horizontal", invert=False, full_stroke=False, pos_min=0, pos_max=100)
+    out["L2"] = generate(motion, sway).actions
+    roll = roll_signal(motion, replace(s, invert=False))
+    if roll is not None:
+        t_ms, sig = roll
+        out["R1"] = extract_actions(t_ms, sig, replace(s, full_stroke=False, pos_min=0, pos_max=100))
+    return out

@@ -344,12 +344,47 @@ def test_curve_multi_select_drag_copy_paste(app, sine_video):
     assert c.selection and min(c.actions[i].at for i in c.selection) == 3000
     # make the pasted strokes bigger
     sel = c.selection
-    span = lambda: max(c.actions[i].pos for i in sel) - min(c.actions[i].pos for i in sel)  # noqa: E731
+    span = lambda: max(c.actions[i].pos for i in sel) - min(c.actions[i].pos for i in sel)
     s0 = span()
     w.scale_points(1.2)
     assert span() > s0
     n = len(c.actions)
     w.delete_points()
     assert len(c.actions) == n - 3 and not c.selection
+    w.dirty = False
+    w.close()
+
+
+def test_axes_edit_save_load_and_device_uses_stroke(app, sine_video, tmp_path):
+    from pathlib import Path
+
+    from vtf.funscript import Action, load_axes
+    from vtf.gui.main_window import MainWindow
+
+    video = tmp_path / "axes.avi"
+    video.write_bytes(Path(sine_video).read_bytes())
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(video))
+    stroke = [Action(0, 0), Action(500, 100), Action(1000, 0)]
+    w.curve.set_actions(list(stroke))
+    w.switch_axis("R1")
+    assert w.axis == "R1" and w.curve.actions == []
+    assert w.stroke_actions() == stroke                 # device/rail keep the stroke
+    w._push_undo()
+    w.curve.set_actions([Action(0, 50), Action(300, 90)])
+    w._edited()
+    assert "· 2" in w.axis_box.currentText()
+    w.switch_axis("L0")
+    w.undo()                                            # jumps back to the roll axis
+    assert w.axis == "R1" and w.curve.actions == []
+    w.redo()
+    assert len(w.curve.actions) == 2
+    w.export()
+    assert (tmp_path / "axes.funscript").is_file() and (tmp_path / "axes.roll.funscript").is_file()
+    assert set(load_axes(video)) == {"L0", "R1"}
+    w.open_video(str(video))                            # reload: both axes are back
+    assert w.axis == "L0" and len(w.curve.actions) == 3
+    assert len(w.actions_for("R1")) == 2
     w.dirty = False
     w.close()

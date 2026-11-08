@@ -67,6 +67,34 @@ def position_at(actions: list[Action], ms: float) -> float | None:
     return a.pos + (b.pos - a.pos) * (ms - a.at) / max(1, b.at - a.at)
 
 
-def funscript_path_for(video: str | Path) -> Path:
-    """Players expect ``<video name>.funscript`` next to the video."""
-    return Path(video).with_suffix(".funscript")
+#: Script axes (TCode names) -> (label, file suffix). The multi-axis convention
+#: used by MultiFunPlayer, OFS & co.: <video>.funscript is the stroke (L0),
+#: the other axes are <video>.<name>.funscript next to it.
+AXES: dict[str, tuple[str, str]] = {
+    "L0": ("Hub", ""),
+    "L1": ("Surge", "surge"),
+    "L2": ("Sway", "sway"),
+    "R0": ("Twist", "twist"),
+    "R1": ("Roll", "roll"),
+    "R2": ("Pitch", "pitch"),
+}
+
+
+def funscript_path_for(video: str | Path, axis: str = "L0") -> Path:
+    """Players expect ``<video name>.funscript`` (and ``<video name>.roll.funscript`` etc.)."""
+    suffix = AXES[axis][1]
+    p = Path(video)
+    return p.with_suffix(f".{suffix}.funscript" if suffix else ".funscript")
+
+
+def load_axes(video: str | Path) -> dict[str, list[Action]]:
+    """All axis scripts lying next to the video (missing or broken files are left out)."""
+    out = {}
+    for axis in AXES:
+        f = funscript_path_for(video, axis)
+        if f.is_file():
+            try:
+                out[axis] = Funscript.load(f).actions
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+    return out

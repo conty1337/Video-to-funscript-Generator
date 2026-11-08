@@ -12,7 +12,7 @@ Clip = list[tuple[int, int]]          # (ms relative to the first point, positio
 
 
 def _clamp_pos(p: float) -> int:
-    return int(round(min(100.0, max(0.0, p))))
+    return round(min(100.0, max(0.0, p)))
 
 
 def move(actions: list[Action], sel: set[int], dt: float, dpos: float,
@@ -37,7 +37,7 @@ def move(actions: list[Action], sel: set[int], dt: float, dpos: float,
                 hi = min(hi, gap - 1)
             elif gap < 0:
                 lo = max(lo, gap + 1)
-    dt = int(round(min(max(dt, lo), hi)))
+    dt = round(min(max(dt, lo), hi))
     pos = [actions[i].pos for i in idx]
     dpos = min(max(dpos, -min(pos)), 100 - max(pos))
     out = list(actions)
