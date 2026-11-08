@@ -23,7 +23,25 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 9 | Bereits analysierte Videos überspringen | ✅ |
 | 10 | Bluetooth-Anbindung Fredorch F21S | geplant (z. B. über [Intiface/Buttplug](https://intiface.com/), Open Source) |
 
-## Installation (Nobara / Fedora)
+## Installation als AppImage (am einfachsten)
+
+Eine Datei, keine Installation, Python wird nicht benötigt:
+
+1. Unter **Releases** (oder unter Actions → appimage → Artifacts) die Datei
+   `Video-to-Funscript-<Version>-x86_64.AppImage` herunterladen.
+2. Ausführbar machen und starten:
+   ```bash
+   chmod +x Video-to-Funscript-*.AppImage
+   ./Video-to-Funscript-*.AppImage
+   ```
+   Oder in Dolphin: Rechtsklick → Eigenschaften → Berechtigungen → „Ausführbar“.
+3. Optional ins Startmenü aufnehmen: mit **Gear Lever** (Flatpak, in Discover)
+   die AppImage-Datei öffnen und „Unlock / Move to the app menu“ wählen.
+
+FFmpeg und die OpenCL-Treiber kommen weiterhin vom System (siehe unten).
+Ohne FFmpeg dekodiert das AppImage über das mitgelieferte OpenCV.
+
+## Installation aus dem Quellcode (Nobara / Fedora)
 
 ```bash
 sudo dnf install git python3 ffmpeg          # ffmpeg ist bei Nobara meist schon da
@@ -92,11 +110,15 @@ vtf info                                   # FFmpeg/OpenCL prüfen
 vtf analyze --help                         # alle Optionen
 ```
 
-## Eigenständige Programmdatei
+## AppImage selbst bauen
 
 ```bash
-./scripts/build-binary.sh   # erzeugt dist/vtf-gui/vtf-gui (PyInstaller)
+./scripts/build-appimage.sh   # erzeugt dist/Video-to-Funscript-<Version>-x86_64.AppImage
 ```
+
+Die GitHub-Action `appimage` baut das AppImage bei jedem Push auf `main` und bei
+jedem PR automatisch und testet es (Video analysieren, Screenshot). Bei einem
+Tag `v*` wird es an das Release angehängt.
 
 ## Wie die Analyse funktioniert
 

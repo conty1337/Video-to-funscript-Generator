@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 
 def main() -> int:
+    from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
     from . import theme
@@ -16,11 +18,42 @@ def main() -> int:
     app.setApplicationName("Video-to-Funscript Generator")
     app.setOrganizationName("video-to-funscript")
     app.setDesktopFileName("video-to-funscript")
+    app.setWindowIcon(QIcon(str(Path(__file__).with_name("resources") / "vtf.svg")))
+    args = sys.argv[1:]
+    selftest = None
+    if len(args) >= 3 and args[0] == "--selftest":   # vtf-gui --selftest VIDEO OUT.png
+        selftest = args[2]
+        args = args[1:2]
     win = MainWindow()
+    win.resize(1440, 900)
     win.show()
-    if len(sys.argv) > 1:
-        win.open_video(sys.argv[1])
+    if args:
+        win.open_video(args[0])
+    if selftest:
+        _run_selftest(app, win, selftest)
     return app.exec()
+
+
+def _run_selftest(app, win, out: str) -> None:
+    """Analyse the opened video, save a screenshot and quit (exit code 1 on failure)."""
+    from PySide6.QtCore import QTimer
+
+    def finish():
+        ok = bool(win.curve.actions)
+        win.grab().save(out)
+        print(f"selftest: {len(win.curve.actions)} Punkte, Screenshot {out}")
+        win.dirty = False
+        app.exit(0 if ok else 1)
+
+    def start():
+        win.start_analysis()
+        if win.worker is None:
+            app.exit(1)
+            return
+        win.worker.finished.connect(lambda: QTimer.singleShot(200, finish))
+
+    QTimer.singleShot(300, start)
+    QTimer.singleShot(120_000, lambda: app.exit(2))
 
 
 if __name__ == "__main__":

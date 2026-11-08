@@ -7,3 +7,4 @@ dist/
 .pytest_cache/
 *.funscript
 !tests/data/*.funscript
+selftest.*

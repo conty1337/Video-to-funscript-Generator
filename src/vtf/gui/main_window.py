@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
             return
         dur = self.curve.actions[-1].at - self.curve.actions[0].at
         rate = (n - 1) / 2 / (dur / 60000) if dur > 0 else 0
-        edited = " · bearbeitet" if self.dirty else ""
+        edited = " · nicht gespeichert" if self.dirty else ""
         self.curve_meta.setText(f"{n} Punkte · {rate:.0f} Hübe/min{edited}")
 
     def _confirm_discard(self) -> bool:
