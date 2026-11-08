@@ -1,0 +1,149 @@
+"""Video preview widget with ROI selection (drag a rectangle)."""
+
+from __future__ import annotations
+
+import cv2
+import numpy as np
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from . import theme
+
+
+class VideoView(QWidget):
+    roiChanged = Signal(object)  # normalized (x, y, w, h) or None
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(320, 180)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._img: QImage | None = None
+        self._roi: tuple[float, float, float, float] | None = None
+        self._drag_start: QPointF | None = None
+        self._drag_rect: QRectF | None = None
+        self.setMouseTracking(True)
+        self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen")
+
+    # ------------------------------------------------------------ frames
+    def set_frame(self, frame_bgr: np.ndarray | None) -> None:
+        if frame_bgr is None:
+            self._img = None
+        else:
+            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            h, w, _ = rgb.shape
+            self._img = QImage(rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()
+        self.update()
+
+    def set_roi(self, roi) -> None:
+        self._roi = tuple(roi) if roi else None
+        self.update()
+
+    def roi(self):
+        return self._roi
+
+    # ------------------------------------------------------------ geometry
+    def _image_rect(self) -> QRectF:
+        if self._img is None:
+            return QRectF(self.rect())
+        iw, ih = self._img.width(), self._img.height()
+        scale = min(self.width() / iw, self.height() / ih)
+        w, h = iw * scale, ih * scale
+        return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+
+    def _to_norm(self, p: QPointF) -> QPointF:
+        r = self._image_rect()
+        return QPointF(min(max((p.x() - r.x()) / r.width(), 0), 1),
+                       min(max((p.y() - r.y()) / r.height(), 0), 1))
+
+    # ------------------------------------------------------------ painting
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), theme.qcolor(theme.CARD))
+        if self._img is None:
+            self._paint_empty(p)
+            return
+        r = self._image_rect()
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.drawImage(r, self._img)
+        rect = None
+        if self._drag_rect is not None:
+            rect = self._drag_rect
+        elif self._roi:
+            x, y, w, h = self._roi
+            rect = QRectF(r.x() + x * r.width(), r.y() + y * r.height(), w * r.width(), h * r.height())
+        if rect is not None:
+            # dim what is outside the analysed area instead of drawing a loud frame
+            shade = QPainterPath()
+            shade.addRect(r)
+            hole = QPainterPath()
+            hole.addRect(rect)
+            p.fillPath(shade - hole, QColor(0, 0, 0, 140))
+            p.setPen(QPen(theme.qcolor(theme.TEXT, 0.7), 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5))
+            p.setFont(theme.mono_font(11))
+            p.setPen(theme.qcolor(theme.TEXT_2))
+            p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
+                       "Analysebereich")
+
+    def _paint_empty(self, p: QPainter):
+        cx, cy = self.width() / 2, self.height() / 2
+        p.drawPixmap(int(cx - 16), int(cy - 56), theme.icon_pixmap("film", theme.MUTED, 32))
+        f = p.font()
+        f.setPixelSize(15)
+        p.setFont(f)
+        p.setPen(theme.qcolor(theme.TEXT))
+        p.drawText(QRectF(0, cy - 12, self.width(), 20), Qt.AlignCenter, "Kein Video geladen")
+        f.setPixelSize(13)
+        p.setFont(f)
+        p.setPen(theme.qcolor(theme.TEXT_2))
+        p.drawText(QRectF(0, cy + 12, self.width(), 20), Qt.AlignCenter,
+                   "Video öffnen oder hierher ziehen")
+        _keycaps(p, cx, cy + 48, ["Strg", "O"])
+
+    # ------------------------------------------------------------ mouse
+    def mousePressEvent(self, ev):
+        if self._img is None:
+            return
+        if ev.button() == Qt.RightButton:
+            self._roi = None
+            self.roiChanged.emit(None)
+            self.update()
+        elif ev.button() == Qt.LeftButton:
+            self._drag_start = ev.position()
+            self._drag_rect = QRectF(self._drag_start, self._drag_start)
+
+    def mouseMoveEvent(self, ev):
+        if self._drag_start is not None:
+            self._drag_rect = QRectF(self._drag_start, ev.position()).normalized() & self._image_rect()
+            self.update()
+
+    def mouseReleaseEvent(self, ev):
+        if self._drag_start is None or ev.button() != Qt.LeftButton:
+            return
+        a, b = self._to_norm(self._drag_start), self._to_norm(ev.position())
+        self._drag_start = self._drag_rect = None
+        x0, x1 = sorted((a.x(), b.x()))
+        y0, y1 = sorted((a.y(), b.y()))
+        if x1 - x0 > 0.03 and y1 - y0 > 0.03:
+            self._roi = (x0, y0, x1 - x0, y1 - y0)
+            self.roiChanged.emit(self._roi)
+        self.update()
+
+
+def _keycaps(p: QPainter, cx: float, cy: float, keys: list[str]) -> None:
+    p.setFont(theme.mono_font(11))
+    fm = p.fontMetrics()
+    widths = [max(20, fm.horizontalAdvance(k) + 12) for k in keys]
+    total = sum(widths) + 4 * (len(keys) - 1)
+    x = cx - total / 2
+    for k, w in zip(keys, widths):
+        r = QRectF(x, cy - 10, w, 20)
+        p.setPen(QPen(theme.qcolor(theme.TEXT, 0.12), 1))
+        p.setBrush(theme.qcolor(theme.RAISED))
+        p.drawRoundedRect(r, 4, 4)
+        p.setPen(theme.qcolor(theme.TEXT_2))
+        p.drawText(r, Qt.AlignCenter, k)
+        x += w + 4
