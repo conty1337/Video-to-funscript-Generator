@@ -21,7 +21,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 7 | Funscript-Export (`<Video>.funscript` neben dem Video) | ✅ |
 | 8 | Stapelverarbeitung ganzer Ordner (GUI + Kommandozeile) | ✅ |
 | 9 | Bereits analysierte Videos überspringen | ✅ |
-| 10 | Bluetooth-Anbindung Fredorch F21S | geplant (z. B. über [Intiface/Buttplug](https://intiface.com/), Open Source) |
+| 10 | Gerätesteuerung (Fredorch F21S über Intiface Central, Simulation) | ✅ Teil 1, Test mit echtem Gerät steht aus |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -110,6 +110,39 @@ Auflösungen lohnt sich OpenCL eher.
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
 die schon ein `.funscript` existiert, werden übersprungen (abschaltbar).
 
+## Gerät steuern (Phase 2)
+
+Die App spielt das Script synchron zum Video auf einem Gerät ab. Die
+Bluetooth-Verbindung übernimmt **[Intiface Central](https://intiface.com/central/)**
+(kostenlos, Open Source, für Linux als AppImage). Es unterstützt den
+**Fredorch F21S** über sein Protokoll „fredorch“, das Gerät meldet sich als
+`YXlinksSPP`.
+
+1. Intiface Central starten und auf **„Start Server“** klicken (Adresse
+   `ws://127.0.0.1:12345`).
+2. Gerät einschalten. Die Hersteller-App am Handy darf nicht verbunden sein,
+   das Gerät erlaubt nur eine Verbindung.
+3. In dieser App: **Gerät** (Toolbar oder Strg+D) → Art „Intiface Central“ →
+   **Verbinden**. Die App startet die Gerätesuche, und das Gerät erscheint in der Liste.
+4. Mit **Oben/Unten** testen, dann das Video abspielen: Das Gerät folgt dem Script.
+
+Ohne Gerät: Art **„Simulation“**. Die Hubschiene neben dem Video zeigt mit
+einer weißen Umrandung, wo das Gerät gerade wäre. Die Simulation bildet den
+F21S nach: 16 Positionen, voller Hub frühestens in etwa 200 ms.
+
+Einstellungen im Geräte-Dialog:
+
+- **Zeitversatz**: gleicht die Bluetooth-Verzögerung aus. Positiv heißt, das Gerät
+  bekommt seine Befehle früher. Startwert 0, typisch 50–150 ms.
+- **Max. Tempo**: Hübe, die schneller wären, werden verkürzt, nicht verzögert.
+  So bleibt das Gerät synchron und wird geschont.
+- **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).
+- **Richtung umkehren**.
+
+**Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
+das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen
+Script-Position und folgt erst dann.
+
 ## Kommandozeile
 
 ```bash
@@ -177,6 +210,7 @@ src/vtf/
   funscript.py   Dateiformat
   batch.py       Ordnerverarbeitung
   gpu.py         OpenCL-Hilfen
+  device/        Gerätesteuerung: Simulation, Intiface (Buttplug), Synchronisation
   cli.py         Kommandozeile (vtf)
   gui/           PySide6-Oberfläche (vtf-gui), Gestaltung in gui/theme.py
 ```

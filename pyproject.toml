@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "video-to-funscript"
-version = "0.1.3"
+version = "0.2.0"
 description = "Lokale, kostenlose Videoanalyse und Funscript-Erstellung"
 readme = "README.md"
 license = { text = "MIT" }
@@ -17,6 +17,8 @@ dependencies = [
     "PySide6-Essentials>=6.5",
     # Zertifikate für den Updater, falls das System keine an bekannter Stelle hat
     "certifi>=2024.0",
+    # Intiface Central (Buttplug) spricht WebSocket
+    "websockets>=12",
 ]
 
 [project.optional-dependencies]

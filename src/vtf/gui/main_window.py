@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import cv2
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
@@ -24,6 +24,7 @@ from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
 from .video_view import VideoView
+from .device_ui import DeviceController
 from .update_ui import UpdateController
 from .workers import AnalysisWorker
 
@@ -169,10 +170,15 @@ class MainWindow(QMainWindow):
             ocl_label.setToolTip(hint)
 
         self.updates = UpdateController(self, self.qsettings)
+        self.devices = DeviceController(self, self.qsettings)
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
+        self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.timeout.connect(self._next_frame)
+        self._clock = QElapsedTimer()
+        self._play_origin_ms = 0.0
+        self._cur_idx = -1
         self.regen_timer = QTimer(self)
         self.regen_timer.setSingleShot(True)
         self.regen_timer.setInterval(120)
@@ -221,6 +227,11 @@ class MainWindow(QMainWindow):
         self._act(m, "Frame zurück", lambda: self.step_frames(-1), "Left")
         self._act(m, "1 s vor", lambda: self.step_frames(int(self.fps)), "Shift+Right")
         self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
+        m = self.menuBar().addMenu("&Gerät")
+        self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
+        self._act(m, "Trennen", lambda: self.devices.disconnect_device())
+        m.addSeparator()
+        self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
         self.updates.add_menu_entries(m)
@@ -236,6 +247,7 @@ class MainWindow(QMainWindow):
         tb.addAction(theme.icon("folder-open"), "Öffnen", self.open_dialog)
         self.save_action = tb.addAction(theme.icon("save"), "Speichern", self.export)
         tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
+        tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
         tb.addSeparator()
         tb.addAction(theme.icon("undo"), "", self.undo).setToolTip("Rückgängig (Strg+Z)")
         tb.addAction(theme.icon("redo"), "", self.redo).setToolTip("Wiederholen (Strg+Umschalt+Z)")
@@ -322,11 +334,15 @@ class MainWindow(QMainWindow):
             self.pause()
             return
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+        self._cur_idx = idx
         self.view.set_frame(frame)
         self.slider.blockSignals(True)
         self.slider.setValue(idx)
         self.slider.blockSignals(False)
         ms = idx / self.fps * 1000
+        self._show_time(ms)
+
+    def _show_time(self, ms: float):
         self.curve.set_playhead(ms)
         self.rail.set_position(position_at(self.curve.actions, ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
@@ -334,8 +350,12 @@ class MainWindow(QMainWindow):
     def seek_frame(self, idx: int):
         if not self.cap:
             return
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, min(int(idx), self.frame_count - 1)))
+        idx = max(0, min(int(idx), self.frame_count - 1))
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         self._read_frame()
+        if self.timer.isActive():   # keep playing from the new position
+            self._play_origin_ms = idx / self.fps * 1000
+            self._clock.restart()
 
     def seek_ms(self, ms: int):
         self.curve.follow = True
@@ -346,8 +366,30 @@ class MainWindow(QMainWindow):
             self.pause()
             self.seek_frame(self.slider.value() + n)
 
+    def _media_ms(self) -> float:
+        return self._play_origin_ms + self._clock.elapsed()
+
     def _next_frame(self):
-        self._read_frame()
+        """Playback tick (every 10 ms): wall clock drives video and device."""
+        if not self.cap:
+            return
+        media_ms = self._media_ms()
+        target = int(media_ms * self.fps / 1000)
+        if target >= self.frame_count:
+            self.pause()
+            return
+        behind = target - self._cur_idx
+        if behind > 30:                       # far behind (slow decoder): jump
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+            self._read_frame()
+        elif behind >= 1:
+            for _ in range(behind - 1):       # drop frames to catch up
+                if not self.cap.grab():
+                    break
+            self._read_frame()
+        if self.timer.isActive():
+            self.devices.tick(media_ms, True)
+            self.rail.set_device_position(self.devices.device_position())
 
     def toggle_play(self):
         if not self.cap:
@@ -356,12 +398,26 @@ class MainWindow(QMainWindow):
             self.pause()
         else:
             self.curve.follow = True
-            self.timer.start(max(1, int(1000 / self.fps)))
+            if self._cur_idx >= self.frame_count - 1:
+                self.seek_frame(0)
+            self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
+            self._clock.start()
+            self.devices.set_actions(self.curve.actions)
+            self.timer.start(10)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
 
     def pause(self):
         self.timer.stop()
+        self.devices.tick(0, False)
+        self.rail.set_device_position(self.devices.device_position())
         self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
+
+    def emergency_stop(self):
+        """Esc: stop the device immediately and pause playback."""
+        self.devices.emergency_stop()
+        if self.timer.isActive():
+            self.pause()
+        self._status("Not-Aus: Gerät gestoppt")
 
     # ------------------------------------------------------------ analysis
     def start_analysis(self):
@@ -446,6 +502,7 @@ class MainWindow(QMainWindow):
         self._status("Punkte bearbeitet")
 
     def _refresh_position(self):
+        self.devices.set_actions(self.curve.actions)
         self.rail.set_position(position_at(self.curve.actions, self.curve.playhead_ms))
         self._update_meta()
 
@@ -589,6 +646,7 @@ class MainWindow(QMainWindow):
         self.cancel_analysis()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         self.qsettings.sync()
+        self.devices.shutdown()
         if self.cap:
             self.cap.release()
         return True
@@ -599,6 +657,7 @@ class MainWindow(QMainWindow):
             return
         self.cancel_analysis()
         self.updates.shutdown()
+        self.devices.shutdown()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         if self.cap:
             self.cap.release()
