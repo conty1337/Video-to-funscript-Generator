@@ -35,8 +35,25 @@ jobs:
           path: |
             dist/*.AppImage
             selftest.png
-      - name: An Release anhängen
+      - name: Release-Dateien vorbereiten
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.AppImage
+        run: |
+          VERSION="$(python -c 'import sys; sys.path.insert(0, "src"); import vtf; print(vtf.__version__)')"
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME passt nicht zu __version__ $VERSION"; exit 1
+          fi
+          mkdir release
+          # fester Name: stabiler Download-Link und Ziel des Updaters
+          cp dist/*.AppImage release/Video-to-Funscript-x86_64.AppImage
+          (cd release && sha256sum Video-to-Funscript-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS)
+      - name: Release veröffentlichen
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # erst als Entwurf mit allen Dateien, dann veröffentlichen:
+        # bei unveränderlichen Releases lassen sich danach keine Dateien mehr anhängen
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "Video-to-Funscript $GITHUB_REF_NAME" --notes-file packaging/release-notes.md \
+            release/Video-to-Funscript-x86_64.AppImage release/SHA256SUMS
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

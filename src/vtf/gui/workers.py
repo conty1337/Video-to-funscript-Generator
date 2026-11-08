@@ -63,3 +63,34 @@ class BatchWorker(QThread):
             self.log.emit(f"Fehler: {e}")
             res = None
         self.done.emit(res)
+
+
+class UpdateWorker(QThread):
+    """mode 'check': emits checked(Release|None); mode 'install': installs ``release``."""
+    checked = Signal(object)
+    progress = Signal(float)
+    installed = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, mode: str, release=None):
+        super().__init__()
+        self.mode, self.release = mode, release
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        from .. import updater
+        try:
+            if self.mode == "check":
+                self.checked.emit(updater.check_for_update())
+            else:
+                path = updater.download_and_install(self.release, progress=self.progress.emit,
+                                                    cancel=lambda: self._stop)
+                self.installed.emit(str(path))
+        except updater.UpdateError as e:
+            self.failed.emit(str(e))
+        except Exception as e:  # never crash the app because of an update
+            traceback.print_exc()
+            self.failed.emit(str(e))
