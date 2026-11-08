@@ -28,7 +28,7 @@ jobs:
       - name: Qt Multimedia prüfen
         # PyInstaller lässt Qt-Module weg, die sich hier nicht importieren lassen
         run: |
-          python -m pip install --quiet PySide6-Essentials
+          python -m pip install --quiet -e .
           QT="$(python -c 'import PySide6, os; print(os.path.dirname(PySide6.__file__))')"
           ldd "$QT"/QtMultimedia.abi3.so "$QT"/Qt/lib/libQt6Multimedia.so.6 | grep "not found" || true
           python -c "import PySide6.QtMultimedia; print('QtMultimedia ok')"
