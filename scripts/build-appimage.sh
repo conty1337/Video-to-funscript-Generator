@@ -57,15 +57,21 @@ cp packaging/vtf.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/video-to-funs
 ln -sf video-to-funscript.png "$APPDIR/.DirIcon"
 
 echo "==> appimagetool"
+# Downloads mit Wiederholungen: GitHub-Releases antworten gelegentlich mit 5xx
+fetch() { curl -fsSL --retry 6 --retry-delay 5 --retry-all-errors -o "$2" "$1"; }
+mkdir -p build
 TOOL="${APPIMAGETOOL:-}"
 if [ -z "$TOOL" ]; then
   TOOL=build/appimagetool
   if [ ! -x "$TOOL" ]; then
-    curl -fsSL -o "$TOOL" \
-      "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage"
+    fetch "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage" "$TOOL"
     chmod +x "$TOOL"
   fi
 fi
+RUNTIME="${APPIMAGE_RUNTIME:-build/runtime-${ARCH}}"
+if [ ! -s "$RUNTIME" ]; then
+  fetch "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-${ARCH}" "$RUNTIME"
+fi
 # ohne FUSE lauffähig (CI, Container)
-APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOL" --no-appstream "$APPDIR" "$OUT"
+APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOL" --no-appstream --runtime-file "$RUNTIME" "$APPDIR" "$OUT"
 echo "==> Fertig: $OUT ($(du -h "$OUT" | cut -f1))"
