@@ -48,6 +48,25 @@ class Funscript:
                    d.get("metadata", {}) or {})
 
 
+def position_at(actions: list[Action], ms: float) -> float | None:
+    """Linearly interpolated position at ``ms`` (actions sorted by time)."""
+    if not actions:
+        return None
+    if ms <= actions[0].at:
+        return float(actions[0].pos)
+    if ms >= actions[-1].at:
+        return float(actions[-1].pos)
+    lo, hi = 0, len(actions) - 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if actions[mid].at <= ms:
+            lo = mid
+        else:
+            hi = mid
+    a, b = actions[lo], actions[hi]
+    return a.pos + (b.pos - a.pos) * (ms - a.at) / max(1, b.at - a.at)
+
+
 def funscript_path_for(video: str | Path) -> Path:
     """Players expect ``<video name>.funscript`` next to the video."""
     return Path(video).with_suffix(".funscript")

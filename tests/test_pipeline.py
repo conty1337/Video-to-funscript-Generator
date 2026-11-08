@@ -4,7 +4,7 @@ import numpy as np
 
 from vtf.analysis import AnalysisSettings, MotionData, analyze_motion
 from vtf.batch import process_video, run_batch
-from vtf.funscript import Action, Funscript, funscript_path_for
+from vtf.funscript import Action, Funscript, funscript_path_for, position_at
 from vtf.generator import (GeneratorSettings, enforce_min_interval, find_extrema,
                            generate)
 from vtf.video import probe
@@ -89,3 +89,12 @@ def test_motion_cache_roundtrip(tmp_path):
     m.save(tmp_path / "m.npz")
     m2 = MotionData.load(tmp_path / "m.npz")
     assert m2.fps == 30.0 and np.allclose(m2.dx, m.dx)
+
+
+def test_position_at():
+    acts = [Action(0, 0), Action(1000, 100), Action(2000, 50)]
+    assert position_at([], 5) is None
+    assert position_at(acts, -10) == 0
+    assert position_at(acts, 500) == 50
+    assert position_at(acts, 1500) == 75
+    assert position_at(acts, 9999) == 50

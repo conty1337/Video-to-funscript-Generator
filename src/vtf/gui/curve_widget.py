@@ -14,13 +14,14 @@ import bisect
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..funscript import Action
+from . import theme
 
 HIT_PX = 7
-MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 34, 8, 8, 18
+MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 40, 16, 12, 24
 
 
 class CurveWidget(QWidget):
@@ -109,13 +110,15 @@ class CurveWidget(QWidget):
     def paintEvent(self, _ev):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor(24, 24, 30))
+        p.fillRect(self.rect(), theme.qcolor(theme.CARD))
         r = self._plot()
-        p.setPen(QColor(55, 55, 65))
+        p.setFont(theme.mono_font(11))
         for v in (0, 25, 50, 75, 100):
             y = self._y(v / 100)
+            p.setPen(theme.qcolor(theme.TEXT, 0.08 if v in (0, 100) else 0.04))
             p.drawLine(QPointF(r.left(), y), QPointF(r.right(), y))
-            p.drawText(QRectF(0, y - 8, MARGIN_L - 4, 16), Qt.AlignRight | Qt.AlignVCenter, str(v))
+            p.setPen(theme.qcolor(theme.MUTED))
+            p.drawText(QRectF(0, y - 8, MARGIN_L - 8, 16), Qt.AlignRight | Qt.AlignVCenter, str(v))
         # time grid
         step = next(s for s in (500, 1000, 2000, 5000, 10000, 30000, 60000, 300000, 600000, 10**9)
                     if self.view_ms / s <= 12)
@@ -123,10 +126,10 @@ class CurveWidget(QWidget):
         while t <= self.start_ms + self.view_ms:
             x = self._x(t)
             if x >= r.left():
-                p.setPen(QColor(45, 45, 55))
+                p.setPen(theme.qcolor(theme.TEXT, 0.04))
                 p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
-                p.setPen(QColor(140, 140, 150))
-                p.drawText(QPointF(x + 2, self.height() - 4), _fmt(t))
+                p.setPen(theme.qcolor(theme.MUTED))
+                p.drawText(QPointF(x + 4, self.height() - 8), _fmt(t))
             t += step
         p.setClipRect(r)
         # analysis curve
@@ -138,7 +141,7 @@ class CurveWidget(QWidget):
             for k, i in enumerate(range(i0, i1, stride)):
                 pt = QPointF(self._x(self.t_ms[i]), self._y(float(self.signal[i])))
                 path.moveTo(pt) if k == 0 else path.lineTo(pt)
-            p.setPen(QPen(QColor(90, 140, 220, 160), 1))
+            p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.35), 1))
             p.drawPath(path)
         # actions
         vis = [i for i, a in enumerate(self.actions)
@@ -149,18 +152,18 @@ class CurveWidget(QWidget):
                 a = self.actions[i]
                 pt = QPointF(self._x(a.at), self._y(a.pos / 100))
                 path.moveTo(pt) if k == 0 else path.lineTo(pt)
-            p.setPen(QPen(QColor(255, 170, 60), 2))
+            p.setPen(QPen(theme.qcolor(theme.ACCENT), 1.5))
             p.drawPath(path)
             if self.view_ms < 120_000:
                 for i in vis:
                     a = self.actions[i]
                     sel = i == self._selected
                     p.setPen(Qt.NoPen)
-                    p.setBrush(QColor(255, 255, 255) if sel else QColor(255, 200, 100))
-                    p.drawEllipse(QPointF(self._x(a.at), self._y(a.pos / 100)), 4 if sel else 3, 4 if sel else 3)
+                    p.setBrush(theme.qcolor(theme.TEXT) if sel else theme.qcolor(theme.ACCENT))
+                    p.drawEllipse(QPointF(self._x(a.at), self._y(a.pos / 100)), 4 if sel else 2.5, 4 if sel else 2.5)
         # playhead
         x = self._x(self.playhead_ms)
-        p.setPen(QPen(QColor(230, 60, 60), 1.5))
+        p.setPen(QPen(theme.qcolor(theme.TEXT, 0.9), 1))
         p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
 
     # ------------------------------------------------------------ mouse

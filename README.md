@@ -3,6 +3,8 @@
 Kostenlose, quelloffene Software zur **lokalen** Videoanalyse und automatischen
 Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 
+![Screenshot](docs/screenshot.png)
+
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
@@ -110,6 +112,12 @@ vtf analyze --help                         # alle Optionen
 Da Schritt 1–2 (teuer) von 3–4 (billig) getrennt sind, wirken
 Script-Einstellungen sofort ohne neue Analyse.
 
+## Gestaltung
+
+Die Oberfläche folgt einer festen Gestaltungsrichtung (Schnittplatz bei Nacht,
+ein Bernstein-Akzent nur für das Script). Details und Quellen stehen in
+[docs/design.md](docs/design.md).
+
 ## Entwicklung
 
 ```bash
@@ -127,7 +135,7 @@ src/vtf/
   batch.py       Ordnerverarbeitung
   gpu.py         OpenCL-Hilfen
   cli.py         Kommandozeile (vtf)
-  gui/           PySide6-Oberfläche (vtf-gui)
+  gui/           PySide6-Oberfläche (vtf-gui), Gestaltung in gui/theme.py
 ```
 
 ## Lizenz

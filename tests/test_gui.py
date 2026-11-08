@@ -9,7 +9,10 @@ QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 @pytest.fixture(scope="module")
 def app():
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from vtf.gui import theme
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    theme.apply(app)
+    return app
 
 
 def test_open_analyze_export(app, sine_video, tmp_path, monkeypatch):
@@ -37,7 +40,17 @@ def test_open_analyze_export(app, sine_video, tmp_path, monkeypatch):
     w.undo()
     assert len(w.curve.actions) == n
 
+    assert w.rail._pos is not None
+    assert "Punkte" in w.curve_meta.text()
+
     w.export()
     assert len(Funscript.load(funscript_path_for(sine_video)).actions) == n
     w.dirty = False
     w.close()
+
+
+def test_batch_dialog(app, sine_video):
+    from vtf.gui.batch_dialog import BatchDialog
+    from vtf.gui.settings_panel import SettingsPanel
+    d = BatchDialog(SettingsPanel(), str(sine_video.parent))
+    assert d.info.text().startswith("1 Videos")

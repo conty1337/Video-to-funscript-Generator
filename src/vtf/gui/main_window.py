@@ -6,21 +6,23 @@ import json
 from pathlib import Path
 
 import cv2
-from PySide6.QtCore import QSettings, Qt, QTimer
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QScrollArea, QSlider, QSplitter,
-                               QVBoxLayout, QWidget)
+                               QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
+                               QSplitter, QVBoxLayout, QWidget)
 
 from .. import __version__, gpu
 from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
-from ..funscript import Action, Funscript, funscript_path_for
+from ..funscript import Action, Funscript, funscript_path_for, position_at
 from ..generator import generate
 from ..video import probe
+from . import theme
 from .batch_dialog import BatchDialog
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
+from .stroke_rail import StrokeRail
 from .video_view import VideoView
 from .workers import AnalysisWorker
 
@@ -44,62 +46,127 @@ class MainWindow(QMainWindow):
 
         # widgets
         self.view = VideoView()
+        self.rail = StrokeRail()
         self.curve = CurveWidget()
         self.panel = SettingsPanel()
         self.slider = QSlider(Qt.Horizontal)
+        self.slider.setObjectName("timeline")
         self.slider.setEnabled(False)
-        self.time_label = QLabel("0:00.0 / 0:00.0")
-        self.play_btn = QPushButton("▶")
-        self.play_btn.setFixedWidth(40)
-        self.play_btn.setEnabled(False)
-        self.analyze_btn = QPushButton("Analysieren")
+        self.time_label = QLabel("0:00.00 / 0:00.00")
+        self.time_label.setFont(theme.mono_font(12))
+        self.time_label.setObjectName("value")
+        self.play_btn = self._transport("play", "Abspielen (Leertaste)")
+        self.back_btn = self._transport("chevron-left", "Frame zurück (←)")
+        self.fwd_btn = self._transport("chevron-right", "Frame vor (→)")
+        self.analyze_btn = QPushButton(theme.icon("activity", theme.ON_ACCENT), "Analysieren")
+        self.analyze_btn.setObjectName("primary")
         self.analyze_btn.setEnabled(False)
-        self.cancel_btn = QPushButton("Abbrechen")
+        self.cancel_btn = QPushButton(theme.icon("x"), "Abbrechen")
         self.cancel_btn.setVisible(False)
         self.progress = QProgressBar()
+        self.progress.setTextVisible(False)
         self.progress.setVisible(False)
+        self.progress_label = QLabel()
+        self.progress_label.setObjectName("meta")
+        self.progress_label.setFont(theme.mono_font(12))
+        self.progress_label.setVisible(False)
         self.status_label = QLabel()
+        self.curve_title = QLabel("Script")
+        self.curve_title.setObjectName("section")
+        self.curve_meta = QLabel("Noch nicht analysiert")
+        self.curve_meta.setObjectName("meta")
+        self.curve_meta.setFont(theme.mono_font(12))
+        curve_hint = QLabel("Ziehen verschiebt · Doppelklick fügt hinzu · Rechtsklick löscht · Mausrad zoomt")
+        curve_hint.setObjectName("caption")
 
         controls = QHBoxLayout()
+        controls.setContentsMargins(12, 8, 16, 8)
+        controls.setSpacing(4)
+        controls.addWidget(self.back_btn)
         controls.addWidget(self.play_btn)
+        controls.addWidget(self.fwd_btn)
+        controls.addSpacing(8)
         controls.addWidget(self.slider, 1)
+        controls.addSpacing(12)
         controls.addWidget(self.time_label)
+        stage = QHBoxLayout()
+        stage.setContentsMargins(0, 0, 0, 0)
+        stage.setSpacing(1)
+        stage.addWidget(self.view, 1)
+        stage.addWidget(self.rail)
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.setContentsMargins(0, 0, 0, 0)
-        ll.addWidget(self.view, 1)
+        ll.setSpacing(0)
+        ll.addLayout(stage, 1)
         ll.addLayout(controls)
 
         right = QWidget()
+        right.setObjectName("sidebar")
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(0)
         scroll = QScrollArea()
+        scroll.setObjectName("sidebarScroll")
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(self.panel)
         rl.addWidget(scroll, 1)
-        rl.addWidget(self.analyze_btn)
-        rl.addWidget(self.cancel_btn)
-        rl.addWidget(self.progress)
-        right.setMinimumWidth(340)
+        footer = QWidget()
+        footer.setObjectName("sidebarFooter")
+        fl = QVBoxLayout(footer)
+        fl.setContentsMargins(16, 12, 16, 16)
+        fl.setSpacing(8)
+        fl.addWidget(self.progress_label)
+        fl.addWidget(self.progress)
+        fl.addWidget(self.analyze_btn)
+        fl.addWidget(self.cancel_btn)
+        rl.addWidget(footer)
+        right.setFixedWidth(320)
 
-        top = QSplitter(Qt.Horizontal)
-        top.addWidget(left)
-        top.addWidget(right)
-        top.setStretchFactor(0, 1)
-        vsplit = QSplitter(Qt.Vertical)
-        vsplit.addWidget(top)
-        vsplit.addWidget(self.curve)
-        vsplit.setStretchFactor(0, 3)
-        vsplit.setStretchFactor(1, 1)
-        self.setCentralWidget(vsplit)
+        curve_box = QWidget()
+        cl = QVBoxLayout(curve_box)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(0)
+        head = QHBoxLayout()
+        head.setContentsMargins(16, 12, 16, 8)
+        head.setSpacing(12)
+        head.addWidget(self.curve_title)
+        head.addWidget(self.curve_meta)
+        head.addStretch(1)
+        head.addWidget(curve_hint)
+        cl.addLayout(head)
+        cl.addWidget(self.curve, 1)
+
+        main = QSplitter(Qt.Vertical)
+        main.addWidget(left)
+        main.addWidget(curve_box)
+        main.setStretchFactor(0, 3)
+        main.setStretchFactor(1, 2)
+        main.setChildrenCollapsible(False)
+        body = QWidget()
+        bl = QHBoxLayout(body)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(0)
+        bl.addWidget(main, 1)
+        sep = QWidget()
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(f"background: {theme.HAIRLINE};")
+        bl.addWidget(sep)
+        bl.addWidget(right)
+        self.setCentralWidget(body)
         self.statusBar().addWidget(self.status_label, 1)
+        self.statusBar().setSizeGripEnabled(False)
         ocl = gpu.opencl_device_name()
-        self.statusBar().addPermanentWidget(QLabel(f"OpenCL: {ocl}" if ocl else "OpenCL: nicht verfügbar"))
+        ocl_label = QLabel(f"OpenCL · {ocl}" if ocl else "OpenCL · nicht verfügbar")
+        ocl_label.setFont(theme.mono_font(11))
+        self.statusBar().addPermanentWidget(ocl_label)
         if not ocl:
             self.panel.opencl.setEnabled(False)
-            self.panel.opencl.setToolTip("Kein OpenCL-Gerät gefunden (siehe README: ROCm/rusticl)")
+            self.panel.opencl.setToolTip("Kein OpenCL-Gerät gefunden, siehe README: ROCm oder rusticl")
 
         self._build_menu()
+        self._build_toolbar()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._next_frame)
         self.regen_timer = QTimer(self)
@@ -109,6 +176,8 @@ class MainWindow(QMainWindow):
 
         # signals
         self.play_btn.clicked.connect(self.toggle_play)
+        self.back_btn.clicked.connect(lambda: self.step_frames(-1))
+        self.fwd_btn.clicked.connect(lambda: self.step_frames(1))
         self.slider.sliderMoved.connect(self.seek_frame)
         self.slider.sliderPressed.connect(lambda: self.seek_frame(self.slider.value()))
         self.analyze_btn.clicked.connect(self.start_analysis)
@@ -151,6 +220,33 @@ class MainWindow(QMainWindow):
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
 
+    def _build_toolbar(self):
+        tb = self.addToolBar("Werkzeuge")
+        tb.setMovable(False)
+        tb.setFloatable(False)
+        tb.setIconSize(QSize(16, 16))
+        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        tb.toggleViewAction().setVisible(False)
+        tb.addAction(theme.icon("folder-open"), "Öffnen", self.open_dialog)
+        self.save_action = tb.addAction(theme.icon("save"), "Speichern", self.export)
+        tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
+        tb.addSeparator()
+        tb.addAction(theme.icon("undo"), "", self.undo).setToolTip("Rückgängig (Strg+Z)")
+        tb.addAction(theme.icon("redo"), "", self.redo).setToolTip("Wiederholen (Strg+Umschalt+Z)")
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        tb.addWidget(spacer)
+        self.file_label = QLabel()
+        self.file_label.setObjectName("meta")
+        tb.addWidget(self.file_label)
+
+    def _transport(self, name: str, tip: str) -> QPushButton:
+        b = QPushButton(theme.icon(name, theme.TEXT_2, 16), "")
+        b.setObjectName("transport")
+        b.setToolTip(tip)
+        b.setEnabled(False)
+        return b
+
     def _act(self, menu, text, slot, shortcut=None):
         a = QAction(text, self)
         if shortcut:
@@ -179,7 +275,7 @@ class MainWindow(QMainWindow):
             return
         cap = cv2.VideoCapture(path)
         if not cap.isOpened():
-            QMessageBox.critical(self, "Fehler", "OpenCV kann das Video nicht öffnen.")
+            QMessageBox.critical(self, "Fehler", "OpenCV kann dieses Video nicht öffnen.")
             return
         if self.cap:
             self.cap.release()
@@ -194,12 +290,13 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self.slider.setRange(0, self.frame_count - 1)
         self.slider.setEnabled(True)
-        self.play_btn.setEnabled(True)
-        self.analyze_btn.setEnabled(True)
+        for b in (self.play_btn, self.back_btn, self.fwd_btn, self.analyze_btn):
+            b.setEnabled(True)
         self.view.set_roi(None)
         self.panel.set_roi(None)
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
+        self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
         existing = funscript_path_for(path)
         if existing.is_file():
             try:
@@ -208,7 +305,7 @@ class MainWindow(QMainWindow):
             except (OSError, ValueError, KeyError) as e:
                 self._status(f"Funscript konnte nicht geladen werden: {e}")
         else:
-            self._status(f"{info.width}x{info.height}, {info.fps:.2f} fps, {info.duration:.1f} s")
+            self._status("Bereit zur Analyse")
         self.seek_frame(0)
 
     def _read_frame(self):
@@ -225,6 +322,7 @@ class MainWindow(QMainWindow):
         self.slider.blockSignals(False)
         ms = idx / self.fps * 1000
         self.curve.set_playhead(ms)
+        self.rail.set_position(position_at(self.curve.actions, ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
 
     def seek_frame(self, idx: int):
@@ -253,11 +351,11 @@ class MainWindow(QMainWindow):
         else:
             self.curve.follow = True
             self.timer.start(max(1, int(1000 / self.fps)))
-            self.play_btn.setText("⏸")
+            self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
 
     def pause(self):
         self.timer.stop()
-        self.play_btn.setText("▶")
+        self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
 
     # ------------------------------------------------------------ analysis
     def start_analysis(self):
@@ -268,16 +366,22 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.Yes:
             return
         self.worker = AnalysisWorker(self.video_path, self.panel.analysis_settings())
-        self.worker.progress.connect(lambda p: self.progress.setValue(int(p * 100)))
+        self.worker.progress.connect(self._progress)
         self.worker.finishedOk.connect(self._analysis_done)
         self.worker.failed.connect(self._analysis_failed)
-        self.worker.cancelled.connect(lambda: self._analysis_end("Analyse abgebrochen."))
+        self.worker.cancelled.connect(lambda: self._analysis_end("Analyse abgebrochen"))
         self.progress.setValue(0)
         self.progress.setVisible(True)
+        self.progress_label.setText("Analyse  0 %")
+        self.progress_label.setVisible(True)
         self.cancel_btn.setVisible(True)
-        self.analyze_btn.setEnabled(False)
-        self._status("Analysiere…")
+        self.analyze_btn.setVisible(False)
+        self._status("Analysiere Bewegung")
         self.worker.start()
+
+    def _progress(self, p: float):
+        self.progress.setValue(int(p * 100))
+        self.progress_label.setText(f"Analyse {p * 100:3.0f} %")
 
     def cancel_analysis(self):
         if self.worker and self.worker.isRunning():
@@ -286,7 +390,9 @@ class MainWindow(QMainWindow):
 
     def _analysis_end(self, msg: str):
         self.progress.setVisible(False)
+        self.progress_label.setVisible(False)
         self.cancel_btn.setVisible(False)
+        self.analyze_btn.setVisible(True)
         self.analyze_btn.setEnabled(self.video_path is not None)
         self._status(msg)
 
@@ -297,15 +403,15 @@ class MainWindow(QMainWindow):
         self._push_undo()
         self.regenerate()
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
-        self._analysis_end(f"Analyse fertig{ocl}: {len(self.curve.actions)} Punkte erzeugt.")
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt")
 
     def _analysis_failed(self, msg: str):
-        self._analysis_end("Analyse fehlgeschlagen.")
+        self._analysis_end("Analyse fehlgeschlagen")
         QMessageBox.critical(self, "Analyse fehlgeschlagen", msg)
 
     def _analysis_outdated(self):
         if self.motion is not None:
-            self._status("Analyse-Einstellungen geändert – bitte neu analysieren.")
+            self._status("Analyse-Einstellungen geändert, neu analysieren, um sie anzuwenden")
 
     def regenerate(self):
         if self.motion is None:
@@ -314,7 +420,8 @@ class MainWindow(QMainWindow):
         self.curve.set_data(script.t_ms, script.signal, script.actions,
                             max(self.motion.duration_ms, self.frame_count / self.fps * 1000))
         self.dirty = True
-        self._status(f"{len(script.actions)} Punkte")
+        self._refresh_position()
+        self._status(f"{len(script.actions)} Punkte erzeugt")
 
     def regenerate_manual(self):
         if self.motion is not None:
@@ -329,19 +436,26 @@ class MainWindow(QMainWindow):
 
     def _edited(self):
         self.dirty = True
-        self._status(f"{len(self.curve.actions)} Punkte (bearbeitet)")
+        self._refresh_position()
+        self._status("Punkte bearbeitet")
+
+    def _refresh_position(self):
+        self.rail.set_position(position_at(self.curve.actions, self.curve.playhead_ms))
+        self._update_meta()
 
     def undo(self):
         if self.undo_stack:
             self.redo_stack.append(list(self.curve.actions))
             self.curve.set_actions(self.undo_stack.pop())
             self.dirty = True
+            self._refresh_position()
 
     def redo(self):
         if self.redo_stack:
             self.undo_stack.append(list(self.curve.actions))
             self.curve.set_actions(self.redo_stack.pop())
             self.dirty = True
+            self._refresh_position()
 
     # ------------------------------------------------------------ files
     def export(self):
@@ -358,7 +472,7 @@ class MainWindow(QMainWindow):
 
     def _save(self, path: Path):
         if not self.curve.actions:
-            QMessageBox.information(self, "Export", "Keine Punkte vorhanden – bitte zuerst analysieren.")
+            QMessageBox.information(self, "Export", "Noch keine Punkte vorhanden. Analysiere zuerst das Video.")
             return
         try:
             Funscript(list(self.curve.actions), metadata=make_metadata(self.video_path)).save(path)
@@ -399,6 +513,17 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ misc
     def _status(self, msg: str):
         self.status_label.setText(msg)
+        self._update_meta()
+
+    def _update_meta(self):
+        n = len(self.curve.actions)
+        if not n:
+            self.curve_meta.setText("Noch nicht analysiert" if self.motion is None else "Keine Punkte")
+            return
+        dur = self.curve.actions[-1].at - self.curve.actions[0].at
+        rate = (n - 1) / 2 / (dur / 60000) if dur > 0 else 0
+        edited = " · bearbeitet" if self.dirty else ""
+        self.curve_meta.setText(f"{n} Punkte · {rate:.0f} Hübe/min{edited}")
 
     def _confirm_discard(self) -> bool:
         if not self.dirty or not self.curve.actions:
@@ -433,4 +558,4 @@ class MainWindow(QMainWindow):
 
 def _fmt(ms: float) -> str:
     s = ms / 1000
-    return f"{int(s // 60)}:{s % 60:04.1f}"
+    return f"{int(s // 60)}:{s % 60:05.2f}"

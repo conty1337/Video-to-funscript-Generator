@@ -5,8 +5,10 @@ from __future__ import annotations
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from . import theme
 
 
 class VideoView(QWidget):
@@ -57,10 +59,10 @@ class VideoView(QWidget):
     # ------------------------------------------------------------ painting
     def paintEvent(self, _ev):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(20, 20, 24))
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), theme.qcolor(theme.CARD))
         if self._img is None:
-            p.setPen(QColor(150, 150, 150))
-            p.drawText(self.rect(), Qt.AlignCenter, "Kein Video geladen\n(Datei → Video öffnen)")
+            self._paint_empty(p)
             return
         r = self._image_rect()
         p.setRenderHint(QPainter.SmoothPixmapTransform)
@@ -72,8 +74,34 @@ class VideoView(QWidget):
             x, y, w, h = self._roi
             rect = QRectF(r.x() + x * r.width(), r.y() + y * r.height(), w * r.width(), h * r.height())
         if rect is not None:
-            p.setPen(QPen(QColor(0, 220, 120), 2, Qt.DashLine))
-            p.drawRect(rect)
+            # dim what is outside the analysed area instead of drawing a loud frame
+            shade = QPainterPath()
+            shade.addRect(r)
+            hole = QPainterPath()
+            hole.addRect(rect)
+            p.fillPath(shade - hole, QColor(0, 0, 0, 140))
+            p.setPen(QPen(theme.qcolor(theme.TEXT, 0.7), 1))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5))
+            p.setFont(theme.mono_font(11))
+            p.setPen(theme.qcolor(theme.TEXT_2))
+            p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
+                       "Analysebereich")
+
+    def _paint_empty(self, p: QPainter):
+        cx, cy = self.width() / 2, self.height() / 2
+        p.drawPixmap(int(cx - 16), int(cy - 56), theme.icon_pixmap("film", theme.MUTED, 32))
+        f = p.font()
+        f.setPixelSize(15)
+        p.setFont(f)
+        p.setPen(theme.qcolor(theme.TEXT))
+        p.drawText(QRectF(0, cy - 12, self.width(), 20), Qt.AlignCenter, "Kein Video geladen")
+        f.setPixelSize(13)
+        p.setFont(f)
+        p.setPen(theme.qcolor(theme.TEXT_2))
+        p.drawText(QRectF(0, cy + 12, self.width(), 20), Qt.AlignCenter,
+                   "Video öffnen oder hierher ziehen")
+        _keycaps(p, cx, cy + 48, ["Strg", "O"])
 
     # ------------------------------------------------------------ mouse
     def mousePressEvent(self, ev):
@@ -103,3 +131,19 @@ class VideoView(QWidget):
             self._roi = (x0, y0, x1 - x0, y1 - y0)
             self.roiChanged.emit(self._roi)
         self.update()
+
+
+def _keycaps(p: QPainter, cx: float, cy: float, keys: list[str]) -> None:
+    p.setFont(theme.mono_font(11))
+    fm = p.fontMetrics()
+    widths = [max(20, fm.horizontalAdvance(k) + 12) for k in keys]
+    total = sum(widths) + 4 * (len(keys) - 1)
+    x = cx - total / 2
+    for k, w in zip(keys, widths):
+        r = QRectF(x, cy - 10, w, 20)
+        p.setPen(QPen(theme.qcolor(theme.TEXT, 0.12), 1))
+        p.setBrush(theme.qcolor(theme.RAISED))
+        p.drawRoundedRect(r, 4, 4)
+        p.setPen(theme.qcolor(theme.TEXT_2))
+        p.drawText(r, Qt.AlignCenter, k)
+        x += w + 4
