@@ -2,10 +2,13 @@
 
 Mouse:
   * left click on empty space      -> seek
+  * left drag on empty space       -> scroll the time axis (also middle drag)
   * left drag on a point           -> move point (time + position)
   * double click                   -> add point
   * right click on a point / Del   -> delete point
-  * wheel                          -> zoom time axis, Shift+wheel -> scroll
+  * wheel                          -> zoom time axis
+  * Shift+wheel, horizontal wheel  -> scroll (touchpad: two-finger swipe)
+  * scroll bar below the plot      -> scroll
 """
 
 from __future__ import annotations
@@ -15,13 +18,15 @@ import bisect
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
 from ..funscript import Action
 from . import theme
 
 HIT_PX = 7
-MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 40, 16, 12, 24
+SCROLL_H = 10
+MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 40, 16, 12, 24 + SCROLL_H + 6
+PAN_THRESHOLD_PX = 4
 
 
 class CurveWidget(QWidget):
@@ -45,6 +50,15 @@ class CurveWidget(QWidget):
         self.follow = True
         self._drag_idx: int | None = None
         self._selected: int | None = None
+        self._press: QPointF | None = None     # press on empty space (click or pan)
+        self._press_button = Qt.NoButton
+        self._pan_from = 0.0
+        self._panning = False
+        self.scrollbar = QScrollBar(Qt.Horizontal, self)
+        self.scrollbar.setObjectName("curveScroll")
+        self.scrollbar.setCursor(Qt.ArrowCursor)
+        self.scrollbar.valueChanged.connect(self._scrolled)
+        self._sync_scrollbar()
 
     # ------------------------------------------------------------ data
     def set_data(self, t_ms: np.ndarray, signal: np.ndarray, actions: list[Action], duration_ms: float):
@@ -92,6 +106,37 @@ class CurveWidget(QWidget):
     def _clamp_view(self):
         self.view_ms = float(min(max(self.view_ms, 1000.0), max(self.duration_ms, 1000.0)))
         self.start_ms = float(min(max(self.start_ms, 0.0), max(0.0, self.duration_ms - self.view_ms)))
+        self._sync_scrollbar()
+
+    # ------------------------------------------------------------ scrolling
+    def _sync_scrollbar(self):
+        sb = getattr(self, "scrollbar", None)
+        if sb is None:
+            return
+        sb.blockSignals(True)
+        sb.setRange(0, int(max(0.0, self.duration_ms - self.view_ms)))
+        sb.setPageStep(int(self.view_ms))
+        sb.setSingleStep(max(1, int(self.view_ms * 0.05)))
+        sb.setValue(int(self.start_ms))
+        sb.blockSignals(False)
+        sb.setVisible(sb.maximum() > 0)
+
+    def _scrolled(self, v: int):
+        self.follow = False
+        self.start_ms = float(v)
+        self.update()
+
+    def scroll_by(self, ms: float):
+        """Move the visible window (positive = later)."""
+        self.follow = False
+        self.start_ms += ms
+        self._clamp_view()
+        self.update()
+
+    def resizeEvent(self, ev):
+        r = self._plot()
+        self.scrollbar.setGeometry(int(r.left()), self.height() - SCROLL_H - 2, int(r.width()), SCROLL_H)
+        super().resizeEvent(ev)
 
     def _hit(self, p: QPointF) -> int | None:
         best, best_d = None, HIT_PX ** 2
@@ -129,7 +174,7 @@ class CurveWidget(QWidget):
                 p.setPen(theme.qcolor(theme.TEXT, 0.04))
                 p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
                 p.setPen(theme.qcolor(theme.MUTED))
-                p.drawText(QPointF(x + 4, self.height() - 8), _fmt(t))
+                p.drawText(QPointF(x + 4, r.bottom() + 16), _fmt(t))
             t += step
         p.setClipRect(r)
         # analysis curve
@@ -174,18 +219,33 @@ class CurveWidget(QWidget):
             if hit is not None:
                 self._delete(hit)
             return
+        if ev.button() == Qt.MiddleButton or (ev.button() == Qt.LeftButton and hit is None):
+            # empty space: a click seeks (on release), a drag scrolls
+            self._press, self._press_button = pos, ev.button()
+            self._pan_from = self.start_ms
+            self._panning = ev.button() == Qt.MiddleButton
+            if self._panning:
+                self.setCursor(Qt.ClosedHandCursor)
+            return
         if ev.button() != Qt.LeftButton:
             return
-        if hit is not None:
-            self._selected = hit
-            self._drag_idx = hit
-            self.editStarted.emit()
-        else:
-            self._selected = None
-            self.seekRequested.emit(int(max(0, min(self._ms(pos.x()), self.duration_ms))))
+        self._selected = hit
+        self._drag_idx = hit
+        self.editStarted.emit()
         self.update()
 
     def mouseMoveEvent(self, ev):
+        if self._press is not None:
+            dx = ev.position().x() - self._press.x()
+            if not self._panning and abs(dx) >= PAN_THRESHOLD_PX:
+                self._panning = True
+                self.setCursor(Qt.ClosedHandCursor)
+            if self._panning:
+                self.follow = False
+                self.start_ms = self._pan_from - dx / self._plot().width() * self.view_ms
+                self._clamp_view()
+                self.update()
+            return
         if self._drag_idx is None:
             self.setCursor(Qt.PointingHandCursor if self._hit(ev.position()) is not None else Qt.ArrowCursor)
             return
@@ -197,6 +257,14 @@ class CurveWidget(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, ev):
+        if self._press is not None:
+            if not self._panning and self._press_button == Qt.LeftButton:
+                self._selected = None
+                self.seekRequested.emit(int(max(0, min(self._ms(self._press.x()), self.duration_ms))))
+                self.update()
+            self._press, self._panning = None, False
+            self.setCursor(Qt.ArrowCursor)
+            return
         if self._drag_idx is not None:
             self._drag_idx = None
             self.actionsEdited.emit()
@@ -216,12 +284,21 @@ class CurveWidget(QWidget):
         self.update()
 
     def wheelEvent(self, ev):
-        d = ev.angleDelta().y() or ev.angleDelta().x()
-        if ev.modifiers() & Qt.ShiftModifier:
-            self.start_ms -= d / 120 * self.view_ms * 0.15
+        ad, px = ev.angleDelta(), ev.pixelDelta()
+        horizontal = abs(ad.x()) > abs(ad.y())
+        if horizontal or ev.modifiers() & Qt.ShiftModifier:
+            # touchpad swipe (pixel deltas) moves with the fingers, a wheel by 15 % per notch
+            if horizontal and not px.isNull():
+                self.start_ms -= px.x() / self._plot().width() * self.view_ms
+            else:
+                d = ad.x() if horizontal else (ad.y() or ad.x())
+                self.start_ms -= d / 120 * self.view_ms * 0.15
         else:
+            d = ad.y()
+            if not d:
+                return
             anchor = self._ms(ev.position().x())
-            factor = 0.8 if d > 0 else 1.25
+            factor = 0.8 ** (d / 120)        # proportional: smooth on touchpads too
             self.view_ms *= factor
             self._clamp_view()
             self.start_ms = anchor - (anchor - self.start_ms) * factor

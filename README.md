@@ -101,10 +101,18 @@ Auflösungen lohnt sich OpenCL eher.
    * **Bewegungsumfang**: minimale/maximale Position (0–100).
    * **Umkehren** / **Immer voller Hub**.
 5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = neuer Punkt,
-   Rechtsklick oder Entf = löschen, Mausrad = Zoom, Umschalt+Mausrad = scrollen,
-   Klick in die Kurve = zu dieser Stelle springen. Strg+Z / Strg+Umschalt+Z.
+   Rechtsklick oder Entf = löschen, Mausrad = Zoom, Klick in die Kurve = zu
+   dieser Stelle springen. Strg+Z / Strg+Umschalt+Z.
+   Kurve verschieben: freie Fläche ziehen (oder mittlere Maustaste), die
+   Scrollleiste darunter, Umschalt+Mausrad oder waagrecht wischen (Touchpad).
+   Video-Zeitleiste: Klick springt direkt an die Stelle und lässt sich gleich
+   weiterziehen, Mausrad = 1 s vor/zurück.
 6. **Strg+S** speichert `<Video>.funscript` neben dem Video – so finden es
    Player automatisch.
+
+**Ton**: Beim Abspielen läuft der Ton des Videos mit, synchron zum Bild und
+zum Gerät. Lautsprecher-Knopf oder **M** schaltet ihn stumm, der Regler daneben
+stellt die Lautstärke ein. Beides merkt sich die App.
 
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für

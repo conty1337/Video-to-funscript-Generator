@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "video-to-funscript"
-version = "0.2.1"
+version = "0.2.2"
 description = "Lokale, kostenlose Videoanalyse und Funscript-Erstellung"
 readme = "README.md"
 license = { text = "MIT" }
@@ -15,6 +15,9 @@ dependencies = [
     "opencv-python-headless>=4.8",
     # Essentials = QtCore/Gui/Widgets/Svg, ohne WebEngine & Co. (deutlich kleiner)
     "PySide6-Essentials>=6.5",
+    # Addons enthält QtMultimedia (Ton bei der Wiedergabe); das AppImage packt
+    # davon nur dieses Modul ein
+    "PySide6-Addons>=6.5",
     # Zertifikate für den Updater, falls das System keine an bekannter Stelle hat
     "certifi>=2024.0",
     # Intiface Central (Buttplug) spricht WebSocket
