@@ -187,6 +187,7 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
     if settings.mode == "track" and settings.sections():
         return analyze_tracking(path, settings, progress, cancel, info)
     using_ocl = gpu.set_opencl(settings.use_opencl)
+    report: dict = {}
     step = max(1, settings.frame_step)
     total = max(1, info.frame_count // step)
     w, h = scaled_size(info, settings.width)
@@ -196,7 +197,8 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
     dy: list[float] = [0.0]
     prev = None
     flow_buf = None
-    for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step)):
+    for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step,
+                                                    report=report)):
         if cancel and cancel():
             raise AnalysisCancelled()
         cur = np.ascontiguousarray(frame[ys, xs])
@@ -219,7 +221,8 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
         progress(1.0)
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32),
                       np.asarray(dy, np.float32),
-                      {"opencl": using_ocl, "width": w, "height": h})
+                      {"opencl": using_ocl, "width": w, "height": h,
+                       "decoder": report.get("decoder"), "decoder_errors": report.get("errors", [])})
 
 
 def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: ProgressCb | None = None,
@@ -230,6 +233,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     from .tracking import MAX_AREAS, MultiTracker
 
     info = info or probe(path)
+    report: dict = {}
     step = max(1, settings.frame_step)
     total = max(1, info.frame_count // step)
     w, h = scaled_size(info, settings.width)
@@ -249,7 +253,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     tracker = None
     active = -1
     prev = None
-    for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step)):
+    for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step,
+                                                    report=report)):
         if cancel and cancel():
             raise AnalysisCancelled()
         sec = next((s for s, a, b in plan if a <= i < b), -1)
@@ -292,7 +297,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     if progress:
         progress(1.0)
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32), np.asarray(dy, np.float32),
-                      {"opencl": False, "width": w, "height": h, "mode": "track"},
+                      {"opencl": False, "width": w, "height": h, "mode": "track",
+                       "decoder": report.get("decoder"), "decoder_errors": report.get("errors", [])},
                       tracks=tracks, track_sizes=sizes, track_section=np.asarray(owner, np.int16))
 
 

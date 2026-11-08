@@ -47,8 +47,9 @@ def _run_selftest(app, win, out: str) -> None:
         ok = bool(win.curve.actions) and sound
         win.grab().save(out)
         track = "mit Tonspur" if win.audio.has_audio else "ohne Tonspur"
+        dec = (win.motion.meta.get("decoder") if win.motion is not None else None) or "?"
         print(f"selftest: {len(win.curve.actions)} Punkte, Ton {'ok' if sound else 'FEHLT'} ({track}), "
-              f"Screenshot {out}")
+              f"Dekodierung {dec}, Screenshot {out}")
         if not sound:
             from .audio import IMPORT_ERROR
             print(f"selftest: Qt Multimedia nicht ladbar: {IMPORT_ERROR or 'unbekannter Fehler'}")
