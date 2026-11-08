@@ -10,7 +10,7 @@ from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
-                               QSplitter, QVBoxLayout, QWidget)
+                               QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import __version__, gpu
 from ..analysis import MotionData
@@ -21,6 +21,7 @@ from ..video import probe
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .player_panel import PlayerPanel
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
@@ -62,6 +63,10 @@ class MainWindow(QMainWindow):
         self.play_btn = self._transport("play", "Abspielen (Leertaste)")
         self.back_btn = self._transport("chevron-left", "Frame zurück (←)")
         self.fwd_btn = self._transport("chevron-right", "Frame vor (→)")
+        self.prev_btn = self._transport("skip-back", "Vorheriges Video (Bild ↑)")
+        self.next_btn = self._transport("skip-forward", "Nächstes Video (Bild ↓)")
+        self.full_btn = self._transport("maximize", "Vollbild (F11)")
+        self.full_btn.setEnabled(True)
         self.audio = AudioPlayer(self)
         self.mute_btn = self._transport("volume", "Ton an/aus (M)")
         self.mute_btn.setEnabled(self.audio.available)
@@ -88,16 +93,18 @@ class MainWindow(QMainWindow):
         self.curve_meta = QLabel("Noch nicht analysiert")
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
-        curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
+        curve_hint = self.curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
                            "Rechtsklick löscht · Mausrad zoomt")
         curve_hint.setObjectName("caption")
 
         controls = QHBoxLayout()
         controls.setContentsMargins(12, 8, 16, 8)
         controls.setSpacing(4)
+        controls.addWidget(self.prev_btn)
         controls.addWidget(self.back_btn)
         controls.addWidget(self.play_btn)
         controls.addWidget(self.fwd_btn)
+        controls.addWidget(self.next_btn)
         controls.addSpacing(8)
         controls.addWidget(self.slider, 1)
         controls.addSpacing(12)
@@ -105,6 +112,8 @@ class MainWindow(QMainWindow):
         controls.addSpacing(12)
         controls.addWidget(self.mute_btn)
         controls.addWidget(self.volume)
+        controls.addSpacing(4)
+        controls.addWidget(self.full_btn)
         stage = QHBoxLayout()
         stage.setContentsMargins(0, 0, 0, 0)
         stage.setSpacing(1)
@@ -138,9 +147,14 @@ class MainWindow(QMainWindow):
         fl.addWidget(self.analyze_btn)
         fl.addWidget(self.cancel_btn)
         rl.addWidget(footer)
-        right.setFixedWidth(320)
+        self.player = PlayerPanel(self.qsettings)
+        self.player.setObjectName("sidebar")
+        self.side = QStackedWidget()
+        self.side.addWidget(right)
+        self.side.addWidget(self.player)
+        self.side.setFixedWidth(320)
 
-        curve_box = QWidget()
+        curve_box = self.curve_box = QWidget()
         cl = QVBoxLayout(curve_box)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
@@ -165,11 +179,11 @@ class MainWindow(QMainWindow):
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
         bl.addWidget(main, 1)
-        sep = QWidget()
+        sep = self._side_sep = QWidget()
         sep.setFixedWidth(1)
         sep.setStyleSheet(f"background: {theme.HAIRLINE};")
         bl.addWidget(sep)
-        bl.addWidget(right)
+        bl.addWidget(self.side)
         self.setCentralWidget(body)
         self.statusBar().addWidget(self.status_label, 1)
         self.statusBar().setSizeGripEnabled(False)
@@ -203,8 +217,13 @@ class MainWindow(QMainWindow):
         self.back_btn.clicked.connect(lambda: self.step_frames(-1))
         self.fwd_btn.clicked.connect(lambda: self.step_frames(1))
         self.mute_btn.clicked.connect(self.toggle_mute)
+        self.prev_btn.clicked.connect(self.play_prev)
+        self.next_btn.clicked.connect(self.play_next)
+        self.full_btn.clicked.connect(self.toggle_fullscreen)
+        self.player.playRequested.connect(self.play_index)
         self.volume.valueChanged.connect(self._volume_changed)
         self._load_audio_settings()
+        self.set_player_mode(str(self.qsettings.value("mode", "edit")) == "player")
         self.slider.sliderMoved.connect(self.seek_frame)
         self.slider.sliderPressed.connect(lambda: self.seek_frame(self.slider.value()))
         self.analyze_btn.clicked.connect(self.start_analysis)
@@ -246,6 +265,13 @@ class MainWindow(QMainWindow):
         self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
         m.addSeparator()
         self._act(m, "Ton an/aus", self.toggle_mute, "M")
+        m.addSeparator()
+        self._act(m, "Nächstes Video", self.play_next, "PgDown")
+        self._act(m, "Vorheriges Video", self.play_prev, "PgUp")
+        m = self.menuBar().addMenu("&Ansicht")
+        self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
+        self.player_action.setCheckable(True)
+        self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
@@ -268,6 +294,14 @@ class MainWindow(QMainWindow):
         tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
         tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
         tb.addSeparator()
+        self.mode_edit = tb.addAction(theme.icon("pencil"), "Bearbeiten", lambda: self.set_player_mode(False))
+        self.mode_player = tb.addAction(theme.icon("list-video"), "Player", lambda: self.set_player_mode(True))
+        for a, tip in ((self.mode_edit, "Scripts erstellen und bearbeiten"),
+                       (self.mode_player, "Videos mit Script abspielen, mit Playlist (Strg+P)")):
+            a.setCheckable(True)
+            a.setToolTip(tip)
+        self.mode_edit.setChecked(True)
+        tb.addSeparator()
         tb.addAction(theme.icon("undo"), "", self.undo).setToolTip("Rückgängig (Strg+Z)")
         tb.addAction(theme.icon("redo"), "", self.redo).setToolTip("Wiederholen (Strg+Umschalt+Z)")
         spacer = QWidget()
@@ -276,6 +310,7 @@ class MainWindow(QMainWindow):
         self.file_label = QLabel()
         self.file_label.setObjectName("meta")
         tb.addWidget(self.file_label)
+        self._toolbar = tb
 
     def _transport(self, name: str, tip: str) -> QPushButton:
         b = QPushButton(theme.icon(name, theme.TEXT_2, 16), "")
@@ -352,7 +387,10 @@ class MainWindow(QMainWindow):
             return
         ok, frame = self.cap.read()
         if not ok:
+            was_playing = self.timer.isActive()
             self.pause()
+            if was_playing:
+                self._video_ended()
             return
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
         self._cur_idx = idx
@@ -399,6 +437,7 @@ class MainWindow(QMainWindow):
         target = int(media_ms * self.fps / 1000)
         if target >= self.frame_count:
             self.pause()
+            self._video_ended()
             return
         behind = target - self._cur_idx
         if behind > 30:                       # far behind (slow decoder): jump
@@ -437,6 +476,78 @@ class MainWindow(QMainWindow):
         self.rail.set_device_position(self.devices.device_position())
         self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
 
+    # ------------------------------------------------------------ player mode
+    @property
+    def player_mode(self) -> bool:
+        return self.side.currentWidget() is self.player
+
+    def set_player_mode(self, on: bool):
+        on = bool(on)
+        self.side.setCurrentWidget(self.player if on else self.side.widget(0))
+        self.mode_player.setChecked(on)
+        self.mode_edit.setChecked(not on)
+        self.player_action.setChecked(on)
+        self.curve.editable = not on
+        self.save_action.setEnabled(not on)
+        self.prev_btn.setVisible(on)
+        self.next_btn.setVisible(on)
+        has_list = bool(self.player.playlist.items)
+        self.prev_btn.setEnabled(on and has_list)
+        self.next_btn.setEnabled(on and has_list)
+        self.curve_hint.setText("Nur ansehen · zum Bearbeiten in den Modus „Bearbeiten“ wechseln" if on else
+                                "Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
+                                "Rechtsklick löscht · Mausrad zoomt")
+        self.qsettings.setValue("mode", "player" if on else "edit")
+
+    def play_index(self, index: int):
+        """Open playlist entry `index` and start playback (player mode)."""
+        pl = self.player.playlist
+        if not 0 <= index < len(pl.items):
+            return
+        if not self.player_mode:
+            self.set_player_mode(True)
+        self.player.set_current(index)
+        self.open_video(pl.items[index])
+        if self.video_path and Path(self.video_path) == Path(pl.items[index]):
+            self.prev_btn.setEnabled(True)
+            self.next_btn.setEnabled(True)
+            if not self.timer.isActive():
+                self.toggle_play()
+        self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
+                     + ("" if self.curve.actions else "  (kein Script)"))
+
+    def play_next(self):
+        i = self.player.playlist.next_index()
+        if i is None:
+            self._status("Ende der Playlist")
+            return
+        self.play_index(i)
+
+    def play_prev(self):
+        # like music players: more than 3 s in -> restart this video
+        if self.timer.isActive() and self._media_ms() > 3000:
+            self.seek_frame(0)
+            return
+        i = self.player.playlist.prev_index()
+        if i is not None:
+            self.play_index(i)
+
+    def _video_ended(self):
+        if self.player_mode and self.player.playlist.items:
+            QTimer.singleShot(0, self.play_next)
+
+    def toggle_fullscreen(self):
+        full = not self.isFullScreen()
+        for w in (self.menuBar(), self._toolbar, self.statusBar(), self.side, self._side_sep, self.curve_box):
+            w.setVisible(not full)
+        if full:
+            self._was_maximized = self.isMaximized()
+            self.showFullScreen()
+        elif getattr(self, "_was_maximized", False):
+            self.showMaximized()
+        else:
+            self.showNormal()
+
     # ------------------------------------------------------------ sound
     def _load_audio_settings(self):
         try:
@@ -467,6 +578,8 @@ class MainWindow(QMainWindow):
         self.devices.emergency_stop()
         if self.timer.isActive():
             self.pause()
+        if self.isFullScreen():
+            self.toggle_fullscreen()
         self._status("Not-Aus: Gerät gestoppt")
 
     # ------------------------------------------------------------ analysis
@@ -684,6 +797,10 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, ev):
         urls = [u.toLocalFile() for u in ev.mimeData().urls() if u.isLocalFile()]
+        if urls and self.player_mode:          # player: dropped videos go to the playlist
+            n = self.player.add_paths(urls)
+            self._status(f"{n} Video{'s' if n != 1 else ''} zur Playlist hinzugefügt")
+            return
         if urls:
             p = Path(urls[0])
             if p.is_dir():
@@ -712,6 +829,7 @@ class MainWindow(QMainWindow):
         self.updates.shutdown()
         self.devices.shutdown()
         self.audio.shutdown()
+        self.player.save()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         if self.cap:
             self.cap.release()

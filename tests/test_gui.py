@@ -257,3 +257,41 @@ def test_timeline_click_jumps_and_curve_pans(app, sine_video):
     c.scrollbar.setValue(0)
     assert c.start_ms == 0
     w.close()
+
+
+
+def test_player_mode_plays_playlist(app, tmp_path, monkeypatch):
+    """Player mode: plays the videos with a script one after another, skips the rest,
+    and the curve is read-only."""
+    from pathlib import Path
+
+    from videogen import make_video
+
+    from vtf.funscript import Action, Funscript
+    from vtf.gui.main_window import MainWindow
+
+    vids = [make_video(tmp_path / f"{n}.avi", seconds=1.0) for n in "abc"]
+    for v in (vids[0], vids[2]):
+        Funscript([Action(0, 0), Action(500, 100), Action(1000, 0)]).save(v.with_suffix(".funscript"))
+
+    w = MainWindow()
+    w.player.playlist.clear()
+    w.set_player_mode(True)
+    assert w.player_mode and not w.curve.editable
+    assert w.player.add_paths([tmp_path]) == 3
+    assert "2 mit Script" in w.player.meta.text()
+    w.player._play_clicked()
+    assert Path(w.video_path).stem == "a" and w.timer.isActive()
+    assert len(w.curve.actions) == 3
+    _wait(1600)                                    # a ends -> b skipped -> c
+    assert Path(w.video_path).stem == "c"
+    assert w.player.playlist.current == 2
+    w.pause()
+    w.play_prev()
+    assert Path(w.video_path).stem == "a"
+    w.pause()
+    w.set_player_mode(False)
+    assert w.curve.editable
+    w.player.playlist.clear()
+    w.player.save()
+    w.close()

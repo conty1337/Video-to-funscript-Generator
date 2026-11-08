@@ -48,6 +48,7 @@ class CurveWidget(QWidget):
         self.start_ms = 0.0
         self.playhead_ms = 0.0
         self.follow = True
+        self.editable = True           # False in player mode: view, seek and scroll only
         self._drag_idx: int | None = None
         self._selected: int | None = None
         self._press: QPointF | None = None     # press on empty space (click or pan)
@@ -214,7 +215,7 @@ class CurveWidget(QWidget):
     # ------------------------------------------------------------ mouse
     def mousePressEvent(self, ev):
         pos = ev.position()
-        hit = self._hit(pos)
+        hit = self._hit(pos) if self.editable else None
         if ev.button() == Qt.RightButton:
             if hit is not None:
                 self._delete(hit)
@@ -247,7 +248,8 @@ class CurveWidget(QWidget):
                 self.update()
             return
         if self._drag_idx is None:
-            self.setCursor(Qt.PointingHandCursor if self._hit(ev.position()) is not None else Qt.ArrowCursor)
+            over = self.editable and self._hit(ev.position()) is not None
+            self.setCursor(Qt.PointingHandCursor if over else Qt.ArrowCursor)
             return
         i = self._drag_idx
         lo = self.actions[i - 1].at + 1 if i > 0 else 0
@@ -270,7 +272,7 @@ class CurveWidget(QWidget):
             self.actionsEdited.emit()
 
     def mouseDoubleClickEvent(self, ev):
-        if ev.button() != Qt.LeftButton or self._hit(ev.position()) is not None:
+        if not self.editable or ev.button() != Qt.LeftButton or self._hit(ev.position()) is not None:
             return
         at = int(max(0, min(self._ms(ev.position().x()), self.duration_ms)))
         times = [a.at for a in self.actions]
@@ -307,7 +309,7 @@ class CurveWidget(QWidget):
         self.update()
 
     def keyPressEvent(self, ev):
-        if ev.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self._selected is not None:
+        if self.editable and ev.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self._selected is not None:
             self._delete(self._selected)
         else:
             super().keyPressEvent(ev)
