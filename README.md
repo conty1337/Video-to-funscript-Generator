@@ -113,8 +113,12 @@ vtf analyze --help                         # alle Optionen
 ## AppImage selbst bauen
 
 ```bash
-./scripts/build-appimage.sh   # erzeugt dist/Video-to-Funscript-<Version>-x86_64.AppImage
+sudo dnf install squashfs-tools   # mksquashfs, meist schon installiert
+./scripts/build-appimage.sh       # erzeugt dist/Video-to-Funscript-<Version>-x86_64.AppImage
 ```
+
+Der Build braucht keine Downloads außer den Python-Paketen: Die AppImage-Runtime
+liegt in `packaging/` (siehe [packaging/RUNTIME.md](packaging/RUNTIME.md)).
 
 Die GitHub-Action `appimage` baut das AppImage bei jedem Push auf `main` und bei
 jedem PR automatisch und testet es (Video analysieren, Screenshot). Bei einem

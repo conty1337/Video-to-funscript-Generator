@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Baut dist/Video-to-Funscript-<version>-x86_64.AppImage
 #   1. PyInstaller bündelt Python, NumPy, OpenCV und Qt in einen Ordner
-#   2. appimagetool packt den Ordner zusammen mit Starter, Icon und .desktop-Datei
+#   2. mksquashfs packt den Ordner mit Starter, Icon und .desktop-Datei in ein
+#      SquashFS-Abbild, davor kommt die AppImage-Runtime aus packaging/
+#      (genau das macht appimagetool, nur ohne Downloads)
 # Nutzt .venv, falls vorhanden, sonst das aktuelle Python (z. B. in der CI).
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
@@ -56,22 +58,17 @@ cp packaging/vtf.png "$APPDIR/video-to-funscript.png"
 cp packaging/vtf.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/video-to-funscript.png"
 ln -sf video-to-funscript.png "$APPDIR/.DirIcon"
 
-echo "==> appimagetool"
-# Downloads mit Wiederholungen: GitHub-Releases antworten gelegentlich mit 5xx
-fetch() { curl -fsSL --retry 12 --retry-delay 15 --retry-all-errors --connect-timeout 20 -o "$2.part" "$1" && mv "$2.part" "$2"; }
-mkdir -p build "${APPIMAGE_TOOLS_DIR:-build}"
-TOOL="${APPIMAGETOOL:-}"
-if [ -z "$TOOL" ]; then
-  TOOL="${APPIMAGE_TOOLS_DIR:-build}/appimagetool"
-  if [ ! -x "$TOOL" ]; then
-    fetch "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage" "$TOOL"
-    chmod +x "$TOOL"
-  fi
+echo "==> SquashFS + Runtime"
+RUNTIME="${APPIMAGE_RUNTIME:-packaging/runtime-${ARCH}}"
+RUNTIME_SHA256="617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46"
+[ -s "$RUNTIME" ] || { echo "Runtime fehlt: $RUNTIME (siehe packaging/RUNTIME.md)"; exit 1; }
+if [ -z "${APPIMAGE_RUNTIME:-}" ] && [ "$ARCH" = "x86_64" ]; then
+  echo "$RUNTIME_SHA256  $RUNTIME" | sha256sum -c --quiet - || { echo "Prüfsumme der Runtime falsch"; exit 1; }
 fi
-RUNTIME="${APPIMAGE_RUNTIME:-${APPIMAGE_TOOLS_DIR:-build}/runtime-${ARCH}}"
-if [ ! -s "$RUNTIME" ]; then
-  fetch "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-${ARCH}" "$RUNTIME"
-fi
-# ohne FUSE lauffähig (CI, Container)
-APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOL" --no-appstream --runtime-file "$RUNTIME" "$APPDIR" "$OUT"
+command -v mksquashfs >/dev/null || { echo "mksquashfs fehlt: sudo dnf install squashfs-tools"; exit 1; }
+mkdir -p dist
+rm -f build/app.squashfs "$OUT"
+mksquashfs "$APPDIR" build/app.squashfs -root-owned -noappend -comp zstd -Xcompression-level 19 -no-progress >/dev/null
+cat "$RUNTIME" build/app.squashfs > "$OUT"
+chmod +x "$OUT"
 echo "==> Fertig: $OUT ($(du -h "$OUT" | cut -f1))"
