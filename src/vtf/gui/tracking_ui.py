@@ -75,10 +75,12 @@ class TrackingBox(QWidget):
         grid.addWidget(self.out_btn, 1, 1)
         lay.addLayout(grid)
 
-        self.end_btn.clicked.connect(lambda: self._say(self.set_end(self.current_ms())))
-        self.del_btn.clicked.connect(lambda: self._say(self.delete_at(self.current_ms())))
-        self.in_btn.clicked.connect(lambda: self._say(self.calibrate("in", self.current_ms())))
-        self.out_btn.clicked.connect(lambda: self._say(self.calibrate("out", self.current_ms())))
+        # bound methods, no lambdas: a lambda holding self makes a reference cycle that
+        # the garbage collector may break at any time - also after the QApplication is gone
+        self.end_btn.clicked.connect(self._end_clicked)
+        self.del_btn.clicked.connect(self._del_clicked)
+        self.in_btn.clicked.connect(self._in_clicked)
+        self.out_btn.clicked.connect(self._out_clicked)
         self.list.itemClicked.connect(self._clicked)
         self.refresh()
 
@@ -99,6 +101,18 @@ class TrackingBox(QWidget):
     def boxes_at(self, ms: float) -> list:
         i = self.index_at(ms)
         return list(self.sections[i].boxes) if i is not None else []
+
+    def _end_clicked(self):
+        self._say(self.set_end(self.current_ms()))
+
+    def _del_clicked(self):
+        self._say(self.delete_at(self.current_ms()))
+
+    def _in_clicked(self):
+        self._say(self.calibrate("in", self.current_ms()))
+
+    def _out_clicked(self):
+        self._say(self.calibrate("out", self.current_ms()))
 
     def _say(self, msg: str | None) -> None:
         if msg:

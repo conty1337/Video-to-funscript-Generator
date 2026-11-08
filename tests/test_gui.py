@@ -416,6 +416,8 @@ def test_tracking_sections_box(app):
     assert "nur innerhalb" in tb.calibrate("in", 9000)
     assert "gelöscht" in tb.delete_at(1000)
     assert [s.start_ms for s in tb.sections] == [3000]
+    tb.deleteLater()                                         # gone before the QApplication
+    app.processEvents()
 
 
 def test_tracking_sections_in_main_window(app, tmp_path):
