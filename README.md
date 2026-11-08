@@ -132,8 +132,9 @@ Die GitHub-Action `appimage` baut das AppImage bei jedem Push auf `main` und bei
 jedem PR automatisch und testet es (Video analysieren, Screenshot).
 
 **Release erstellen:** Version in `src/vtf/__init__.py` und `pyproject.toml`
-erhöhen, mergen, dann Tag setzen: `git tag v0.2.0 && git push origin v0.2.0`.
-Die Action prüft, dass Tag und Version zusammenpassen, und veröffentlicht
+erhöhen und mergen. Dann auf GitHub unter Actions → appimage → „Run workflow“
+mit Haken bei „release“ auf `main` starten (oder einen Tag `v0.2.0` pushen).
+Die Action legt den Tag an, bricht ab, wenn es die Version schon gibt, und veröffentlicht
 `Video-to-Funscript-x86_64.AppImage` und `SHA256SUMS`. Installierte Versionen
 aktualisieren sich daraufhin selbst.
 

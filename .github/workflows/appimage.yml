@@ -5,6 +5,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Release aus der Version in src/vtf/__init__.py veröffentlichen (nur auf main)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -36,24 +41,34 @@ jobs:
             dist/*.AppImage
             selftest.png
       - name: Release-Dateien vorbereiten
-        if: startsWith(github.ref, 'refs/tags/v')
+        id: rel
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="$(python -c 'import sys; sys.path.insert(0, "src"); import vtf; print(vtf.__version__)')"
-          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+          TAG="v$VERSION"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$TAG" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME passt nicht zu __version__ $VERSION"; exit 1
           fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG gibt es schon. Version in src/vtf/__init__.py und pyproject.toml erhöhen."; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           mkdir release
           # fester Name: stabiler Download-Link und Ziel des Updaters
           cp dist/*.AppImage release/Video-to-Funscript-x86_64.AppImage
           (cd release && sha256sum Video-to-Funscript-x86_64.AppImage > SHA256SUMS && cat SHA256SUMS)
       - name: Release veröffentlichen
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.rel.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rel.outputs.tag }}
         # erst als Entwurf mit allen Dateien, dann veröffentlichen:
-        # bei unveränderlichen Releases lassen sich danach keine Dateien mehr anhängen
+        # bei unveränderlichen Releases lassen sich danach keine Dateien mehr anhängen.
+        # Bei manuellem Start legt gh den Tag auf dem gebauten Commit an.
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-            --title "Video-to-Funscript $GITHUB_REF_NAME" --notes-file packaging/release-notes.md \
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+            --title "Video-to-Funscript $TAG" --notes-file packaging/release-notes.md \
             release/Video-to-Funscript-x86_64.AppImage release/SHA256SUMS
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh release edit "$TAG" --draft=false --latest
