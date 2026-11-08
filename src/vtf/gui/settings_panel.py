@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
 from ..analysis import AnalysisSettings
 from ..generator import GeneratorSettings
 from . import theme
+from .tracking_ui import TrackingBox
 
 AXES = [("Vertikal", "vertical"), ("Horizontal", "horizontal"), ("Automatisch", "auto")]
 HWACCEL = [("Automatisch", "auto"), ("VAAPI, AMD-GPU", "vaapi"), ("Software", "none")]
@@ -138,6 +139,11 @@ class SettingsPanel(QWidget):
         self.method.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.method.setMinimumContentsLength(8)
         _row(f, "Methode", self.method)
+        lay.addLayout(f)
+        self.tracking = TrackingBox()
+        lay.addWidget(self.tracking)
+        lay.addSpacing(4)
+        f = _form()
         self.width = QComboBox()
         for w in (160, 240, 320, 480, 640):
             self.width.addItem(f"{w} px", w)
@@ -168,9 +174,9 @@ class SettingsPanel(QWidget):
         lay.addWidget(self.roi_label)
         lay.addStretch(1)
         self._roi = None
-        self._tracks: list = []
-        self._track_start_ms = 0
         self._update_roi_label()
+        self.tracking.analysisChanged.connect(self.analysisChanged)
+        self.tracking.generatorChanged.connect(self.generatorChanged)
 
         for w in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm):
             w.valueChanged.connect(self.generatorChanged)
@@ -189,22 +195,13 @@ class SettingsPanel(QWidget):
         return self.method.currentData()
 
     @property
-    def track_start_ms(self) -> int:
-        return self._track_start_ms
-
-    @property
-    def tracks(self) -> list:
-        return list(self._tracks)
+    def sections(self) -> list:
+        """Tracking sections (only meaningful in mode "track")."""
+        return list(self.tracking.sections) if self.mode == "track" else []
 
     def _method_changed(self):
         self._update_roi_label()
         self.methodChanged.emit(self.mode)
-        self.analysisChanged.emit()
-
-    def set_tracks(self, boxes, start_ms: float) -> None:
-        self._tracks = [tuple(round(v, 4) for v in b) for b in boxes]
-        self._track_start_ms = int(start_ms)
-        self._update_roi_label()
         self.analysisChanged.emit()
 
     # ------------------------------------------------------------ roi
@@ -214,18 +211,10 @@ class SettingsPanel(QWidget):
         self.analysisChanged.emit()
 
     def _update_roi_label(self):
-        if self.mode == "track":
-            n = len(self._tracks)
-            if not n:
-                text = ("Tracking: im Video bis zu 3 Bereiche aufziehen, an einer Stelle, wo sie gut "
-                        "zu sehen sind. 1 Bereich = dessen Bewegung. 2–3 Bereiche = Bereich 1 relativ "
-                        "zu den anderen, dann spielt die Kamera keine Rolle.")
-            else:
-                rel = "relativ zu Bereich 2" + (" und 3" if n > 2 else "") if n > 1 else "allein"
-                text = (f"Tracking: {n} Bereich{'e' if n > 1 else ''}, markiert bei "
-                        f"{_fmt_ms(self._track_start_ms)}. Bereich 1 wird {rel} verfolgt, ab dieser "
-                        "Stelle bis zum Ende. Rechtsklick im Video entfernt die Bereiche.")
-            self.roi_label.setText(text)
+        track = self.mode == "track"
+        self.roi_label.setVisible(not track)
+        self.tracking.setVisible(track)
+        if track:
             return
         if not self._roi:
             self.roi_label.setText("Analysebereich: ganzes Bild. Rechteck im Video aufziehen, um ihn einzugrenzen.")
@@ -248,11 +237,11 @@ class SettingsPanel(QWidget):
             width=self.width.currentData(), roi=self._roi, frame_step=self.step.value(),
             compensate_camera=self.cam.isChecked(), use_opencl=self.opencl.isChecked(),
             hwaccel=self.hwaccel.currentData(), mode=self.mode,
-            track_boxes=tuple(self._tracks), track_start_ms=self._track_start_ms)
+            track_sections=tuple(self.sections))
 
     def to_dict(self) -> dict:
         a = asdict(self.analysis_settings())
-        for k in ("roi", "track_boxes", "track_start_ms"):     # belong to one video
+        for k in ("roi", "track_boxes", "track_start_ms", "track_sections"):     # belong to one video
             a.pop(k)
         return {"generator": asdict(self.generator_settings()), "analysis": a}
 

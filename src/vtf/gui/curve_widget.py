@@ -54,6 +54,7 @@ class CurveWidget(QWidget):
         self.playhead_ms = 0.0
         self.follow = True
         self.editable = True           # False in player mode: view, seek and scroll only
+        self.sections: list[tuple] = []  # tracking: (start, end, calib_in_ms, calib_out_ms)
         self._sel: set[int] = set()          # selected action indices
         self._drag_from: QPointF | None = None
         self._drag_base: list[Action] | None = None
@@ -78,6 +79,10 @@ class CurveWidget(QWidget):
         self.view_ms = min(self.view_ms, self.duration_ms)
         self._sel = set()
         self._clamp_view()
+        self.update()
+
+    def set_sections(self, sections) -> None:
+        self.sections = list(sections)
         self.update()
 
     def set_actions(self, actions: list[Action]):
@@ -187,6 +192,22 @@ class CurveWidget(QWidget):
                 p.drawText(QPointF(x + 4, r.bottom() + 16), _fmt(t))
             t += step
         p.setClipRect(r)
+        # tracking sections: light bands, calibration moments as labelled lines
+        for a, b, cin, cout in self.sections:
+            x0, x1 = self._x(a), self._x(b)
+            if x1 < r.left() or x0 > r.right():
+                continue
+            p.fillRect(QRectF(x0, r.top(), x1 - x0, r.height()), theme.qcolor(theme.ACCENT, 0.05))
+            p.setPen(QPen(theme.qcolor(theme.ACCENT, 0.35), 1))
+            p.drawLine(QPointF(x0, r.top()), QPointF(x0, r.bottom()))
+            for ms, label, y in ((cin, "drin", r.bottom() - 4), (cout, "raus", r.top() + 12)):
+                if ms is None:
+                    continue
+                x = self._x(ms)
+                p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.8), 1, Qt.DashLine))
+                p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+                p.setPen(theme.qcolor(theme.TEXT_2))
+                p.drawText(QPointF(x + 4, y), label)
         # analysis curve
         if len(self.t_ms):
             i0 = max(0, int(np.searchsorted(self.t_ms, self.start_ms)) - 1)

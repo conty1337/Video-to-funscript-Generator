@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import cv2
+import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -145,7 +146,7 @@ class MainWindow(QMainWindow):
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.setSpacing(0)
-        scroll = QScrollArea()
+        scroll = self._side_scroll = QScrollArea()
         scroll.setObjectName("sidebarScroll")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -243,7 +244,13 @@ class MainWindow(QMainWindow):
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.cancel_btn.clicked.connect(self.cancel_analysis)
         self.view.roiChanged.connect(self.panel.set_roi)
-        self.view.tracksChanged.connect(self._tracks_changed)
+        self.view.boxDrawn.connect(self._box_drawn)
+        self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self.panel.tracking.current_ms = self._cur_ms
+        self.panel.tracking.message.connect(self._status)
+        self.panel.tracking.seekRequested.connect(self.seek_ms)
+        self.panel.tracking.analysisChanged.connect(self._sections_changed)
+        self.panel.tracking.generatorChanged.connect(self._sections_changed)
         self.panel.methodChanged.connect(self._method_changed)
         self.panel.generatorChanged.connect(self.regen_timer.start)
         self.panel.analysisChanged.connect(self._analysis_outdated)
@@ -300,6 +307,14 @@ class MainWindow(QMainWindow):
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
         self.player_action.setCheckable(True)
         self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
+        m = self.menuBar().addMenu("&Tracking")
+        self._act(m, "Abschnitt-Ende hier", lambda: self._track_cmd(self.panel.tracking.set_end), "E")
+        self._act(m, "Ganz drin hier (Position 0)",
+                  lambda: self._track_cmd(self.panel.tracking.calibrate, "in"), "D")
+        self._act(m, "Ganz draußen hier (Position 100)",
+                  lambda: self._track_cmd(self.panel.tracking.calibrate, "out"), "A")
+        m.addSeparator()
+        self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
@@ -398,7 +413,7 @@ class MainWindow(QMainWindow):
         self.panel.set_roi(None)
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
-        self.panel.set_tracks([], 0)
+        self.panel.tracking.reset(info.duration * 1000, info.fps)
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -514,27 +529,57 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ tracking
     def _method_changed(self, mode: str):
         self.view.set_mode("track" if mode == "track" else "roi")
-        self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0)
+        if mode == "track":       # bring the section buttons into view
+            QTimer.singleShot(0, lambda: self._side_scroll.ensureWidgetVisible(self.panel.tracking, 0, 16))
+        self._update_track_overlay(self._cur_ms())
+        self._update_section_marks()
 
-    def _tracks_changed(self, boxes: list):
-        ms = max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0
-        old = self.panel.tracks
-        if old and boxes and len(boxes) > len(old) and abs(ms - self.panel.track_start_ms) > 1000 / self.fps:
-            # all areas belong to one frame: marking on another frame starts over
-            boxes = boxes[-1:]
-            self.view.set_tracks(boxes)
-            self._status("Bereiche müssen auf demselben Bild markiert werden – neu begonnen")
-        start = self.panel.track_start_ms if old and len(boxes) > 1 else ms
-        self.panel.set_tracks(boxes, start)
+    def _cur_ms(self) -> float:
+        return max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0.0
+
+    def _box_drawn(self, box):
+        self._status(self.panel.tracking.add_box(box, self._cur_ms()))
+
+    def _track_cmd(self, fn, *args):
+        """Tracking commands from the menu: only in mode Tracking."""
+        if self.panel.mode != "track":
+            self._status("Nur bei Analyse-Methode „Tracking“")
+            return
+        self._status(fn(*args, self._cur_ms()))
+
+    def _sections_changed(self):
+        self._update_track_overlay(self._cur_ms())
+        self._update_section_marks()
+
+    def _update_section_marks(self):
+        """Sections and calibration moments as marks in the curve."""
+        tb = self.panel.tracking
+        if self.panel.mode != "track":
+            self.curve.set_sections([])
+            return
+        marks = []
+        for i, a, b in tb._ranges():
+            sec = tb.sections[i]
+            marks.append((a, b, sec.calib_in_ms, sec.calib_out_ms))
+        self.curve.set_sections(marks)
 
     def _update_track_overlay(self, ms: float):
-        m = self.motion
-        if self.view.mode != "track" or m is None or m.tracks is None or m.track_sizes is None:
+        if self.view.mode != "track":
             self.view.set_track_overlay(None)
             return
-        i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
-        boxes = [(cx - w / 2, cy - h / 2, w, h) for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes)]
-        self.view.set_track_overlay(boxes)
+        m = self.motion
+        if m is not None and m.tracks is not None and m.track_section is not None and len(m.tracks):
+            i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
+            sec = int(m.track_section[i])
+            if sec >= 0 and m.track_sizes is not None and sec < len(m.track_sizes):
+                boxes = [(cx - w / 2, cy - h / 2, w, h)
+                         for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes[sec])
+                         if not (np.isnan(cx) or np.isnan(w))]
+                self.view.set_track_overlay(boxes)
+                return
+        # not analysed (yet) here: show the areas as marked
+        self.view.set_track_overlay(None)
+        self.view.set_tracks(self.panel.tracking.boxes_at(ms))
 
     # ------------------------------------------------------------ player mode
     @property
@@ -651,7 +696,7 @@ class MainWindow(QMainWindow):
     def start_analysis(self):
         if not self.video_path or (self.worker and self.worker.isRunning()):
             return
-        if self.panel.mode == "track" and not self.panel.tracks:
+        if self.panel.mode == "track" and not self.panel.sections:
             self._status("Tracking: erst im Video die Bereiche aufziehen, die verfolgt werden sollen")
             return
         if self.curve.actions and self.dirty and QMessageBox.question(
@@ -710,7 +755,7 @@ class MainWindow(QMainWindow):
     def regenerate(self):
         if self.motion is None:
             return
-        script = generate(self.motion, self.panel.generator_settings())
+        script = generate(self.motion, self.panel.generator_settings(), self.panel.sections)
         self._l0_signal = (script.t_ms, script.signal)
         dur = max(self.motion.duration_ms, self.frame_count / self.fps * 1000)
         if self.axis == "L0":
@@ -735,7 +780,7 @@ class MainWindow(QMainWindow):
         if self.motion is None:
             self._status("Erst analysieren")
             return
-        axes = generate_axes(self.motion, self.panel.generator_settings())
+        axes = generate_axes(self.motion, self.panel.generator_settings(), self.panel.sections)
         self._sync_axis()
         for code, acts in axes.items():
             self.undo_stack.append((code, list(self.actions_for(code))))
@@ -964,7 +1009,9 @@ class MainWindow(QMainWindow):
             "Bearbeiten\n"
             "1. Video öffnen (Strg+O oder Datei hierher ziehen).\n"
             "2. Methode wählen: „Bewegung im Bild“ (optional Rechteck = Analysebereich)\n"
-            "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. Hüfte, Oberschenkel).\n"
+            "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n"
+            "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
+            "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
             "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"

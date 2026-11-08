@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .analysis import MotionData
+from .analysis import MotionData, section_ranges
 from .funscript import Action
 
 
@@ -175,9 +175,10 @@ def enforce_min_interval(idx: list[int], t_ms: np.ndarray, signal: np.ndarray,
     return out
 
 
-def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings) -> list[Action]:
+def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
+                    delta_scale: float = 1.0) -> list[Action]:
     sens = float(np.clip(s.sensitivity, 0, 100)) / 100.0
-    delta = 0.02 + (1.0 - sens) * 0.5
+    delta = (0.02 + (1.0 - sens) * 0.5) * delta_scale
     idx = find_extrema(signal, delta)
     idx = enforce_min_interval(idx, t_ms, signal, s.min_interval_ms)
     lo, hi = sorted((int(s.pos_min), int(s.pos_max)))
@@ -195,10 +196,75 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings) 
     return actions
 
 
-def generate(motion: MotionData, s: GeneratorSettings | None = None) -> GeneratedScript:
+def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()) -> GeneratedScript:
+    """Script from the analysis. With tracking sections, points are only made
+    inside them, and calibrated sections use the real depth."""
     s = s or GeneratorSettings()
     t_ms, sig = build_signal(motion, s)
-    return GeneratedScript(t_ms, sig, extract_actions(t_ms, sig, s))
+    if motion.track_section is None or not sections:
+        return GeneratedScript(t_ms, sig, extract_actions(t_ms, sig, s))
+    sig = sig.copy()
+    ranges = section_ranges(sections, motion.duration_ms + 1000)
+    calibrated: set[int] = set()
+    for sec, _a, _b in ranges:
+        depth = depth_signal(motion, s, sections[sec], sec)
+        if depth is not None:
+            mask = motion.track_section == sec
+            sig[mask] = depth[mask]
+            calibrated.add(sec)
+    actions: list[Action] = []
+    for sec, a, b in ranges:
+        inside = (t_ms >= a) & (t_ms < b)
+        if inside.any():
+            # the real depth is not stretched to the full range: smaller strokes must count too
+            scale = 0.4 if sec in calibrated else 1.0
+            actions += extract_actions(t_ms[inside], sig[inside], s, delta_scale=scale)
+    actions.sort(key=lambda x: x.at)
+    return GeneratedScript(t_ms, sig, actions)
+
+
+def _measure(motion: MotionData, n_areas: int, axis: str) -> np.ndarray:
+    """What the depth is read from, per sample (px of the analysis frame):
+    the distance between areas 1 and 2, or with one area its position."""
+    w = float(motion.meta.get("width", 1) or 1)
+    h = float(motion.meta.get("height", 1) or 1)
+    tr = motion.tracks.astype(np.float64) * np.array([w, h])
+    if n_areas >= 2:
+        return np.hypot(*(tr[:, 1] - tr[:, 0]).T)
+    if axis == "horizontal":
+        return tr[:, 0, 0]
+    return -tr[:, 0, 1]                      # up = out
+
+
+def depth_signal(motion: MotionData, s: GeneratorSettings, section, index: int) -> np.ndarray | None:
+    """0..1 per sample for a calibrated section: 0 = like the "fully in" moment,
+    1 = like the "fully out" moment. None if the section is not calibrated or the
+    moments are not inside it."""
+    if not getattr(section, "calibrated", False) or motion.tracks is None:
+        return None
+    mask = motion.track_section == index
+    if not mask.any():
+        return None
+    n_areas = int(np.sum(~np.isnan(motion.track_sizes[index, :, 0]))) if motion.track_sizes is not None else 1
+    m = _measure(motion, n_areas, s.axis)
+    fps = motion.fps
+
+    def at(ms):
+        i = round(ms / 1000 * fps)
+        if not 0 <= i < len(m) or not mask[i] or np.isnan(m[i]):
+            return None
+        lo, hi = max(0, i - 1), min(len(m), i + 2)          # a little averaging
+        return float(np.nanmean(m[lo:hi]))
+
+    m_in, m_out = at(section.calib_in_ms), at(section.calib_out_ms)
+    if m_in is None or m_out is None or abs(m_out - m_in) < 1.0:
+        return None
+    vals = np.where(mask, m, m_in)
+    vals = gaussian_smooth(np.nan_to_num(vals, nan=m_in), s.smoothing_ms / 1000.0 * fps / 2.0)
+    sig = (vals - m_in) / (m_out - m_in)
+    if s.invert:
+        sig = 1.0 - sig
+    return np.clip(sig, 0.0, 1.0)
 
 
 # ------------------------------------------------------------- further axes
@@ -212,7 +278,12 @@ def roll_signal(motion: MotionData, s: GeneratorSettings) -> tuple[np.ndarray, n
     w = float(motion.meta.get("width", 1) or 1)
     h = float(motion.meta.get("height", 1) or 1)
     vec = (tr[:, 1] - tr[:, 0]) * np.array([w, h])
-    ang = np.unwrap(np.arctan2(vec[:, 1], vec[:, 0]))
+    valid = ~np.isnan(vec).any(axis=1)              # both areas tracked
+    if valid.sum() < 3:
+        return None
+    idx = np.arange(len(vec))
+    raw = np.arctan2(vec[valid, 1], vec[valid, 0])
+    ang = np.interp(idx, idx[valid], np.unwrap(raw))   # gaps between sections: bridged
     fps = motion.fps
     drift_n = int(round(s.drift_window_ms / 1000.0 * fps))
     if drift_n > 2:
@@ -224,10 +295,12 @@ def roll_signal(motion: MotionData, s: GeneratorSettings) -> tuple[np.ndarray, n
     span = max(float(np.percentile(np.abs(ang), 98)), np.radians(5))
     span = min(span, np.radians(30))
     sig = np.clip(ang / (2 * span) + 0.5, 0.0, 1.0)
+    sig[~valid] = 0.5                               # neutral where nothing is tracked
     return np.arange(len(ang)) * (1000.0 / fps), sig
 
 
-def generate_axes(motion: MotionData, s: GeneratorSettings | None = None) -> dict[str, list[Action]]:
+def generate_axes(motion: MotionData, s: GeneratorSettings | None = None,
+                  sections=()) -> dict[str, list[Action]]:
     """Further axes that can be derived from the analysis:
 
     * L2 sway: the horizontal motion
@@ -239,8 +312,14 @@ def generate_axes(motion: MotionData, s: GeneratorSettings | None = None) -> dic
     out: dict[str, list[Action]] = {}
     sway = replace(s, axis="horizontal", invert=False, full_stroke=False, pos_min=0, pos_max=100)
     out["L2"] = generate(motion, sway).actions
+    ranges = section_ranges(sections, motion.duration_ms + 1000) if motion.track_section is not None else []
+    if ranges:                                      # tracking: only inside the sections
+        out["L2"] = [a for a in out["L2"] if any(lo <= a.at < hi for _i, lo, hi in ranges)]
     roll = roll_signal(motion, replace(s, invert=False))
     if roll is not None:
         t_ms, sig = roll
-        out["R1"] = extract_actions(t_ms, sig, replace(s, full_stroke=False, pos_min=0, pos_max=100))
+        acts = extract_actions(t_ms, sig, replace(s, full_stroke=False, pos_min=0, pos_max=100))
+        if ranges:
+            acts = [a for a in acts if any(lo <= a.at < hi for _i, lo, hi in ranges)]
+        out["R1"] = acts
     return out
