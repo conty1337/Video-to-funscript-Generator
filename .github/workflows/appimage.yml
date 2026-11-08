@@ -27,7 +27,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from conftest import make_video; make_video(Path('selftest.avi'))"
+          python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from videogen import make_video; make_video(Path('selftest.avi'))"
           ./dist/*.AppImage --selftest selftest.avi selftest.png
       - uses: actions/upload-artifact@v4
         with:
