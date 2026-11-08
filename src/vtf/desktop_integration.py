@@ -14,7 +14,9 @@ import subprocess
 from pathlib import Path
 
 APP_ID = "video-to-funscript"
-ICON_SRC = Path(__file__).resolve().parent / "gui" / "resources" / "vtf.svg"
+RESOURCES = Path(__file__).resolve().parent / "gui" / "resources"
+ICON_SRC = RESOURCES / "vtf.svg"
+ICON_PNG_SRC = RESOURCES / "vtf.png"
 
 
 def data_home() -> Path:
@@ -27,6 +29,10 @@ def desktop_file() -> Path:
 
 def icon_file() -> Path:
     return data_home() / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_ID}.svg"
+
+
+def icon_png_file() -> Path:
+    return data_home() / "icons" / "hicolor" / "256x256" / "apps" / f"{APP_ID}.png"
 
 
 def _quote(path: str) -> str:
@@ -46,7 +52,9 @@ def entry_text(appimage: Path) -> str:
         "Comment=Videos analysieren und Funscripts erstellen\n"
         f"Exec={_quote(str(appimage))} %f\n"
         f"TryExec={appimage}\n"
-        f"Icon={APP_ID}\n"
+        # full path instead of a theme name: Plasma caches theme icons and often
+        # shows a fallback until the next login for icons it has not indexed yet
+        f"Icon={icon_png_file()}\n"
         "Terminal=false\n"
         "Categories=AudioVideo;Video;\n"
         "MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;\n"
@@ -81,13 +89,14 @@ def is_installed(appimage: Path) -> bool:
 
 def install(appimage: Path) -> bool:
     """Create or update the entry. Returns True if something was written."""
-    if is_installed(appimage) and icon_file().is_file():
+    if is_installed(appimage) and icon_png_file().is_file():
         return False
-    df, ic = desktop_file(), icon_file()
+    df = desktop_file()
     df.parent.mkdir(parents=True, exist_ok=True)
-    ic.parent.mkdir(parents=True, exist_ok=True)
-    if ICON_SRC.is_file():
-        shutil.copyfile(ICON_SRC, ic)
+    for src, dst in ((ICON_SRC, icon_file()), (ICON_PNG_SRC, icon_png_file())):
+        if src.is_file():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
     tmp = df.with_suffix(".desktop.tmp")
     tmp.write_text(entry_text(appimage), encoding="utf-8")
     os.chmod(tmp, 0o755)
@@ -98,7 +107,7 @@ def install(appimage: Path) -> bool:
 
 def uninstall() -> bool:
     removed = False
-    for f in (desktop_file(), icon_file()):
+    for f in (desktop_file(), icon_file(), icon_png_file()):
         try:
             f.unlink()
             removed = True

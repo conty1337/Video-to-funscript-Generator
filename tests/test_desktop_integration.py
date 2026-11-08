@@ -18,7 +18,8 @@ def test_auto_integrate_creates_entry_and_icon(tmp_path, monkeypatch):
     assert di.auto_integrate(app) == "Ins Startmenü aufgenommen"
     text = di.desktop_file().read_text()
     assert f'Exec="{app}" %f' in text  # path with space is quoted
-    assert "Icon=video-to-funscript" in text
+    assert f"Icon={di.icon_png_file()}" in text  # absolute path, no theme lookup
+    assert di.icon_png_file().read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     assert di.icon_file().read_text().startswith("<svg")
     # second start: nothing to do
     assert di.auto_integrate(app) is None
@@ -47,8 +48,18 @@ def test_uninstall_and_not_appimage(tmp_path, monkeypatch):
     di.install(app)
     assert di.uninstall()
     assert not di.desktop_file().exists() and not di.icon_file().exists()
+    assert not di.icon_png_file().exists()
     assert di.auto_integrate(None) is None
 
 
 def test_exec_quoting_special_chars():
     assert di._quote('/a b/$x"y') == '"/a b/\\$x\\"y"'
+
+
+def test_old_entry_with_theme_icon_gets_rewritten(tmp_path, monkeypatch):
+    app = setup(tmp_path, monkeypatch)
+    di.install(app)
+    old = di.desktop_file().read_text().replace(f"Icon={di.icon_png_file()}", "Icon=video-to-funscript")
+    di.desktop_file().write_text(old)
+    assert di.auto_integrate(app) == "Startmenü-Eintrag aktualisiert"
+    assert f"Icon={di.icon_png_file()}" in di.desktop_file().read_text()
