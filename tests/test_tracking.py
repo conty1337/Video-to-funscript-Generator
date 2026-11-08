@@ -9,7 +9,7 @@ from vtf.generator import GeneratorSettings, generate
 W, H, FPS = 480, 270, 30
 
 
-def _video(path, seconds=4.0, pan=True):
+def _video(path, seconds=4.0, pan=True, amp=lambda t: 38):
     """Area A strokes up/down at 1 Hz, area B is still; the camera pans in x and y."""
     rng = np.random.default_rng(0)
     bg = (rng.random((H * 2, W * 2)) * 80).astype(np.uint8)
@@ -21,7 +21,7 @@ def _video(path, seconds=4.0, pan=True):
         cx = int(45 * np.sin(2 * np.pi * 0.3 * t)) if pan else 0
         cy = int(20 * np.sin(2 * np.pi * 0.2 * t)) if pan else 0
         f = bg[80 + cy:80 + cy + H, 150 + cx:150 + cx + W].copy()
-        ya = int(110 + 38 * np.sin(2 * np.pi * t))
+        ya = int(110 + amp(t) * np.sin(2 * np.pi * t))
         f[ya - cy:ya - cy + 44, 150 - cx:194 - cx] = tex_a
         f[190 - cy:234 - cy, 290 - cx:334 - cx] = tex_b
         vw.write(cv2.cvtColor(f, cv2.COLOR_GRAY2BGR))
@@ -39,7 +39,8 @@ def _peaks(motion):
 def test_two_areas_ignore_camera(tmp_path):
     path, a, b = _video(tmp_path / "pan.avi")
     m = analyze_motion(path, AnalysisSettings(mode="track", track_boxes=(a, b), width=W, hwaccel="none"))
-    assert m.tracks.shape == (len(m), 2, 2) and m.track_sizes.shape == (2, 2)
+    assert m.tracks.shape == (len(m), 2, 2) and m.track_sizes.shape == (1, 2, 2)
+    assert (m.track_section == 0).all()
     peaks = _peaks(m)
     # area A is highest (smallest y) at t = 0.75 s + k
     expected = [750, 1750, 2750]
@@ -79,3 +80,46 @@ def test_tracking_needs_area():
     from vtf.tracking import MultiTracker
     with pytest.raises(ValueError):
         MultiTracker([], (100, 100))
+
+
+def test_sections_with_end_and_gap(tmp_path):
+    from vtf.analysis import TrackSection
+    from vtf.generator import generate
+
+    path, a, b = _video(tmp_path / "sec.avi", seconds=4.0, pan=False)
+    sections = (TrackSection(0, (a, b), end_ms=1500), TrackSection(2500, (a, b)))
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=sections, width=W, hwaccel="none"))
+    t = np.arange(len(m)) / m.fps * 1000
+    assert (m.track_section[t < 1450] == 0).all()
+    gap = (t > 1550) & (t < 2450)
+    assert (m.track_section[gap] == -1).all() and np.isnan(m.tracks[gap]).all()
+    assert (m.track_section[t > 2550] == 1).all()
+    acts = generate(m, GeneratorSettings(axis="vertical"), sections).actions
+    assert acts and not any(1500 <= x.at < 2500 for x in acts)
+
+
+def test_depth_calibration_keeps_small_strokes_small(tmp_path):
+    from vtf.analysis import TrackSection
+    from vtf.generator import generate
+
+    # big strokes (+-38 px) for 2 s, then small ones (+-10 px)
+    path, a, b = _video(tmp_path / "cal.avi", seconds=4.0, pan=False, amp=lambda t: 38 if t < 2 else 10)
+    sec = TrackSection(0, (a, b))
+    s = AnalysisSettings(mode="track", track_sections=(sec,), width=W, hwaccel="none")
+    m = analyze_motion(path, s)
+    g = GeneratorSettings(axis="vertical", smoothing_ms=50)
+    # area A lowest = closest to B = "fully in" at 0.25 s, highest = "fully out" at 0.75 s
+    cal = (TrackSection(0, (a, b), calib_in_ms=250, calib_out_ms=750),)
+    acts = generate(m, g, cal).actions
+    big = [x.pos for x in acts if 300 < x.at < 1900]
+    small = [x.pos for x in acts if 2300 < x.at < 3900]
+    assert max(big) >= 90 and min(big) <= 10
+    assert small and 20 <= min(small) and max(small) <= 80          # real depth, not stretched
+    assert max(small) - min(small) >= 10                            # but still detected
+    # without calibration the small strokes would be stretched to the full range
+    plain = generate(m, g, (sec,)).actions
+    small_plain = [x.pos for x in plain if 2300 < x.at < 3900]
+    assert max(small_plain) - min(small_plain) > max(small) - min(small)
+    # the calibration does not change the analysis cache key
+    assert s.cache_key() == AnalysisSettings(mode="track", track_sections=cal, width=W,
+                                             hwaccel="none").cache_key()

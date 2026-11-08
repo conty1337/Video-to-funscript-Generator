@@ -8,7 +8,7 @@ Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.3)
+## Funktionen (Stand 0.4)
 
 | | Funktion | Status |
 |---|---|---|
@@ -24,7 +24,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 10 | Gerätesteuerung (Fredorch F21S über Intiface Central, Simulation) | ✅ Teil 1, Test mit echtem Gerät steht aus |
 | 11 | Ton bei der Wiedergabe | ✅ |
 | 12 | Player-Modus mit Playlist | ✅ |
-| 13 | Tracking: markierte Körperteile/Objekte mit vielen Punkten verfolgen | ✅ |
+| 13 | Tracking: markierte Körperteile/Objekte verfolgen, Abschnitte, Tiefen-Kalibrierung | ✅ |
 | 14 | Editor: Mehrfachauswahl, Kopieren/Einfügen, Abschnitt glätten/verstärken | ✅ |
 | 15 | Weitere Achsen (Surge, Sway, Twist, Roll, Pitch) | ✅ |
 
@@ -126,14 +126,27 @@ stellt die Lautstärke ein. Beides merkt sich die App.
 
 **Tracking** (genauer bei unruhigen Videos): In den Analyse-Einstellungen
 „Methode: Tracking“ wählen, an eine Stelle spulen, wo alles gut zu sehen ist,
-und im Video bis zu 3 Bereiche aufziehen, z.B. um Hüfte und Oberschenkel.
+und im Video bis zu 3 Bereiche aufziehen, z.B. um die beiden Körperteile.
 Jeder Bereich wird mit vielen Bildpunkten verfolgt.
 * 1 Bereich: dessen Bewegung (Kamerabewegung wird abgezogen).
 * 2–3 Bereiche: Bereich 1 relativ zu den anderen. Dann spielt die Kamera keine
   Rolle mehr, auch Zoom und Schwenks stören kaum.
 
-Verfolgt wird ab dem Bild, auf dem markiert wurde. Beim Abspielen zeigt die
-Vorschau, wo die Bereiche gerade sind. Rechtsklick ins Video entfernt sie.
+*Abschnitte*: Das Markieren startet einen Abschnitt an dieser Stelle. **Ende
+hier** (Taste E) beendet ihn, z.B. wenn die Szene vorbei ist. Nach einem
+Szenenwechsel einfach an der neuen Stelle wieder markieren, dann beginnt dort
+ein neuer Abschnitt. Nur in Abschnitten entstehen Punkte. Die Abschnitte stehen
+als Liste in den Einstellungen (Klick springt zum Start) und als helle Bänder in
+der Kurve. Rechtsklick ins Video löscht den Abschnitt an dieser Stelle.
+
+*Tiefen-Kalibrierung*: Zu einer Stelle spulen, wo es ganz drin ist, und **Ganz
+drin** (Taste D) klicken, dann zu einer Stelle ganz draußen und **Ganz
+draußen** (Taste A). Ab dann nutzt das Script in diesem Abschnitt den echten
+Abstand der Bereiche: ganz drin = 0, ganz draußen = 100, kurze Hübe bleiben kurz.
+Ohne Kalibrierung wird jeder Hub auf den vollen Bereich gestreckt. Die
+Kalibrierung wirkt sofort, ohne neue Analyse.
+
+Beim Abspielen zeigt die Vorschau, wo die Bereiche gerade sind.
 
 **Weitere Achsen**: Über der Kurve wählst du die Achse: Hub (L0), Surge (L1),
 Sway (L2), Twist (R0), Roll (R1) oder Pitch (R2). Jede Achse hat eigene Punkte

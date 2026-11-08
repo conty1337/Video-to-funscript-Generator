@@ -22,7 +22,8 @@ MAX_TRACKS = 3
 
 class VideoView(QWidget):
     roiChanged = Signal(object)  # normalized (x, y, w, h) or None
-    tracksChanged = Signal(list)  # normalized boxes [(x, y, w, h), ...] in mode "track"
+    boxDrawn = Signal(tuple)      # mode "track": a new area (x, y, w, h), normalized
+    tracksCleared = Signal()      # mode "track": right click
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,8 +43,9 @@ class VideoView(QWidget):
         self.mode = mode
         self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
                         if mode == "roi" else
-                        "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. Hüfte, Oberschenkel). "
-                        "Rechtsklick entfernt alle")
+                        "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
+                        "Das startet einen Tracking-Abschnitt an dieser Stelle. Rechtsklick löscht den "
+                        "Abschnitt an dieser Stelle")
         self.update()
 
     def set_tracks(self, boxes) -> None:
@@ -172,9 +174,7 @@ class VideoView(QWidget):
             return
         if ev.button() == Qt.RightButton:
             if self.mode == "track":
-                self._tracks = []
-                self._overlay = None
-                self.tracksChanged.emit([])
+                self.tracksCleared.emit()
             else:
                 self._roi = None
                 self.roiChanged.emit(None)
@@ -198,11 +198,7 @@ class VideoView(QWidget):
         if x1 - x0 > 0.03 and y1 - y0 > 0.03:
             box = (x0, y0, x1 - x0, y1 - y0)
             if self.mode == "track":
-                if len(self._tracks) >= MAX_TRACKS:
-                    self._tracks = self._tracks[1:]
-                self._tracks.append(box)
-                self._overlay = None
-                self.tracksChanged.emit(list(self._tracks))
+                self.boxDrawn.emit(box)
             else:
                 self._roi = box
                 self.roiChanged.emit(self._roi)

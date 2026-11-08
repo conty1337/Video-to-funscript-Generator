@@ -388,3 +388,69 @@ def test_axes_edit_save_load_and_device_uses_stroke(app, sine_video, tmp_path):
     assert len(w.actions_for("R1")) == 2
     w.dirty = False
     w.close()
+
+
+def test_tracking_sections_box(app):
+    """Marking starts sections, a later mark splits, end/calibrate/delete act at the playhead."""
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    seen = []
+    tb.analysisChanged.connect(lambda: seen.append("a"))
+    tb.generatorChanged.connect(lambda: seen.append("g"))
+    box = (0.1, 0.1, 0.2, 0.2)
+    assert "Neuer Abschnitt 1" in tb.add_box(box, 0)
+    assert "2 Bereiche" in tb.add_box(box, 10)               # same frame (within ~1 frame)
+    assert "endet bei" in tb.set_end(6000)
+    assert tb.sections[0].end_ms == 6000
+    msg = tb.add_box(box, 3000)                              # inside section 1: splits it
+    assert "der vorige endet hier" in msg
+    assert [s.start_ms for s in tb.sections] == [0, 3000] and tb.sections[0].end_ms == 3000
+    assert tb.sections[1].end_ms == 6000                     # the new part keeps the old end
+    assert tb.index_at(1000) == 0 and tb.index_at(4000) == 1 and tb.index_at(9000) is None
+    seen.clear()
+    assert "jetzt noch" in tb.calibrate("in", 3500)
+    assert "kalibriert" in tb.calibrate("out", 4000)
+    assert tb.sections[1].calibrated and seen == ["g", "g"]   # no new analysis needed
+    assert "nur innerhalb" in tb.calibrate("in", 9000)
+    assert "gelöscht" in tb.delete_at(1000)
+    assert [s.start_ms for s in tb.sections] == [3000]
+
+
+def test_tracking_sections_in_main_window(app, tmp_path):
+    from PySide6.QtCore import QEventLoop
+
+    from test_tracking import _video
+    from vtf.gui.main_window import MainWindow
+
+    path, a, b = _video(tmp_path / "t.avi", seconds=3.0, pan=False)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(path))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    w._box_drawn(a)
+    w._box_drawn(b)
+    w.seek_ms(2000)
+    w._track_cmd(w.panel.tracking.set_end)
+    w.seek_ms(250)
+    w._track_cmd(w.panel.tracking.calibrate, "in")
+    w.seek_ms(750)
+    w._track_cmd(w.panel.tracking.calibrate, "out")
+    assert w.panel.sections[0].calibrated and w.panel.sections[0].end_ms == 2000
+    assert w.curve.sections and abs(w.curve.sections[0][2] - 250) < 40     # nearest frame
+    w.start_analysis()
+    loop = QEventLoop()
+    w.worker.finished.connect(loop.quit)
+    if w.worker.isRunning():
+        loop.exec()
+    app.processEvents()
+    assert w.motion is not None and w.motion.track_section is not None
+    acts = w.curve.actions
+    assert acts and all(x.at < 2000 for x in acts)
+    assert max(x.pos for x in acts) >= 90 and min(x.pos for x in acts) <= 10
+    w.seek_ms(1000)
+    assert w.view._overlay                                   # tracked areas shown
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()
