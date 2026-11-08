@@ -230,6 +230,8 @@ class MainWindow(QMainWindow):
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.cancel_btn.clicked.connect(self.cancel_analysis)
         self.view.roiChanged.connect(self.panel.set_roi)
+        self.view.tracksChanged.connect(self._tracks_changed)
+        self.panel.methodChanged.connect(self._method_changed)
         self.panel.generatorChanged.connect(self.regen_timer.start)
         self.panel.analysisChanged.connect(self._analysis_outdated)
         self.curve.seekRequested.connect(self.seek_ms)
@@ -379,6 +381,9 @@ class MainWindow(QMainWindow):
             b.setEnabled(True)
         self.view.set_roi(None)
         self.panel.set_roi(None)
+        self.view.set_tracks([])
+        self.view.set_track_overlay(None)
+        self.panel.set_tracks([], 0)
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -413,6 +418,7 @@ class MainWindow(QMainWindow):
         self._show_time(ms)
 
     def _show_time(self, ms: float):
+        self._update_track_overlay(ms)
         self.curve.set_playhead(ms)
         self.rail.set_position(position_at(self.curve.actions, ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
@@ -486,6 +492,31 @@ class MainWindow(QMainWindow):
         self.devices.tick(0, False)
         self.rail.set_device_position(self.devices.device_position())
         self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
+
+    # ------------------------------------------------------------ tracking
+    def _method_changed(self, mode: str):
+        self.view.set_mode("track" if mode == "track" else "roi")
+        self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0)
+
+    def _tracks_changed(self, boxes: list):
+        ms = max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0
+        old = self.panel.tracks
+        if old and boxes and len(boxes) > len(old) and abs(ms - self.panel.track_start_ms) > 1000 / self.fps:
+            # all areas belong to one frame: marking on another frame starts over
+            boxes = boxes[-1:]
+            self.view.set_tracks(boxes)
+            self._status("Bereiche müssen auf demselben Bild markiert werden – neu begonnen")
+        start = self.panel.track_start_ms if old and len(boxes) > 1 else ms
+        self.panel.set_tracks(boxes, start)
+
+    def _update_track_overlay(self, ms: float):
+        m = self.motion
+        if self.view.mode != "track" or m is None or m.tracks is None or m.track_sizes is None:
+            self.view.set_track_overlay(None)
+            return
+        i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
+        boxes = [(cx - w / 2, cy - h / 2, w, h) for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes)]
+        self.view.set_track_overlay(boxes)
 
     # ------------------------------------------------------------ player mode
     @property
@@ -597,6 +628,9 @@ class MainWindow(QMainWindow):
     def start_analysis(self):
         if not self.video_path or (self.worker and self.worker.isRunning()):
             return
+        if self.panel.mode == "track" and not self.panel.tracks:
+            self._status("Tracking: erst im Video die Bereiche aufziehen, die verfolgt werden sollen")
+            return
         if self.curve.actions and self.dirty and QMessageBox.question(
                 self, "Analyse", "Manuelle Änderungen werden durch die neue Analyse ersetzt. Fortfahren?"
         ) != QMessageBox.Yes:
@@ -638,6 +672,7 @@ class MainWindow(QMainWindow):
         self.motion = motion
         self._push_undo()
         self.regenerate()
+        self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
         self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt")
 

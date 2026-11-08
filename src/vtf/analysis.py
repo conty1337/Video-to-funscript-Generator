@@ -22,7 +22,8 @@ from .video import VideoInfo, iter_gray_frames, probe, scaled_size
 ProgressCb = Callable[[float], None]
 CancelCb = Callable[[], bool]
 
-MOTION_FORMAT_VERSION = 1
+MOTION_FORMAT_VERSION = 2
+READABLE_VERSIONS = (1, 2)
 
 
 class AnalysisCancelled(Exception):
@@ -37,11 +38,20 @@ class AnalysisSettings:
     compensate_camera: bool = True        # subtract global (camera) motion
     use_opencl: bool = False              # OpenCV T-API (GPU)
     hwaccel: str = "auto"                 # ffmpeg -hwaccel value ("none", "auto", "vaapi")
+    mode: str = "flow"                    # "flow" = motion in the image, "track" = marked areas
+    track_boxes: tuple = ()               # normalized (x, y, w, h) per area, mode "track"
+    track_start_ms: int = 0               # frame on which the areas were marked
 
     def cache_key(self) -> str:
         d = asdict(self)
         d.pop("use_opencl")
         d.pop("hwaccel")
+        if d["mode"] == "flow":       # same key as before tracking existed: old caches stay valid
+            for k in ("mode", "track_boxes", "track_start_ms"):
+                d.pop(k)
+        else:
+            d.pop("roi")
+            d["track_boxes"] = tuple(tuple(round(v, 4) for v in b) for b in d["track_boxes"])
         return repr(sorted(d.items()))
 
 
@@ -52,6 +62,8 @@ class MotionData:
     dx: np.ndarray             # horizontal motion per sample (px of analysis frame)
     dy: np.ndarray             # vertical motion per sample (positive = down)
     meta: dict = field(default_factory=dict)
+    tracks: np.ndarray | None = None       # (n, areas, 2) normalized area centres (mode "track")
+    track_sizes: np.ndarray | None = None  # (areas, 2) normalized area width/height
 
     def __len__(self) -> int:
         return len(self.dx)
@@ -62,16 +74,22 @@ class MotionData:
 
     def save(self, path: str | Path) -> None:
         tmp = f"{path}.tmp.npz"
+        extra = {}
+        if self.tracks is not None:
+            extra = {"tracks": self.tracks, "track_sizes": self.track_sizes}
         np.savez_compressed(tmp, dx=self.dx, dy=self.dy, fps=self.fps,
-                            version=MOTION_FORMAT_VERSION)
+                            version=MOTION_FORMAT_VERSION, **extra)
         os.replace(tmp, path)
 
     @classmethod
     def load(cls, path: str | Path, video: str = "") -> "MotionData":
         with np.load(path) as d:
-            if int(d["version"]) != MOTION_FORMAT_VERSION:
+            if int(d["version"]) not in READABLE_VERSIONS:
                 raise ValueError("incompatible motion cache")
-            return cls(video, float(d["fps"]), d["dx"].astype(np.float32), d["dy"].astype(np.float32))
+            tracks = d["tracks"].astype(np.float32) if "tracks" in d.files else None
+            sizes = d["track_sizes"].astype(np.float32) if "track_sizes" in d.files else None
+            return cls(video, float(d["fps"]), d["dx"].astype(np.float32), d["dy"].astype(np.float32),
+                       tracks=tracks, track_sizes=sizes)
 
 
 def _roi_slices(shape: tuple[int, int], roi) -> tuple[slice, slice]:
@@ -111,6 +129,8 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
                    info: VideoInfo | None = None) -> MotionData:
     settings = settings or AnalysisSettings()
     info = info or probe(path)
+    if settings.mode == "track" and settings.track_boxes:
+        return analyze_tracking(path, settings, progress, cancel, info)
     using_ocl = gpu.set_opencl(settings.use_opencl)
     step = max(1, settings.frame_step)
     total = max(1, info.frame_count // step)
@@ -145,6 +165,58 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32),
                       np.asarray(dy, np.float32),
                       {"opencl": using_ocl, "width": w, "height": h})
+
+
+def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: ProgressCb | None = None,
+                     cancel: CancelCb | None = None, info: VideoInfo | None = None) -> MotionData:
+    """Mode "track": follow the marked areas from the frame they were marked on.
+    Before that frame there is no motion (the areas are only known from there)."""
+    from .tracking import MultiTracker
+
+    info = info or probe(path)
+    step = max(1, settings.frame_step)
+    total = max(1, info.frame_count // step)
+    w, h = scaled_size(info, settings.width)
+    start = int(settings.track_start_ms / 1000 * info.fps / step)
+    boxes_px = [(x * w, y * h, bw * w, bh * h) for x, y, bw, bh in settings.track_boxes]
+    k = len(boxes_px[:3])
+    dx: list[float] = []
+    dy: list[float] = []
+    centers: list[np.ndarray] = []
+    tracker = None
+    prev = None
+    for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step)):
+        if cancel and cancel():
+            raise AnalysisCancelled()
+        if i < start:                                     # before the marked frame
+            dx.append(0.0)
+            dy.append(0.0)
+            centers.append(None)
+        else:
+            cur = cv2.GaussianBlur(np.ascontiguousarray(frame), (3, 3), 0)
+            if tracker is None:
+                tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera)
+                d = np.zeros(2)
+            else:
+                d = tracker.step(prev, cur)
+            dx.append(float(d[0]))
+            dy.append(float(d[1]))
+            centers.append(tracker.centers())
+            prev = cur
+        if progress and i % 25 == 0:
+            progress(min(1.0, i / total))
+    if not dx:
+        raise RuntimeError(f"Keine Frames gelesen: {path}")
+    if tracker is None:
+        raise RuntimeError("Die Markierung liegt hinter dem Videoende")
+    first = next(c for c in centers if c is not None)
+    tracks = np.array([first if c is None else c for c in centers], np.float32) / np.array([w, h], np.float32)
+    sizes = np.array([[bw, bh] for _x, _y, bw, bh in settings.track_boxes[:k]], np.float32)
+    if progress:
+        progress(1.0)
+    return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32), np.asarray(dy, np.float32),
+                      {"opencl": False, "width": w, "height": h, "mode": "track"},
+                      tracks=tracks, track_sizes=sizes)
 
 
 # ---------------------------------------------------------------- cache

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit,
@@ -106,7 +107,9 @@ class BatchDialog(QDialog):
         if not f:
             return
         self.log.clear()
-        self.worker = BatchWorker(f, self.panel.analysis_settings(), self.panel.generator_settings(),
+        # tracking areas belong to one video: the batch always uses motion in the image
+        a = dataclasses.replace(self.panel.analysis_settings(), mode="flow", track_boxes=())
+        self.worker = BatchWorker(f, a, self.panel.generator_settings(),
                                   self.recursive.isChecked(), self.overwrite.isChecked())
         self.worker.fileStarted.connect(self._file)
         self.worker.progress.connect(lambda p: self.current.setValue(int(p * 100)))

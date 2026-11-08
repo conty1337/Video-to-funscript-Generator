@@ -64,9 +64,18 @@ def _section(lay: QVBoxLayout, title: str, caption: str | None = None) -> None:
     lay.addSpacing(4)
 
 
+METHODS = [("Bewegung im Bild", "flow"), ("Tracking", "track")]
+
+
+def _fmt_ms(ms: float) -> str:
+    s = ms / 1000
+    return f"{int(s // 60)}:{s % 60:04.1f}"
+
+
 class SettingsPanel(QWidget):
     generatorChanged = Signal()   # cheap: regenerate script
     analysisChanged = Signal()    # requires a new analysis
+    methodChanged = Signal(str)   # "flow" or "track"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -121,6 +130,14 @@ class SettingsPanel(QWidget):
         lay.addSpacing(24)
         _section(lay, "Analyse", "Änderungen wirken nach erneuter Analyse")
         f = _form()
+        self.method = QComboBox()
+        for label, val in METHODS:
+            self.method.addItem(label, val)
+        self.method.setToolTip("Bewegung im Bild: erkennt die stärkste Bewegung automatisch.\n"
+                               "Tracking: verfolgt Bereiche, die du im Video markierst (z.B. Körperteile).")
+        self.method.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.method.setMinimumContentsLength(8)
+        _row(f, "Methode", self.method)
         self.width = QComboBox()
         for w in (160, 240, 320, 480, 640):
             self.width.addItem(f"{w} px", w)
@@ -151,6 +168,8 @@ class SettingsPanel(QWidget):
         lay.addWidget(self.roi_label)
         lay.addStretch(1)
         self._roi = None
+        self._tracks: list = []
+        self._track_start_ms = 0
         self._update_roi_label()
 
         for w in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm):
@@ -163,6 +182,30 @@ class SettingsPanel(QWidget):
         self.width.currentIndexChanged.connect(self.analysisChanged)
         self.step.valueChanged.connect(self.analysisChanged)
         self.cam.toggled.connect(self.analysisChanged)
+        self.method.currentIndexChanged.connect(self._method_changed)
+
+    @property
+    def mode(self) -> str:
+        return self.method.currentData()
+
+    @property
+    def track_start_ms(self) -> int:
+        return self._track_start_ms
+
+    @property
+    def tracks(self) -> list:
+        return list(self._tracks)
+
+    def _method_changed(self):
+        self._update_roi_label()
+        self.methodChanged.emit(self.mode)
+        self.analysisChanged.emit()
+
+    def set_tracks(self, boxes, start_ms: float) -> None:
+        self._tracks = [tuple(round(v, 4) for v in b) for b in boxes]
+        self._track_start_ms = int(start_ms)
+        self._update_roi_label()
+        self.analysisChanged.emit()
 
     # ------------------------------------------------------------ roi
     def set_roi(self, roi):
@@ -171,6 +214,19 @@ class SettingsPanel(QWidget):
         self.analysisChanged.emit()
 
     def _update_roi_label(self):
+        if self.mode == "track":
+            n = len(self._tracks)
+            if not n:
+                text = ("Tracking: im Video bis zu 3 Bereiche aufziehen, an einer Stelle, wo sie gut "
+                        "zu sehen sind. 1 Bereich = dessen Bewegung. 2–3 Bereiche = Bereich 1 relativ "
+                        "zu den anderen, dann spielt die Kamera keine Rolle.")
+            else:
+                rel = "relativ zu Bereich 2" + (" und 3" if n > 2 else "") if n > 1 else "allein"
+                text = (f"Tracking: {n} Bereich{'e' if n > 1 else ''}, markiert bei "
+                        f"{_fmt_ms(self._track_start_ms)}. Bereich 1 wird {rel} verfolgt, ab dieser "
+                        "Stelle bis zum Ende. Rechtsklick im Video entfernt die Bereiche.")
+            self.roi_label.setText(text)
+            return
         if not self._roi:
             self.roi_label.setText("Analysebereich: ganzes Bild. Rechteck im Video aufziehen, um ihn einzugrenzen.")
         else:
@@ -191,11 +247,13 @@ class SettingsPanel(QWidget):
         return AnalysisSettings(
             width=self.width.currentData(), roi=self._roi, frame_step=self.step.value(),
             compensate_camera=self.cam.isChecked(), use_opencl=self.opencl.isChecked(),
-            hwaccel=self.hwaccel.currentData())
+            hwaccel=self.hwaccel.currentData(), mode=self.mode,
+            track_boxes=tuple(self._tracks), track_start_ms=self._track_start_ms)
 
     def to_dict(self) -> dict:
         a = asdict(self.analysis_settings())
-        a.pop("roi")
+        for k in ("roi", "track_boxes", "track_start_ms"):     # belong to one video
+            a.pop(k)
         return {"generator": asdict(self.generator_settings()), "analysis": a}
 
     def load_dict(self, d: dict) -> None:
@@ -204,7 +262,7 @@ class SettingsPanel(QWidget):
         a = d.get("analysis") or {}
         widgets = [self.axis, self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm,
                    self.pos_min, self.pos_max, self.invert, self.full_stroke, self.width, self.step,
-                   self.cam, self.opencl, self.hwaccel]
+                   self.cam, self.opencl, self.hwaccel, self.method]
         for w in widgets:
             w.blockSignals(True)
         try:
@@ -222,9 +280,12 @@ class SettingsPanel(QWidget):
             self.cam.setChecked(bool(a.get("compensate_camera", True)))
             self.opencl.setChecked(bool(a.get("use_opencl", False)))
             _set_combo(self.hwaccel, a.get("hwaccel"))
+            _set_combo(self.method, a.get("mode"))
         finally:
             for w in widgets:
                 w.blockSignals(False)
+        self._update_roi_label()
+        self.methodChanged.emit(self.mode)
         # slider labels are updated via valueChanged; refresh them once
         for s in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm):
             s.valueChanged.emit(s.value())
