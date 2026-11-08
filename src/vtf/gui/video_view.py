@@ -1,4 +1,10 @@
-"""Video preview widget with ROI selection (drag a rectangle)."""
+"""Video preview widget.
+
+Mode "roi":   drag a rectangle = analysis area, right click removes it.
+Mode "track": drag up to three rectangles = areas to track (body parts,
+              objects), right click removes them all. After the analysis the
+              tracked areas are drawn where they are in the current frame.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +16,13 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from . import theme
 
+TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
+MAX_TRACKS = 3
+
 
 class VideoView(QWidget):
     roiChanged = Signal(object)  # normalized (x, y, w, h) or None
+    tracksChanged = Signal(list)  # normalized boxes [(x, y, w, h), ...] in mode "track"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,8 +32,31 @@ class VideoView(QWidget):
         self._roi: tuple[float, float, float, float] | None = None
         self._drag_start: QPointF | None = None
         self._drag_rect: QRectF | None = None
+        self.mode = "roi"
+        self._tracks: list[tuple[float, float, float, float]] = []
+        self._overlay: list[tuple[float, float, float, float]] | None = None
         self.setMouseTracking(True)
-        self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen")
+        self.set_mode("roi")
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+        self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
+                        if mode == "roi" else
+                        "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. Hüfte, Oberschenkel). "
+                        "Rechtsklick entfernt alle")
+        self.update()
+
+    def set_tracks(self, boxes) -> None:
+        self._tracks = [tuple(b) for b in boxes][:MAX_TRACKS]
+        self.update()
+
+    def tracks(self) -> list:
+        return list(self._tracks)
+
+    def set_track_overlay(self, boxes) -> None:
+        """Where the tracked areas are in the current frame (None = show the marked ones)."""
+        self._overlay = [tuple(b) for b in boxes] if boxes is not None else None
+        self.update()
 
     # ------------------------------------------------------------ frames
     def set_frame(self, frame_bgr: np.ndarray | None) -> None:
@@ -67,6 +100,9 @@ class VideoView(QWidget):
         r = self._image_rect()
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawImage(r, self._img)
+        if self.mode == "track":
+            self._paint_tracks(p, r)
+            return
         rect = None
         if self._drag_rect is not None:
             rect = self._drag_rect
@@ -88,6 +124,33 @@ class VideoView(QWidget):
             p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
                        "Analysebereich")
 
+    def _norm_rect(self, r: QRectF, box) -> QRectF:
+        x, y, w, h = box
+        return QRectF(r.x() + x * r.width(), r.y() + y * r.height(), w * r.width(), h * r.height())
+
+    def _paint_tracks(self, p: QPainter, r: QRectF) -> None:
+        boxes = self._overlay if self._overlay is not None else self._tracks
+        p.setFont(theme.mono_font(11))
+        for i, box in enumerate(boxes):
+            rect = self._norm_rect(r, box)
+            color = QColor(TRACK_COLORS[i % len(TRACK_COLORS)])
+            p.setPen(QPen(color, 2 if self._overlay is not None else 1.5,
+                          Qt.SolidLine if self._overlay is not None else Qt.DashLine))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(rect.adjusted(0.5, 0.5, -0.5, -0.5))
+            tag = QRectF(rect.x(), rect.y() - 18 if rect.y() - 18 >= r.y() else rect.y(), 22, 18)
+            p.fillRect(tag, color)
+            p.setPen(QColor(theme.ON_ACCENT))
+            p.drawText(tag, Qt.AlignCenter, str(i + 1))
+        if self._drag_rect is not None:
+            p.setPen(QPen(theme.qcolor(theme.TEXT, 0.8), 1, Qt.DashLine))
+            p.drawRect(self._drag_rect)
+        if not boxes and self._drag_rect is None:
+            p.setPen(theme.qcolor(theme.TEXT))
+            p.fillRect(QRectF(r.x() + 8, r.y() + 8, 330, 24), QColor(0, 0, 0, 150))
+            p.drawText(QRectF(r.x() + 16, r.y() + 8, 330, 24), Qt.AlignLeft | Qt.AlignVCenter,
+                       "Tracking: Bereiche aufziehen, die verfolgt werden")
+
     def _paint_empty(self, p: QPainter):
         cx, cy = self.width() / 2, self.height() / 2
         p.drawPixmap(int(cx - 16), int(cy - 56), theme.icon_pixmap("film", theme.MUTED, 32))
@@ -108,8 +171,13 @@ class VideoView(QWidget):
         if self._img is None:
             return
         if ev.button() == Qt.RightButton:
-            self._roi = None
-            self.roiChanged.emit(None)
+            if self.mode == "track":
+                self._tracks = []
+                self._overlay = None
+                self.tracksChanged.emit([])
+            else:
+                self._roi = None
+                self.roiChanged.emit(None)
             self.update()
         elif ev.button() == Qt.LeftButton:
             self._drag_start = ev.position()
@@ -128,8 +196,16 @@ class VideoView(QWidget):
         x0, x1 = sorted((a.x(), b.x()))
         y0, y1 = sorted((a.y(), b.y()))
         if x1 - x0 > 0.03 and y1 - y0 > 0.03:
-            self._roi = (x0, y0, x1 - x0, y1 - y0)
-            self.roiChanged.emit(self._roi)
+            box = (x0, y0, x1 - x0, y1 - y0)
+            if self.mode == "track":
+                if len(self._tracks) >= MAX_TRACKS:
+                    self._tracks = self._tracks[1:]
+                self._tracks.append(box)
+                self._overlay = None
+                self.tracksChanged.emit(list(self._tracks))
+            else:
+                self._roi = box
+                self.roiChanged.emit(self._roi)
         self.update()
 
 

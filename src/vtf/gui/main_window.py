@@ -8,19 +8,21 @@ from pathlib import Path
 import cv2
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
-                               QSplitter, QVBoxLayout, QWidget)
+                               QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import __version__, gpu
+from .. import editing
 from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
-from ..funscript import Action, Funscript, funscript_path_for, position_at
-from ..generator import generate
+from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
+from ..generator import generate, generate_axes
 from ..video import probe
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .player_panel import PlayerPanel
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
@@ -44,8 +46,8 @@ class MainWindow(QMainWindow):
         self.frame_count = 0
         self.motion: MotionData | None = None
         self.worker: AnalysisWorker | None = None
-        self.undo_stack: list[list[Action]] = []
-        self.redo_stack: list[list[Action]] = []
+        self.undo_stack: list[tuple[str, list[Action]]] = []   # (axis, actions)
+        self.redo_stack: list[tuple[str, list[Action]]] = []
         self.dirty = False
 
         # widgets
@@ -62,6 +64,10 @@ class MainWindow(QMainWindow):
         self.play_btn = self._transport("play", "Abspielen (Leertaste)")
         self.back_btn = self._transport("chevron-left", "Frame zurück (←)")
         self.fwd_btn = self._transport("chevron-right", "Frame vor (→)")
+        self.prev_btn = self._transport("skip-back", "Vorheriges Video (Bild ↑)")
+        self.next_btn = self._transport("skip-forward", "Nächstes Video (Bild ↓)")
+        self.full_btn = self._transport("maximize", "Vollbild (F11)")
+        self.full_btn.setEnabled(True)
         self.audio = AudioPlayer(self)
         self.mute_btn = self._transport("volume", "Ton an/aus (M)")
         self.mute_btn.setEnabled(self.audio.available)
@@ -85,19 +91,34 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel()
         self.curve_title = QLabel("Script")
         self.curve_title.setObjectName("section")
+        self.axis = "L0"                       # axis shown in the curve
+        self.axis_actions: dict[str, list[Action]] = {}   # the other axes
+        self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
+        self.axis_box = QComboBox()
+        self.axis_box.setToolTip("Script-Achse. Der Fredorch F21S nutzt nur „Hub“, die anderen Achsen "
+                                 "werden als <Video>.roll.funscript usw. für Mehrachsen-Geräte gespeichert")
+        for code, (label, _suffix) in AXES.items():
+            self.axis_box.addItem(f"{label} ({code})", code)
+        self.axis_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.axis_box.setStyleSheet("QComboBox { padding-right: 28px; }")
         self.curve_meta = QLabel("Noch nicht analysiert")
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
-        curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
+        curve_hint = self.curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
                            "Rechtsklick löscht · Mausrad zoomt")
         curve_hint.setObjectName("caption")
+        # long hint must not widen the window: it is cut off when there is no room
+        curve_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        curve_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(12, 8, 16, 8)
         controls.setSpacing(4)
+        controls.addWidget(self.prev_btn)
         controls.addWidget(self.back_btn)
         controls.addWidget(self.play_btn)
         controls.addWidget(self.fwd_btn)
+        controls.addWidget(self.next_btn)
         controls.addSpacing(8)
         controls.addWidget(self.slider, 1)
         controls.addSpacing(12)
@@ -105,6 +126,8 @@ class MainWindow(QMainWindow):
         controls.addSpacing(12)
         controls.addWidget(self.mute_btn)
         controls.addWidget(self.volume)
+        controls.addSpacing(4)
+        controls.addWidget(self.full_btn)
         stage = QHBoxLayout()
         stage.setContentsMargins(0, 0, 0, 0)
         stage.setSpacing(1)
@@ -138,9 +161,14 @@ class MainWindow(QMainWindow):
         fl.addWidget(self.analyze_btn)
         fl.addWidget(self.cancel_btn)
         rl.addWidget(footer)
-        right.setFixedWidth(320)
+        self.player = PlayerPanel(self.qsettings)
+        self.player.setObjectName("sidebar")
+        self.side = QStackedWidget()
+        self.side.addWidget(right)
+        self.side.addWidget(self.player)
+        self.side.setFixedWidth(320)
 
-        curve_box = QWidget()
+        curve_box = self.curve_box = QWidget()
         cl = QVBoxLayout(curve_box)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
@@ -148,9 +176,9 @@ class MainWindow(QMainWindow):
         head.setContentsMargins(16, 12, 16, 8)
         head.setSpacing(12)
         head.addWidget(self.curve_title)
+        head.addWidget(self.axis_box)
         head.addWidget(self.curve_meta)
-        head.addStretch(1)
-        head.addWidget(curve_hint)
+        head.addWidget(curve_hint, 1)
         cl.addLayout(head)
         cl.addWidget(self.curve, 1)
 
@@ -165,11 +193,11 @@ class MainWindow(QMainWindow):
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
         bl.addWidget(main, 1)
-        sep = QWidget()
+        sep = self._side_sep = QWidget()
         sep.setFixedWidth(1)
         sep.setStyleSheet(f"background: {theme.HAIRLINE};")
         bl.addWidget(sep)
-        bl.addWidget(right)
+        bl.addWidget(self.side)
         self.setCentralWidget(body)
         self.statusBar().addWidget(self.status_label, 1)
         self.statusBar().setSizeGripEnabled(False)
@@ -203,18 +231,26 @@ class MainWindow(QMainWindow):
         self.back_btn.clicked.connect(lambda: self.step_frames(-1))
         self.fwd_btn.clicked.connect(lambda: self.step_frames(1))
         self.mute_btn.clicked.connect(self.toggle_mute)
+        self.prev_btn.clicked.connect(self.play_prev)
+        self.next_btn.clicked.connect(self.play_next)
+        self.full_btn.clicked.connect(self.toggle_fullscreen)
+        self.player.playRequested.connect(self.play_index)
         self.volume.valueChanged.connect(self._volume_changed)
         self._load_audio_settings()
+        self.set_player_mode(str(self.qsettings.value("mode", "edit")) == "player")
         self.slider.sliderMoved.connect(self.seek_frame)
         self.slider.sliderPressed.connect(lambda: self.seek_frame(self.slider.value()))
         self.analyze_btn.clicked.connect(self.start_analysis)
         self.cancel_btn.clicked.connect(self.cancel_analysis)
         self.view.roiChanged.connect(self.panel.set_roi)
+        self.view.tracksChanged.connect(self._tracks_changed)
+        self.panel.methodChanged.connect(self._method_changed)
         self.panel.generatorChanged.connect(self.regen_timer.start)
         self.panel.analysisChanged.connect(self._analysis_outdated)
         self.curve.seekRequested.connect(self.seek_ms)
         self.curve.editStarted.connect(self._push_undo)
         self.curve.actionsEdited.connect(self._edited)
+        self.axis_box.activated.connect(lambda i: self.switch_axis(self.axis_box.itemData(i)))
 
         try:
             self.panel.load_dict(json.loads(self.qsettings.value("settings", "{}")))
@@ -237,7 +273,18 @@ class MainWindow(QMainWindow):
         self._act(m, "Rückgängig", self.undo, QKeySequence.Undo)
         self._act(m, "Wiederholen", self.redo, QKeySequence.Redo)
         m.addSeparator()
+        self._act(m, "Alle Punkte auswählen", self.select_all_points, "Ctrl+A")
+        self._act(m, "Ausschneiden", self.cut_points, "Ctrl+X")
+        self._act(m, "Kopieren", self.copy_points, "Ctrl+C")
+        self._act(m, "Einfügen an Abspielposition", self.paste_points, "Ctrl+V")
+        self._act(m, "Auswahl löschen  (Entf)", self.delete_points)
+        m.addSeparator()
+        self._act(m, "Auswahl glätten", self.smooth_points, "Ctrl+G")
+        self._act(m, "Hub verstärken", lambda: self.scale_points(1.2), "Ctrl+Up")
+        self._act(m, "Hub abschwächen", lambda: self.scale_points(1 / 1.2), "Ctrl+Down")
+        m.addSeparator()
         self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
+        self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -246,6 +293,13 @@ class MainWindow(QMainWindow):
         self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
         m.addSeparator()
         self._act(m, "Ton an/aus", self.toggle_mute, "M")
+        m.addSeparator()
+        self._act(m, "Nächstes Video", self.play_next, "PgDown")
+        self._act(m, "Vorheriges Video", self.play_prev, "PgUp")
+        m = self.menuBar().addMenu("&Ansicht")
+        self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
+        self.player_action.setCheckable(True)
+        self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
@@ -268,6 +322,14 @@ class MainWindow(QMainWindow):
         tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
         tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
         tb.addSeparator()
+        self.mode_edit = tb.addAction(theme.icon("pencil"), "Bearbeiten", lambda: self.set_player_mode(False))
+        self.mode_player = tb.addAction(theme.icon("list-video"), "Player", lambda: self.set_player_mode(True))
+        for a, tip in ((self.mode_edit, "Scripts erstellen und bearbeiten"),
+                       (self.mode_player, "Videos mit Script abspielen, mit Playlist (Strg+P)")):
+            a.setCheckable(True)
+            a.setToolTip(tip)
+        self.mode_edit.setChecked(True)
+        tb.addSeparator()
         tb.addAction(theme.icon("undo"), "", self.undo).setToolTip("Rückgängig (Strg+Z)")
         tb.addAction(theme.icon("redo"), "", self.redo).setToolTip("Wiederholen (Strg+Umschalt+Z)")
         spacer = QWidget()
@@ -276,6 +338,7 @@ class MainWindow(QMainWindow):
         self.file_label = QLabel()
         self.file_label.setObjectName("meta")
         tb.addWidget(self.file_label)
+        self._toolbar = tb
 
     def _transport(self, name: str, tip: str) -> QPushButton:
         b = QPushButton(theme.icon(name, theme.TEXT_2, 16), "")
@@ -333,16 +396,22 @@ class MainWindow(QMainWindow):
             b.setEnabled(True)
         self.view.set_roi(None)
         self.panel.set_roi(None)
+        self.view.set_tracks([])
+        self.view.set_track_overlay(None)
+        self.panel.set_tracks([], 0)
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
-        existing = funscript_path_for(path)
-        if existing.is_file():
-            try:
-                self.curve.set_actions(Funscript.load(existing).actions)
-                self._status(f"Vorhandenes Funscript geladen: {existing.name}")
-            except (OSError, ValueError, KeyError) as e:
-                self._status(f"Funscript konnte nicht geladen werden: {e}")
+        self._l0_signal = None
+        loaded = load_axes(path)
+        self.axis_actions = {k: v for k, v in loaded.items()}
+        self.axis = "L0"
+        self.axis_box.setCurrentIndex(0)
+        self.curve.set_actions(self.axis_actions.pop("L0", []))
+        self._update_axis_labels()
+        if loaded:
+            extra = [AXES[a][0] for a in loaded if a != "L0"]
+            self._status("Vorhandenes Funscript geladen" + (f" (+ {', '.join(extra)})" if extra else ""))
         else:
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
@@ -352,7 +421,10 @@ class MainWindow(QMainWindow):
             return
         ok, frame = self.cap.read()
         if not ok:
+            was_playing = self.timer.isActive()
             self.pause()
+            if was_playing:
+                self._video_ended()
             return
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
         self._cur_idx = idx
@@ -364,8 +436,9 @@ class MainWindow(QMainWindow):
         self._show_time(ms)
 
     def _show_time(self, ms: float):
+        self._update_track_overlay(ms)
         self.curve.set_playhead(ms)
-        self.rail.set_position(position_at(self.curve.actions, ms))
+        self.rail.set_position(position_at(self.stroke_actions(), ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
 
     def seek_frame(self, idx: int):
@@ -399,6 +472,7 @@ class MainWindow(QMainWindow):
         target = int(media_ms * self.fps / 1000)
         if target >= self.frame_count:
             self.pause()
+            self._video_ended()
             return
         behind = target - self._cur_idx
         if behind > 30:                       # far behind (slow decoder): jump
@@ -425,7 +499,7 @@ class MainWindow(QMainWindow):
                 self.seek_frame(0)
             self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
             self._clock.start()
-            self.devices.set_actions(self.curve.actions)
+            self.devices.set_actions(self.stroke_actions())
             self.timer.start(10)
             self.audio.play(self._play_origin_ms)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
@@ -436,6 +510,108 @@ class MainWindow(QMainWindow):
         self.devices.tick(0, False)
         self.rail.set_device_position(self.devices.device_position())
         self.play_btn.setIcon(theme.icon("play", theme.TEXT_2, 16))
+
+    # ------------------------------------------------------------ tracking
+    def _method_changed(self, mode: str):
+        self.view.set_mode("track" if mode == "track" else "roi")
+        self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0)
+
+    def _tracks_changed(self, boxes: list):
+        ms = max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0
+        old = self.panel.tracks
+        if old and boxes and len(boxes) > len(old) and abs(ms - self.panel.track_start_ms) > 1000 / self.fps:
+            # all areas belong to one frame: marking on another frame starts over
+            boxes = boxes[-1:]
+            self.view.set_tracks(boxes)
+            self._status("Bereiche müssen auf demselben Bild markiert werden – neu begonnen")
+        start = self.panel.track_start_ms if old and len(boxes) > 1 else ms
+        self.panel.set_tracks(boxes, start)
+
+    def _update_track_overlay(self, ms: float):
+        m = self.motion
+        if self.view.mode != "track" or m is None or m.tracks is None or m.track_sizes is None:
+            self.view.set_track_overlay(None)
+            return
+        i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
+        boxes = [(cx - w / 2, cy - h / 2, w, h) for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes)]
+        self.view.set_track_overlay(boxes)
+
+    # ------------------------------------------------------------ player mode
+    @property
+    def player_mode(self) -> bool:
+        return self.side.currentWidget() is self.player
+
+    def set_player_mode(self, on: bool):
+        on = bool(on)
+        self.side.setCurrentWidget(self.player if on else self.side.widget(0))
+        self.mode_player.setChecked(on)
+        self.mode_edit.setChecked(not on)
+        self.player_action.setChecked(on)
+        self.curve.editable = not on
+        self.save_action.setEnabled(not on)
+        self.prev_btn.setVisible(on)
+        self.next_btn.setVisible(on)
+        has_list = bool(self.player.playlist.items)
+        self.prev_btn.setEnabled(on and has_list)
+        self.next_btn.setEnabled(on and has_list)
+        self.curve_hint.setText("Nur ansehen" if on else "Umschalt+Ziehen wählt aus · Fläche ziehen scrollt")
+        self.curve_hint.setToolTip(
+            "Zum Bearbeiten in den Modus „Bearbeiten“ wechseln" if on else
+            "Punkt ziehen = verschieben (alle ausgewählten zusammen)\n"
+            "Umschalt/Strg+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle\n"
+            "Fläche ziehen = scrollen, Klick = zur Stelle springen, Mausrad = Zoom\n"
+            "Doppelklick = Punkt hinzufügen, Rechtsklick/Entf = löschen\n"
+            "Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub verstärken/abschwächen")
+        self.qsettings.setValue("mode", "player" if on else "edit")
+
+    def play_index(self, index: int):
+        """Open playlist entry `index` and start playback (player mode)."""
+        pl = self.player.playlist
+        if not 0 <= index < len(pl.items):
+            return
+        if not self.player_mode:
+            self.set_player_mode(True)
+        self.player.set_current(index)
+        self.open_video(pl.items[index])
+        if self.video_path and Path(self.video_path) == Path(pl.items[index]):
+            self.prev_btn.setEnabled(True)
+            self.next_btn.setEnabled(True)
+            if not self.timer.isActive():
+                self.toggle_play()
+        self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
+                     + ("" if self.stroke_actions() else "  (kein Script)"))
+
+    def play_next(self):
+        i = self.player.playlist.next_index()
+        if i is None:
+            self._status("Ende der Playlist")
+            return
+        self.play_index(i)
+
+    def play_prev(self):
+        # like music players: more than 3 s in -> restart this video
+        if self.timer.isActive() and self._media_ms() > 3000:
+            self.seek_frame(0)
+            return
+        i = self.player.playlist.prev_index()
+        if i is not None:
+            self.play_index(i)
+
+    def _video_ended(self):
+        if self.player_mode and self.player.playlist.items:
+            QTimer.singleShot(0, self.play_next)
+
+    def toggle_fullscreen(self):
+        full = not self.isFullScreen()
+        for w in (self.menuBar(), self._toolbar, self.statusBar(), self.side, self._side_sep, self.curve_box):
+            w.setVisible(not full)
+        if full:
+            self._was_maximized = self.isMaximized()
+            self.showFullScreen()
+        elif getattr(self, "_was_maximized", False):
+            self.showMaximized()
+        else:
+            self.showNormal()
 
     # ------------------------------------------------------------ sound
     def _load_audio_settings(self):
@@ -467,11 +643,16 @@ class MainWindow(QMainWindow):
         self.devices.emergency_stop()
         if self.timer.isActive():
             self.pause()
+        if self.isFullScreen():
+            self.toggle_fullscreen()
         self._status("Not-Aus: Gerät gestoppt")
 
     # ------------------------------------------------------------ analysis
     def start_analysis(self):
         if not self.video_path or (self.worker and self.worker.isRunning()):
+            return
+        if self.panel.mode == "track" and not self.panel.tracks:
+            self._status("Tracking: erst im Video die Bereiche aufziehen, die verfolgt werden sollen")
             return
         if self.curve.actions and self.dirty and QMessageBox.question(
                 self, "Analyse", "Manuelle Änderungen werden durch die neue Analyse ersetzt. Fortfahren?"
@@ -514,6 +695,7 @@ class MainWindow(QMainWindow):
         self.motion = motion
         self._push_undo()
         self.regenerate()
+        self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
         self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt")
 
@@ -529,46 +711,170 @@ class MainWindow(QMainWindow):
         if self.motion is None:
             return
         script = generate(self.motion, self.panel.generator_settings())
-        self.curve.set_data(script.t_ms, script.signal, script.actions,
-                            max(self.motion.duration_ms, self.frame_count / self.fps * 1000))
+        self._l0_signal = (script.t_ms, script.signal)
+        dur = max(self.motion.duration_ms, self.frame_count / self.fps * 1000)
+        if self.axis == "L0":
+            self.curve.set_data(script.t_ms, script.signal, script.actions, dur)
+        else:                                   # stroke changes in the background
+            self.axis_actions["L0"] = script.actions
+            self.curve.duration_ms = max(self.curve.duration_ms, dur)
+        self._update_axis_labels()
         self.dirty = True
         self._refresh_position()
         self._status(f"{len(script.actions)} Punkte erzeugt")
 
     def regenerate_manual(self):
         if self.motion is not None:
+            if self.axis != "L0":
+                self.switch_axis("L0")
             self._push_undo()
             self.regenerate()
 
+    def generate_more_axes(self):
+        """Sway (and roll with tracking) from the analysis."""
+        if self.motion is None:
+            self._status("Erst analysieren")
+            return
+        axes = generate_axes(self.motion, self.panel.generator_settings())
+        self._sync_axis()
+        for code, acts in axes.items():
+            self.undo_stack.append((code, list(self.actions_for(code))))
+            self._set_axis_actions(code, acts)
+        self.redo_stack.clear()
+        self.dirty = True
+        self._update_axis_labels()
+        names = ", ".join(f"{AXES[c][0]} ({len(a)} Punkte)" for c, a in axes.items())
+        hint = "" if "R1" in axes else " · Roll braucht Tracking mit 2 Bereichen"
+        self._status(f"Erzeugt: {names}{hint}")
+
+    # ------------------------------------------------------------ axes
+    def _sync_axis(self):
+        """The curve edits its own list; keep the dict view of the shown axis current."""
+        self.axis_actions.pop(self.axis, None)
+
+    def actions_for(self, axis: str) -> list[Action]:
+        return self.curve.actions if axis == self.axis else self.axis_actions.get(axis, [])
+
+    def stroke_actions(self) -> list[Action]:
+        return self.actions_for("L0")
+
+    def _set_axis_actions(self, axis: str, acts: list[Action]):
+        if axis == self.axis:
+            self.curve.set_actions(list(acts))
+        else:
+            self.axis_actions[axis] = list(acts)
+
+    def all_axes(self) -> dict[str, list[Action]]:
+        out = {a: list(v) for a, v in self.axis_actions.items() if a != self.axis}
+        out[self.axis] = list(self.curve.actions)
+        return out
+
+    def switch_axis(self, axis: str):
+        if axis not in AXES or axis == self.axis:
+            self.axis_box.setCurrentIndex(self.axis_box.findData(self.axis))
+            return
+        self.axis_actions[self.axis] = self.curve.actions
+        self.axis = axis
+        acts = self.axis_actions.pop(axis, [])
+        if axis == "L0" and self._l0_signal is not None:
+            t, sig = self._l0_signal
+            self.curve.set_data(t, sig, acts, self.curve.duration_ms)
+        else:
+            self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], acts, self.curve.duration_ms)
+        self.axis_box.setCurrentIndex(self.axis_box.findData(axis))
+        self._update_axis_labels()
+        self._refresh_position()
+        self._status(f"Achse: {AXES[axis][0]} ({axis})"
+                     + ("" if axis == "L0" else " · das Gerät folgt weiter der Achse „Hub“"))
+
+    def _update_axis_labels(self):
+        for i in range(self.axis_box.count()):
+            code = self.axis_box.itemData(i)
+            n = len(self.actions_for(code))
+            label = AXES[code][0]
+            self.axis_box.setItemText(i, f"{label} ({code})" + (f" · {n}" if n else ""))
+
     # ------------------------------------------------------------ editing
+    # ------------------------------------------------------------ point editing
+    def _need_selection(self) -> bool:
+        if not self.curve.editable:
+            self._status("Im Player-Modus nicht möglich – zu „Bearbeiten“ wechseln")
+            return False
+        if not self.curve.selection:
+            self._status("Erst Punkte auswählen: Umschalt+Ziehen, Strg+Klick oder Strg+A")
+            return False
+        return True
+
+    def select_all_points(self):
+        self.curve.select_all()
+        self._status(f"{len(self.curve.selection)} Punkte ausgewählt")
+
+    def copy_points(self):
+        if self._need_selection():
+            self._status(f"{self.curve.copy_selection()} Punkte kopiert")
+
+    def cut_points(self):
+        if self._need_selection():
+            n = self.curve.copy_selection()
+            self.curve.delete_selection()
+            self._status(f"{n} Punkte ausgeschnitten")
+
+    def paste_points(self):
+        if not self.curve.editable:
+            return
+        n = self.curve.paste()
+        self._status(f"{n} Punkte eingefügt bei {_fmt(self.curve.playhead_ms)}" if n else
+                     "Nichts zum Einfügen – erst Punkte kopieren (Strg+C)")
+
+    def delete_points(self):
+        if self._need_selection():
+            n = len(self.curve.selection)
+            self.curve.delete_selection()
+            self._status(f"{n} Punkte gelöscht")
+
+    def smooth_points(self):
+        if self._need_selection():
+            self.curve.apply(editing.smooth)
+            self._status("Auswahl geglättet (mehrmals anwenden für mehr Wirkung)")
+
+    def scale_points(self, factor: float):
+        if self._need_selection():
+            self.curve.apply(editing.scale, factor)
+            self._status("Hub verstärkt" if factor > 1 else "Hub abgeschwächt")
+
     def _push_undo(self):
-        self.undo_stack.append([Action(a.at, a.pos) for a in self.curve.actions])
+        self.undo_stack.append((self.axis, [Action(a.at, a.pos) for a in self.curve.actions]))
         del self.undo_stack[:-100]
         self.redo_stack.clear()
 
     def _edited(self):
         self.dirty = True
+        self._update_axis_labels()
         self._refresh_position()
         self._status("Punkte bearbeitet")
 
     def _refresh_position(self):
-        self.devices.set_actions(self.curve.actions)
-        self.rail.set_position(position_at(self.curve.actions, self.curve.playhead_ms))
+        self.devices.set_actions(self.stroke_actions())
+        self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))
         self._update_meta()
+
+    def _restore(self, src: list, dst: list):
+        axis, acts = src.pop()
+        dst.append((axis, list(self.actions_for(axis))))
+        if axis != self.axis:
+            self.switch_axis(axis)
+        self.curve.set_actions(list(acts))
+        self.dirty = True
+        self._update_axis_labels()
+        self._refresh_position()
 
     def undo(self):
         if self.undo_stack:
-            self.redo_stack.append(list(self.curve.actions))
-            self.curve.set_actions(self.undo_stack.pop())
-            self.dirty = True
-            self._refresh_position()
+            self._restore(self.undo_stack, self.redo_stack)
 
     def redo(self):
         if self.redo_stack:
-            self.undo_stack.append(list(self.curve.actions))
-            self.curve.set_actions(self.redo_stack.pop())
-            self.dirty = True
-            self._refresh_position()
+            self._restore(self.redo_stack, self.undo_stack)
 
     # ------------------------------------------------------------ files
     def export(self):
@@ -584,16 +890,25 @@ class MainWindow(QMainWindow):
             self._save(Path(path))
 
     def _save(self, path: Path):
-        if not self.curve.actions:
+        """Saves the stroke to `path` and every other axis with points next to it
+        (<name>.roll.funscript etc.)."""
+        axes = {a: v for a, v in self.all_axes().items() if v}
+        if not axes:
             QMessageBox.information(self, "Export", "Noch keine Punkte vorhanden. Analysiere zuerst das Video.")
             return
+        meta = make_metadata(self.video_path)
+        saved = []
         try:
-            Funscript(list(self.curve.actions), metadata=make_metadata(self.video_path)).save(path)
+            for axis, acts in axes.items():
+                suffix = AXES[axis][1]
+                target = path if axis == "L0" else path.with_suffix(f".{suffix}.funscript")
+                Funscript(acts, metadata=meta).save(target)
+                saved.append(target.name)
         except OSError as e:
             QMessageBox.critical(self, "Fehler", f"Speichern fehlgeschlagen:\n{e}")
             return
         self.dirty = False
-        self._status(f"Gespeichert: {path}")
+        self._status("Gespeichert: " + ", ".join(saved))
 
     def load_funscript_dialog(self):
         start = str(funscript_path_for(self.video_path)) if self.video_path else ""
@@ -606,7 +921,8 @@ class MainWindow(QMainWindow):
                 return
             self._push_undo()
             self.curve.set_actions(fs.actions)
-            self._status(f"Geladen: {path}")
+            self._update_axis_labels()
+            self._status(f"Geladen in Achse {AXES[self.axis][0]}: {path}")
 
     def open_batch(self):
         folder = str(Path(self.video_path).parent) if self.video_path else self.qsettings.value("last_dir", "")
@@ -645,16 +961,22 @@ class MainWindow(QMainWindow):
 
     def show_help(self):
         QMessageBox.information(self, "Bedienung", (
+            "Bearbeiten\n"
             "1. Video öffnen (Strg+O oder Datei hierher ziehen).\n"
-            "2. Optional: Im Video ein Rechteck um den relevanten Bereich ziehen (ROI).\n"
-            "3. 'Analysieren' klicken.\n"
-            "4. Empfindlichkeit, Glättung usw. anpassen – die Kurve aktualisiert sich sofort.\n"
-            "5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = hinzufügen,\n"
-            "   Rechtsklick/Entf = löschen, Mausrad = Zoom.\n"
-            "   Kurve verschieben: freie Fläche ziehen, Scrollleiste darunter,\n"
-            "   Umschalt+Mausrad oder waagrecht wischen (Touchpad).\n"
-            "6. Strg+S speichert <Video>.funscript neben dem Video.\n\n"
-            "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus."))
+            "2. Methode wählen: „Bewegung im Bild“ (optional Rechteck = Analysebereich)\n"
+            "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. Hüfte, Oberschenkel).\n"
+            "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
+            "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
+            "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"
+            "   Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub stärker/schwächer.\n"
+            "   Fläche ziehen = scrollen, Mausrad = Zoom.\n"
+            "5. Achse über der Kurve wählen (Hub, Roll, Twist …).\n"
+            "6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\n"
+            "Player (Strg+P)\n"
+            "Videos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\n"
+            "Video, F11 = Vollbild.\n\n"
+            "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\n"
+            "Esc = Not-Aus (Gerät stoppen)."))
 
     # ------------------------------------------------------------ misc
     def _status(self, msg: str):
@@ -672,7 +994,7 @@ class MainWindow(QMainWindow):
         self.curve_meta.setText(f"{n} Punkte · {rate:.0f} Hübe/min{edited}")
 
     def _confirm_discard(self) -> bool:
-        if not self.dirty or not self.curve.actions:
+        if not self.dirty or not any(self.all_axes().values()):
             return True
         r = QMessageBox.question(self, "Ungespeicherte Änderungen",
                                  "Das aktuelle Funscript wurde nicht gespeichert. Verwerfen?")
@@ -684,6 +1006,10 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, ev):
         urls = [u.toLocalFile() for u in ev.mimeData().urls() if u.isLocalFile()]
+        if urls and self.player_mode:          # player: dropped videos go to the playlist
+            n = self.player.add_paths(urls)
+            self._status(f"{n} Video{'s' if n != 1 else ''} zur Playlist hinzugefügt")
+            return
         if urls:
             p = Path(urls[0])
             if p.is_dir():
@@ -712,6 +1038,7 @@ class MainWindow(QMainWindow):
         self.updates.shutdown()
         self.devices.shutdown()
         self.audio.shutdown()
+        self.player.save()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         if self.cap:
             self.cap.release()

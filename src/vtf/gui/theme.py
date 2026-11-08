@@ -64,6 +64,16 @@ _ICONS = {
     "check": '<path d="M20 6 9 17l-5-5"/>',
     "chevron-down": '<path d="m6 9 6 6 6-6"/>',
     "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    "list-video": '<path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/><path d="m16 12 5 3-5 3v-6Z"/>',
+    "skip-forward": '<path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/>',
+    "skip-back": '<path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/>',
+    "shuffle": '<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45"/>',
+    "repeat": '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    "plus": '<path d="M5 12h14"/><path d="M12 5v14"/>',
+    "trash": '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+    "maximize": '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    "pencil": '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>',
+    "crosshair": '<circle cx="12" cy="12" r="10"/><path d="M22 12h-4"/><path d="M6 12H2"/><path d="M12 6V2"/><path d="M12 22v-4"/>',
     "volume": '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
     "volume-x": '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M22 9l-6 6"/><path d="M16 9l6 6"/>',
     "film": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/>'
@@ -177,6 +187,13 @@ QSlider::sub-page:horizontal:disabled {{ background: {RAISED}; }}
 QSlider::handle:horizontal:disabled {{ background: {MUTED}; }}
 QSlider#timeline::sub-page:horizontal {{ background: {ACCENT}; }}
 QSlider#volume {{ min-width: 72px; max-width: 88px; }}
+
+QListWidget#playlist {{ background: {DEEP}; border: none; outline: none; padding: 0 8px; }}
+QListWidget#playlist::item {{ padding: 8px; border-radius: 8px; color: {TEXT_2}; margin: 1px 0; }}
+QListWidget#playlist::item:hover {{ background: {CARD}; }}
+QListWidget#playlist::item:selected {{ background: {RAISED}; color: {TEXT}; }}
+QToolButton:checked {{ background: {RAISED}; color: {ACCENT}; }}
+QPushButton#transport:checked {{ background: {RAISED}; }}
 
 QProgressBar {{ background: {RAISED}; border: none; border-radius: 2px; max-height: 4px; min-height: 4px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 2px; }}
