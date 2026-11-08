@@ -224,6 +224,7 @@ class MainWindow(QMainWindow):
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
         self.updates.add_menu_entries(m)
+        self._setup_desktop_integration(m)
 
     def _build_toolbar(self):
         tb = self.addToolBar("Werkzeuge")
@@ -503,6 +504,37 @@ class MainWindow(QMainWindow):
     def open_batch(self):
         folder = str(Path(self.video_path).parent) if self.video_path else self.qsettings.value("last_dir", "")
         BatchDialog(self.panel, folder, self).exec()
+
+    def _setup_desktop_integration(self, menu):
+        """Start menu entry for the AppImage: added on start, switchable in the help menu."""
+        from .. import desktop_integration as di
+        from .. import updater
+
+        self._appimage = updater.running_appimage()
+        act = QAction("Im Startmenü anzeigen", self)
+        act.setCheckable(True)
+        v = self.qsettings.value("desktop_integration", True)
+        enabled = v if isinstance(v, bool) else str(v).lower() == "true"
+        act.setChecked(enabled and self._appimage is not None)
+        act.setEnabled(self._appimage is not None)
+        if self._appimage is None:
+            act.setToolTip("Nur verfügbar, wenn die App als AppImage läuft")
+        menu.insertAction(menu.actions()[1] if len(menu.actions()) > 1 else None, act)
+
+        def toggled(on: bool):
+            self.qsettings.setValue("desktop_integration", on)
+            if on:
+                di.install(self._appimage)
+                self._status("Ins Startmenü aufgenommen")
+            else:
+                di.uninstall()
+                self._status("Aus dem Startmenü entfernt")
+
+        act.toggled.connect(toggled)
+        if enabled and self._appimage is not None:
+            msg = di.auto_integrate(self._appimage)
+            if msg:
+                self._status(msg)
 
     def show_help(self):
         QMessageBox.information(self, "Bedienung", (
