@@ -121,3 +121,27 @@ def test_device_playback_with_simulation(app, sine_video, tmp_path, monkeypatch)
     assert len(dev.commands) == n              # nothing sent after stop
     w.devices.shutdown()
     w.close()
+
+
+def test_device_dialog_layout(app):
+    """The dialog cannot be squeezed, and a status message does not resize it."""
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.devices.open_dialog()
+    d = w.devices.dialog
+    app.processEvents()
+    d.resize(300, 200)                         # smaller than the content
+    app.processEvents()
+    assert d.width() >= 460
+    for field in (d.kind, d.url, d.device_box, d.pmin, d.pmax, d.connect_btn):
+        assert field.height() >= 30
+        assert field.parentWidget().height() >= field.height()   # not clipped
+    size = d.size()
+    d.log("Fehler: Intiface Central nicht erreichbar unter ws://127.0.0.1:12345. "
+          "Läuft Intiface und ist der Server gestartet?")
+    app.processEvents()
+    assert d.size() == size
+    assert d.pmin.height() >= 30
+    d.close()
+    w.close()

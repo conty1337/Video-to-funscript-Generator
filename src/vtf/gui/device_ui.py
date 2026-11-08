@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLayout,
                                QLineEdit, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget)
 
 from ..device import Device, DeviceError, SimulatedDevice
@@ -137,15 +137,20 @@ class DeviceController(QObject):
         self.dialog.raise_()
 
 
+INPUT_H = 34
+BUTTON_H = 36
+
+
 class DeviceDialog(QDialog):
     def __init__(self, ctl: DeviceController, parent=None):
         super().__init__(parent)
         self.ctl = ctl
         self.setWindowTitle("Gerät")
-        self.setMinimumWidth(460)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 24, 24, 24)
         lay.setSpacing(8)
+        # the window can never be shrunk below what the content needs
+        lay.setSizeConstraint(QLayout.SetMinimumSize)
 
         title = QLabel("Verbindung")
         title.setObjectName("section")
@@ -154,6 +159,7 @@ class DeviceDialog(QDialog):
                      "Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
+        cap.setMinimumWidth(412)          # 460 px dialog minus margins
         lay.addWidget(cap)
         f = QFormLayout()
         f.setHorizontalSpacing(12)
@@ -205,7 +211,6 @@ class DeviceDialog(QDialog):
             sp.setButtonSymbols(QSpinBox.NoButtons)
             sp.setAlignment(Qt.AlignRight)
             sp.setFont(theme.mono_font(12))
-            sp.setFixedHeight(30)
         bis = QLabel("bis")
         bis.setObjectName("caption")
         rl.addWidget(self.pmin, 1)
@@ -232,7 +237,25 @@ class DeviceDialog(QDialog):
         self.log_label.setObjectName("meta")
         self.log_label.setWordWrap(True)
         self.log_label.setFont(theme.mono_font(11))
+        self.log_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        # room for three lines, so a status message does not resize the dialog
+        self.log_label.setMinimumHeight(self.log_label.fontMetrics().lineSpacing() * 3 + 4)
         lay.addWidget(self.log_label)
+        lay.addStretch(1)
+        # fixed control heights, set after the stylesheet has been applied
+        # (QSS min-height would otherwise override them on first show)
+        self.ensurePolished()
+        for w in self.findChildren(QWidget):
+            w.ensurePolished()
+        rng.setFixedHeight(INPUT_H)
+        for w in (self.kind, self.url, self.device_box, self.pmin, self.pmax):
+            w.setFixedHeight(INPUT_H)
+        for b in (self.connect_btn, self.scan_btn, self.disconnect_btn,
+                  self.up_btn, self.down_btn, self.stop_btn):
+            b.setFixedHeight(BUTTON_H)
+        self.invert.setMinimumHeight(24)
+        for sl in (self.offset[0], self.speed[0]):
+            sl.setMinimumHeight(24)
 
         self.connect_btn.clicked.connect(lambda: ctl.connect_device(self.kind.currentData(), self.url.text().strip()))
         self.disconnect_btn.clicked.connect(ctl.disconnect_device)
@@ -254,6 +277,8 @@ class DeviceDialog(QDialog):
         lbl = QLabel(text)
         lbl.setObjectName("formLabel")
         lbl.setMinimumWidth(112)
+        lbl.setFixedHeight(INPUT_H)       # same height as the field: label sits centred
+        lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         return lbl
 
     @staticmethod
