@@ -20,7 +20,14 @@ jobs:
           python-version: "3.12"
       - name: System-Pakete
         run: sudo apt-get update && sudo apt-get install -y ffmpeg libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 file
+      - name: AppImage-Werkzeuge aus dem Cache
+        uses: actions/cache@v4
+        with:
+          path: .appimage-tools
+          key: appimage-tools-${{ runner.arch }}-v1
       - name: AppImage bauen
+        env:
+          APPIMAGE_TOOLS_DIR: .appimage-tools
         run: PYTHON=python ./scripts/build-appimage.sh
       - name: Selbsttest des AppImage
         env:

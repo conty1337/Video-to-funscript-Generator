@@ -8,3 +8,4 @@ dist/
 *.funscript
 !tests/data/*.funscript
 selftest.*
+.appimage-tools/
