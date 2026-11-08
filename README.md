@@ -236,7 +236,10 @@ aktualisieren sich daraufhin selbst.
 
 ## Wie die Analyse funktioniert
 
-1. FFmpeg dekodiert das Video verkleinert in Graustufen (optional per VAAPI).
+1. FFmpeg dekodiert das Video verkleinert in Graustufen. Mit VAAPI (AMD/Intel)
+   dekodiert *und* verkleinert die Grafikkarte, zur CPU gehen nur die kleinen
+   Analysebilder. Klappt das nicht (z.B. Codec von der Karte nicht unterstützt),
+   wird automatisch auf CPU-Dekodierung zurückgefallen.
 2. Für jedes Bildpaar berechnet OpenCV den dichten optischen Fluss
    (Farnebäck). Die globale Kamerabewegung (Median) wird abgezogen und aus den
    am stärksten bewegten Pixeln ein Bewegungsvektor gebildet.
