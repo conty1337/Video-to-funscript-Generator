@@ -85,3 +85,39 @@ def test_update_flow_in_gui(app, tmp_path, monkeypatch):
     assert "9.9.9 installiert" in w.updates.button.text()
     assert w.updates.button.isVisible() or not w.isVisible()
     w.close()
+
+
+def test_device_playback_with_simulation(app, sine_video, tmp_path, monkeypatch):
+    """Play with the simulated device: the device follows the script."""
+    import time
+
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.open_video(str(sine_video))
+    w.curve.set_actions([Action(i * 250, 0 if i % 2 else 100) for i in range(24)])
+    w.devices.connect_device("sim", "")
+    end = time.time() + 3
+    while (w.devices.device is None or not w.devices.device.connected) and time.time() < end:
+        app.processEvents()
+        time.sleep(0.01)
+    dev = w.devices.device
+    assert dev is not None and dev.connected
+    w.toggle_play()
+    loop = QEventLoop()
+    QTimer.singleShot(1500, loop.quit)
+    loop.exec()
+    assert w.timer.isActive()
+    assert w._cur_idx > 20                     # video advanced by the clock (~1.5 s at 30 fps)
+    assert len(dev.commands) >= 4              # approach + several strokes
+    positions = {round(p) for p, _ in dev.commands[1:]}
+    assert positions & {0} and positions & {100}
+    n = len(dev.commands)
+    w.emergency_stop()
+    assert not w.timer.isActive()
+    assert len(dev.commands) == n              # nothing sent after stop
+    w.devices.shutdown()
+    w.close()

@@ -26,6 +26,7 @@ rm -rf build/pyinstaller dist/vtf-gui
   --distpath dist --workpath build/pyinstaller --specpath build/pyinstaller \
   --paths "$ROOT/src" --collect-submodules vtf \
   --add-data "$ROOT/src/vtf/gui/resources:vtf/gui/resources" \
+  --hidden-import websockets.sync.client --collect-data certifi \
   --exclude-module tkinter --exclude-module pytest \
   "$ROOT/scripts/vtf_gui_entry.py"
 

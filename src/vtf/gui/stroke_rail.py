@@ -4,7 +4,7 @@ actuator it will drive. The product's signature detail."""
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from . import theme
@@ -19,11 +19,19 @@ class StrokeRail(QWidget):
         self.setFixedWidth(48)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._pos: float | None = None
-        self.setToolTip("Script-Position an der aktuellen Stelle (0–100)")
+        self._device: float | None = None
+        self.setToolTip("Script-Position an der aktuellen Stelle (0–100). "
+                        "Umrandung: wo das Gerät gerade ist")
 
     def set_position(self, pos: float | None) -> None:
         if pos != self._pos:
             self._pos = pos
+            self.update()
+
+    def set_device_position(self, pos: float | None) -> None:
+        """Where the device is (simulation) or was last sent; drawn as an outline."""
+        if pos != self._device:
+            self._device = pos
             self.update()
 
     def paintEvent(self, _ev):
@@ -56,3 +64,8 @@ class StrokeRail(QWidget):
         p.drawRoundedRect(QRectF(cx - 10, y - THUMB_H / 2, 20, THUMB_H), 4, 4)
         p.setPen(theme.qcolor(theme.TEXT))
         p.drawText(QRectF(0, self.height() - 24, self.width(), 16), Qt.AlignCenter, f"{self._pos:.0f}")
+        if self._device is not None:
+            yd = bottom - self._device / 100 * (bottom - top)
+            p.setPen(QPen(theme.qcolor(theme.TEXT), 1.5))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(QRectF(cx - 12, yd - THUMB_H / 2 - 2, 24, THUMB_H + 4), 5, 5)
