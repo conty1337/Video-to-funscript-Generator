@@ -27,8 +27,9 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
 Eine Datei, keine Installation, Python wird nicht benötigt:
 
-1. Unter **Releases** (oder unter Actions → appimage → Artifacts) die Datei
-   `Video-to-Funscript-<Version>-x86_64.AppImage` herunterladen.
+1. Die neueste Version herunterladen:
+   [Video-to-Funscript-x86_64.AppImage](https://github.com/conty1337/Video-to-funscript-Generator/releases/latest/download/Video-to-Funscript-x86_64.AppImage)
+   (oder unter **Releases**).
 2. Ausführbar machen und starten:
    ```bash
    chmod +x Video-to-Funscript-*.AppImage
@@ -37,6 +38,13 @@ Eine Datei, keine Installation, Python wird nicht benötigt:
    Oder in Dolphin: Rechtsklick → Eigenschaften → Berechtigungen → „Ausführbar“.
 3. Optional ins Startmenü aufnehmen: mit **Gear Lever** (Flatpak, in Discover)
    die AppImage-Datei öffnen und „Unlock / Move to the app menu“ wählen.
+
+**Updates kommen automatisch:** Beim Start sucht die App nach einer neuen
+Version, lädt sie im Hintergrund, prüft sie per SHA-256 und ersetzt die
+AppImage-Datei. Der nächste Start oder „Neu starten“ in der Statusleiste nutzt
+dann die neue Version. Manuell: Hilfe → „Nach Updates suchen“, abschaltbar
+über Hilfe → „Automatisch aktualisieren“. Dafür muss der Ordner mit dem
+AppImage beschreibbar sein (z. B. `~/Applications`, wie bei Gear Lever).
 
 FFmpeg und die OpenCL-Treiber kommen weiterhin vom System (siehe unten).
 Ohne FFmpeg dekodiert das AppImage über das mitgelieferte OpenCV.
@@ -121,8 +129,13 @@ Der Build braucht keine Downloads außer den Python-Paketen: Die AppImage-Runtim
 liegt in `packaging/` (siehe [packaging/RUNTIME.md](packaging/RUNTIME.md)).
 
 Die GitHub-Action `appimage` baut das AppImage bei jedem Push auf `main` und bei
-jedem PR automatisch und testet es (Video analysieren, Screenshot). Bei einem
-Tag `v*` wird es an das Release angehängt.
+jedem PR automatisch und testet es (Video analysieren, Screenshot).
+
+**Release erstellen:** Version in `src/vtf/__init__.py` und `pyproject.toml`
+erhöhen, mergen, dann Tag setzen: `git tag v0.2.0 && git push origin v0.2.0`.
+Die Action prüft, dass Tag und Version zusammenpassen, und veröffentlicht
+`Video-to-Funscript-x86_64.AppImage` und `SHA256SUMS`. Installierte Versionen
+aktualisieren sich daraufhin selbst.
 
 ## Wie die Analyse funktioniert
 

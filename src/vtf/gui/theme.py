@@ -132,6 +132,10 @@ QPushButton:disabled {{ color: {MUTED}; background: {CARD}; }}
 QPushButton#primary {{ background: {ACCENT}; color: {ON_ACCENT}; border: none; font-weight: 500; min-height: 36px; }}
 QPushButton#primary:hover {{ background: {ACCENT_HOVER}; }}
 QPushButton#primary:disabled {{ background: {RAISED}; color: {MUTED}; }}
+QPushButton#statusAction {{ background: transparent; border: none; min-height: 20px; padding: 0 8px;
+                           color: {ACCENT}; }}
+QPushButton#statusAction:hover {{ color: {ACCENT_HOVER}; text-decoration: underline; }}
+QPushButton#statusAction:disabled {{ color: {TEXT_2}; background: transparent; }}
 QPushButton#transport {{ background: transparent; border: none; min-height: 32px; min-width: 32px;
                         max-width: 32px; padding: 0; border-radius: 8px; }}
 QPushButton#transport:hover {{ background: {RAISED}; }}

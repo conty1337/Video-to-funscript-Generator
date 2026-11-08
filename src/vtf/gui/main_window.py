@@ -24,6 +24,7 @@ from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
 from .video_view import VideoView
+from .update_ui import UpdateController
 from .workers import AnalysisWorker
 
 
@@ -165,6 +166,7 @@ class MainWindow(QMainWindow):
             self.panel.opencl.setEnabled(False)
             self.panel.opencl.setToolTip("Kein OpenCL-Gerät gefunden, siehe README: ROCm oder rusticl")
 
+        self.updates = UpdateController(self, self.qsettings)
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
@@ -219,6 +221,7 @@ class MainWindow(QMainWindow):
         self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
+        self.updates.add_menu_entries(m)
 
     def _build_toolbar(self):
         tb = self.addToolBar("Werkzeuge")
@@ -545,11 +548,23 @@ class MainWindow(QMainWindow):
             else:
                 self.open_video(str(p))
 
+    def prepare_restart(self) -> bool:
+        """Save state before the process is replaced by an updated version."""
+        if not self._confirm_discard():
+            return False
+        self.cancel_analysis()
+        self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
+        self.qsettings.sync()
+        if self.cap:
+            self.cap.release()
+        return True
+
     def closeEvent(self, ev):
         if not self._confirm_discard():
             ev.ignore()
             return
         self.cancel_analysis()
+        self.updates.shutdown()
         self.qsettings.setValue("settings", json.dumps(self.panel.to_dict()))
         if self.cap:
             self.cap.release()

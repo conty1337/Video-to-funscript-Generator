@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def main() -> int:
     if len(args) >= 3 and args[0] == "--selftest":   # vtf-gui --selftest VIDEO OUT.png
         selftest = args[2]
         args = args[1:2]
+        os.environ["VTF_NO_UPDATE"] = "1"
     win = MainWindow()
     win.resize(1440, 900)
     win.show()
