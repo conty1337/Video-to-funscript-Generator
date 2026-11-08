@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QLabel, QMainWindow, QM
                                QSplitter, QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import __version__, gpu
+from .. import editing
 from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import Action, Funscript, funscript_path_for, position_at
@@ -256,6 +257,16 @@ class MainWindow(QMainWindow):
         self._act(m, "Rückgängig", self.undo, QKeySequence.Undo)
         self._act(m, "Wiederholen", self.redo, QKeySequence.Redo)
         m.addSeparator()
+        self._act(m, "Alle Punkte auswählen", self.select_all_points, "Ctrl+A")
+        self._act(m, "Ausschneiden", self.cut_points, "Ctrl+X")
+        self._act(m, "Kopieren", self.copy_points, "Ctrl+C")
+        self._act(m, "Einfügen an Abspielposition", self.paste_points, "Ctrl+V")
+        self._act(m, "Auswahl löschen  (Entf)", self.delete_points)
+        m.addSeparator()
+        self._act(m, "Auswahl glätten", self.smooth_points, "Ctrl+G")
+        self._act(m, "Hub verstärken", lambda: self.scale_points(1.2), "Ctrl+Up")
+        self._act(m, "Hub abschwächen", lambda: self.scale_points(1 / 1.2), "Ctrl+Down")
+        m.addSeparator()
         self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
@@ -495,8 +506,8 @@ class MainWindow(QMainWindow):
         self.prev_btn.setEnabled(on and has_list)
         self.next_btn.setEnabled(on and has_list)
         self.curve_hint.setText("Nur ansehen · zum Bearbeiten in den Modus „Bearbeiten“ wechseln" if on else
-                                "Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
-                                "Rechtsklick löscht · Mausrad zoomt")
+                                "Punkt ziehen verschiebt · Umschalt+Ziehen wählt aus · Fläche ziehen scrollt · "
+                                "Doppelklick fügt hinzu · Rechtsklick löscht")
         self.qsettings.setValue("mode", "player" if on else "edit")
 
     def play_index(self, index: int):
@@ -654,6 +665,53 @@ class MainWindow(QMainWindow):
             self.regenerate()
 
     # ------------------------------------------------------------ editing
+    # ------------------------------------------------------------ point editing
+    def _need_selection(self) -> bool:
+        if not self.curve.editable:
+            self._status("Im Player-Modus nicht möglich – zu „Bearbeiten“ wechseln")
+            return False
+        if not self.curve.selection:
+            self._status("Erst Punkte auswählen: Umschalt+Ziehen, Strg+Klick oder Strg+A")
+            return False
+        return True
+
+    def select_all_points(self):
+        self.curve.select_all()
+        self._status(f"{len(self.curve.selection)} Punkte ausgewählt")
+
+    def copy_points(self):
+        if self._need_selection():
+            self._status(f"{self.curve.copy_selection()} Punkte kopiert")
+
+    def cut_points(self):
+        if self._need_selection():
+            n = self.curve.copy_selection()
+            self.curve.delete_selection()
+            self._status(f"{n} Punkte ausgeschnitten")
+
+    def paste_points(self):
+        if not self.curve.editable:
+            return
+        n = self.curve.paste()
+        self._status(f"{n} Punkte eingefügt bei {_fmt(self.curve.playhead_ms)}" if n else
+                     "Nichts zum Einfügen – erst Punkte kopieren (Strg+C)")
+
+    def delete_points(self):
+        if self._need_selection():
+            n = len(self.curve.selection)
+            self.curve.delete_selection()
+            self._status(f"{n} Punkte gelöscht")
+
+    def smooth_points(self):
+        if self._need_selection():
+            self.curve.apply(editing.smooth)
+            self._status("Auswahl geglättet (mehrmals anwenden für mehr Wirkung)")
+
+    def scale_points(self, factor: float):
+        if self._need_selection():
+            self.curve.apply(editing.scale, factor)
+            self._status("Hub verstärkt" if factor > 1 else "Hub abgeschwächt")
+
     def _push_undo(self):
         self.undo_stack.append([Action(a.at, a.pos) for a in self.curve.actions])
         del self.undo_stack[:-100]

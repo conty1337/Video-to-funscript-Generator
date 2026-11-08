@@ -35,7 +35,8 @@ def test_open_analyze_export(app, sine_video, tmp_path, monkeypatch):
     assert w.motion is not None and len(w.curve.actions) >= 8
 
     n = len(w.curve.actions)
-    w.curve._delete(0)
+    w.curve.set_selection({0})
+    w.curve.delete_selection()
     assert len(w.curve.actions) == n - 1
     w.undo()
     assert len(w.curve.actions) == n
@@ -294,4 +295,61 @@ def test_player_mode_plays_playlist(app, tmp_path, monkeypatch):
     assert w.curve.editable
     w.player.playlist.clear()
     w.player.save()
+    w.close()
+
+
+def test_curve_multi_select_drag_copy_paste(app, sine_video):
+    """Shift+drag selects, dragging moves all selected points, copy/paste, scale, undo."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.resize(1400, 900)
+    w.show()
+    w.open_video(str(sine_video))
+    c = w.curve
+    c.set_actions([Action(i * 500, 20 if i % 2 else 80) for i in range(8)])
+    c.view_ms, c.start_ms = 4000, 0
+    c._clamp_view()
+    app.processEvents()
+    # rectangle around points 1..3 (500..1500 ms)
+    x0, x1 = int(c._x(400)), int(c._x(1600))
+    y0, y1 = int(c._y(1.0)) + 1, int(c._y(0.0)) - 1
+    QTest.mousePress(c, Qt.LeftButton, Qt.ShiftModifier, QPoint(x0, y0))
+    QTest.mouseMove(c, QPoint(x1, y1))
+    QTest.mouseRelease(c, Qt.LeftButton, Qt.ShiftModifier, QPoint(x1, y1))
+    assert c.selection == {1, 2, 3}
+    # drag point 2 up by ~10 positions: all three move
+    before = [a.pos for a in c.actions]
+    p2 = QPoint(int(c._x(1000)), int(c._y(0.8)))
+    QTest.mousePress(c, Qt.LeftButton, Qt.NoModifier, p2)
+    QTest.mouseMove(c, QPoint(p2.x(), int(c._y(0.9))))
+    QTest.mouseRelease(c, Qt.LeftButton, Qt.NoModifier, QPoint(p2.x(), int(c._y(0.9))))
+    after = [a.pos for a in c.actions]
+    assert all(after[i] > before[i] for i in (1, 2, 3))
+    assert after[0] == before[0] and after[4] == before[4]
+    # undo restores
+    w.undo()
+    assert [a.pos for a in c.actions] == before
+    # copy, paste at 3 s
+    c.set_selection({1, 2, 3})
+    w.copy_points()
+    c.set_playhead(3000)
+    w.paste_points()
+    assert {a.at for a in c.actions} >= {3000, 3500, 4000}
+    assert c.selection and min(c.actions[i].at for i in c.selection) == 3000
+    # make the pasted strokes bigger
+    sel = c.selection
+    span = lambda: max(c.actions[i].pos for i in sel) - min(c.actions[i].pos for i in sel)  # noqa: E731
+    s0 = span()
+    w.scale_points(1.2)
+    assert span() > s0
+    n = len(c.actions)
+    w.delete_points()
+    assert len(c.actions) == n - 3 and not c.selection
+    w.dirty = False
     w.close()

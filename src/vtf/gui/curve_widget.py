@@ -3,7 +3,8 @@
 Mouse:
   * left click on empty space      -> seek
   * left drag on empty space       -> scroll the time axis (also middle drag)
-  * left drag on a point           -> move point (time + position)
+  * left drag on a point           -> move point(s): all selected points move together
+  * Shift/Ctrl + drag on empty     -> selection rectangle; Ctrl+click toggles a point
   * double click                   -> add point
   * right click on a point / Del   -> delete point
   * wheel                          -> zoom time axis
@@ -20,6 +21,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
+from .. import editing
 from ..funscript import Action
 from . import theme
 
@@ -33,6 +35,8 @@ class CurveWidget(QWidget):
     seekRequested = Signal(int)        # ms
     actionsEdited = Signal()           # user changed actions
     editStarted = Signal()             # before a change (for undo)
+    selectionChanged = Signal(int)     # number of selected points
+    clipboard: list = []               # copied points, shared by all curves (editing.Clip)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,8 +53,12 @@ class CurveWidget(QWidget):
         self.playhead_ms = 0.0
         self.follow = True
         self.editable = True           # False in player mode: view, seek and scroll only
-        self._drag_idx: int | None = None
-        self._selected: int | None = None
+        self._sel: set[int] = set()          # selected action indices
+        self._drag_from: QPointF | None = None
+        self._drag_base: list[Action] | None = None
+        self._dragging = False
+        self._band: QRectF | None = None      # selection rectangle (widget coordinates)
+        self._band_add = False
         self._press: QPointF | None = None     # press on empty space (click or pan)
         self._press_button = Qt.NoButton
         self._pan_from = 0.0
@@ -67,13 +75,13 @@ class CurveWidget(QWidget):
         self.actions = actions
         self.duration_ms = max(duration_ms, 1000.0)
         self.view_ms = min(self.view_ms, self.duration_ms)
-        self._selected = None
+        self._sel = set()
         self._clamp_view()
         self.update()
 
     def set_actions(self, actions: list[Action]):
         self.actions = actions
-        self._selected = None
+        self._sel = set()
         self.update()
 
     def set_playhead(self, ms: float):
@@ -203,22 +211,85 @@ class CurveWidget(QWidget):
             if self.view_ms < 120_000:
                 for i in vis:
                     a = self.actions[i]
-                    sel = i == self._selected
+                    sel = i in self._sel
                     p.setPen(Qt.NoPen)
                     p.setBrush(theme.qcolor(theme.TEXT) if sel else theme.qcolor(theme.ACCENT))
                     p.drawEllipse(QPointF(self._x(a.at), self._y(a.pos / 100)), 4 if sel else 2.5, 4 if sel else 2.5)
+        # selection rectangle
+        if self._band is not None:
+            p.setPen(QPen(theme.qcolor(theme.ACCENT, 0.8), 1, Qt.DashLine))
+            p.setBrush(theme.qcolor(theme.ACCENT, 0.08))
+            p.drawRect(self._band.normalized())
         # playhead
         x = self._x(self.playhead_ms)
         p.setPen(QPen(theme.qcolor(theme.TEXT, 0.9), 1))
         p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
 
+    # ------------------------------------------------------------ selection
+    @property
+    def selection(self) -> set[int]:
+        return set(self._sel)
+
+    def set_selection(self, sel) -> None:
+        self._sel = {i for i in sel if 0 <= i < len(self.actions)}
+        self.selectionChanged.emit(len(self._sel))
+        self.update()
+
+    def select_all(self) -> None:
+        self.set_selection(range(len(self.actions)))
+
+    def apply(self, fn, *args) -> bool:
+        """Run an editing.* function on the selection, with undo; False if nothing selected."""
+        if not self.editable or not self._sel:
+            return False
+        self.editStarted.emit()
+        self.actions = fn(self.actions, set(self._sel), *args)
+        self.actionsEdited.emit()
+        self.update()
+        return True
+
+    def delete_selection(self) -> bool:
+        if not self.apply(editing.delete):
+            return False
+        self.set_selection(())
+        return True
+
+    def copy_selection(self) -> int:
+        clip = editing.copy(self.actions, self._sel)
+        if clip:
+            CurveWidget.clipboard = clip
+        return len(clip)
+
+    def paste(self, at_ms: float | None = None) -> int:
+        if not self.editable or not CurveWidget.clipboard:
+            return 0
+        self.editStarted.emit()
+        at = self.playhead_ms if at_ms is None else at_ms
+        self.actions, sel = editing.paste(self.actions, CurveWidget.clipboard, int(at), self.duration_ms)
+        self.actionsEdited.emit()
+        self.set_selection(sel)
+        return len(sel)
+
     # ------------------------------------------------------------ mouse
     def mousePressEvent(self, ev):
         pos = ev.position()
+        mods = ev.modifiers()
         hit = self._hit(pos) if self.editable else None
         if ev.button() == Qt.RightButton:
             if hit is not None:
-                self._delete(hit)
+                if hit in self._sel and len(self._sel) > 1:
+                    self.delete_selection()
+                else:
+                    self.editStarted.emit()
+                    self.actions = editing.delete(self.actions, {hit})
+                    self._sel = set()
+                    self.actionsEdited.emit()
+                    self.update()
+            return
+        if ev.button() == Qt.LeftButton and hit is None and self.editable and mods & (Qt.ShiftModifier | Qt.ControlModifier):
+            # Shift/Strg + drag on empty space: selection rectangle
+            self._band = QRectF(pos, pos)
+            self._band_add = bool(mods & Qt.ControlModifier) or bool(mods & Qt.ShiftModifier)
             return
         if ev.button() == Qt.MiddleButton or (ev.button() == Qt.LeftButton and hit is None):
             # empty space: a click seeks (on release), a drag scrolls
@@ -230,14 +301,25 @@ class CurveWidget(QWidget):
             return
         if ev.button() != Qt.LeftButton:
             return
-        self._selected = hit
-        self._drag_idx = hit
-        self.editStarted.emit()
+        if mods & Qt.ControlModifier:              # Strg+click: toggle one point
+            self.set_selection(self._sel ^ {hit})
+            return
+        if hit not in self._sel:
+            self.set_selection((self._sel | {hit}) if mods & Qt.ShiftModifier else {hit})
+        # drag: all selected points move together
+        self._drag_from = pos
+        self._drag_base = list(self.actions)
+        self._dragging = False
         self.update()
 
     def mouseMoveEvent(self, ev):
+        pos = ev.position()
+        if self._band is not None:
+            self._band.setBottomRight(pos)
+            self.update()
+            return
         if self._press is not None:
-            dx = ev.position().x() - self._press.x()
+            dx = pos.x() - self._press.x()
             if not self._panning and abs(dx) >= PAN_THRESHOLD_PX:
                 self._panning = True
                 self.setCursor(Qt.ClosedHandCursor)
@@ -247,29 +329,43 @@ class CurveWidget(QWidget):
                 self._clamp_view()
                 self.update()
             return
-        if self._drag_idx is None:
-            over = self.editable and self._hit(ev.position()) is not None
+        if self._drag_from is None:
+            over = self.editable and self._hit(pos) is not None
             self.setCursor(Qt.PointingHandCursor if over else Qt.ArrowCursor)
             return
-        i = self._drag_idx
-        lo = self.actions[i - 1].at + 1 if i > 0 else 0
-        hi = self.actions[i + 1].at - 1 if i + 1 < len(self.actions) else int(self.duration_ms)
-        at = int(min(max(self._ms(ev.position().x()), lo), hi))
-        self.actions[i] = Action(at, self._pos(ev.position().y()))
+        r = self._plot()
+        dt = (pos.x() - self._drag_from.x()) / r.width() * self.view_ms
+        dpos = -(pos.y() - self._drag_from.y()) / r.height() * 100
+        if not self._dragging:
+            if abs(pos.x() - self._drag_from.x()) + abs(pos.y() - self._drag_from.y()) < 2:
+                return
+            self._dragging = True
+            self.editStarted.emit()
+        self.actions = editing.move(self._drag_base, self._sel, dt, dpos, self.duration_ms)
         self.update()
 
     def mouseReleaseEvent(self, ev):
+        if self._band is not None:
+            b = self._band.normalized()
+            found = editing.in_rect(self.actions, self._ms(b.left()), self._ms(b.right()),
+                                    self._pos(b.bottom()), self._pos(b.top()))
+            self._band = None
+            self.set_selection((self._sel | found) if self._band_add else found)
+            return
         if self._press is not None:
             if not self._panning and self._press_button == Qt.LeftButton:
-                self._selected = None
+                if self._sel:
+                    self.set_selection(())
                 self.seekRequested.emit(int(max(0, min(self._ms(self._press.x()), self.duration_ms))))
                 self.update()
             self._press, self._panning = None, False
             self.setCursor(Qt.ArrowCursor)
             return
-        if self._drag_idx is not None:
-            self._drag_idx = None
-            self.actionsEdited.emit()
+        if self._drag_from is not None:
+            moved = self._dragging
+            self._drag_from, self._drag_base, self._dragging = None, None, False
+            if moved:
+                self.actionsEdited.emit()
 
     def mouseDoubleClickEvent(self, ev):
         if not self.editable or ev.button() != Qt.LeftButton or self._hit(ev.position()) is not None:
@@ -281,9 +377,8 @@ class CurveWidget(QWidget):
             return
         self.editStarted.emit()
         self.actions.insert(i, Action(at, self._pos(ev.position().y())))
-        self._selected = i
         self.actionsEdited.emit()
-        self.update()
+        self.set_selection({i})
 
     def wheelEvent(self, ev):
         ad, px = ev.angleDelta(), ev.pixelDelta()
@@ -309,17 +404,10 @@ class CurveWidget(QWidget):
         self.update()
 
     def keyPressEvent(self, ev):
-        if self.editable and ev.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self._selected is not None:
-            self._delete(self._selected)
+        if self.editable and ev.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self._sel:
+            self.delete_selection()
         else:
             super().keyPressEvent(ev)
-
-    def _delete(self, i: int):
-        self.editStarted.emit()
-        del self.actions[i]
-        self._selected = None
-        self.actionsEdited.emit()
-        self.update()
 
 
 def _fmt(ms: float) -> str:
