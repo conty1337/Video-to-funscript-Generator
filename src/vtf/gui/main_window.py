@@ -356,6 +356,7 @@ class MainWindow(QMainWindow):
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
         self.player_action.setCheckable(True)
         self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
+        self._act(m, "Video-Zoom zurücksetzen (Strg+Mausrad zoomt)", self.view.reset_zoom, "Ctrl+0")
         m.addSeparator()
         self.left_action = self._act(m, "Linke Leiste (Analyse, Playlist)", self._sides_toggled, "Ctrl+1")
         self.right_action = self._act(m, "Rechte Leiste (Script)", self._sides_toggled, "Ctrl+2")
@@ -483,6 +484,7 @@ class MainWindow(QMainWindow):
         self.panel.set_roi(None)
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
+        self.view.reset_zoom()
         self.panel.tracking.reset(info.duration * 1000, info.fps)
         prepared = load_prep(path)
         if prepared:                  # prepared earlier: tracking with its areas
@@ -532,6 +534,7 @@ class MainWindow(QMainWindow):
         for b in (self.play_btn, self.back_btn, self.fwd_btn, self.analyze_btn):
             b.setEnabled(False)
         self.view.set_countdown(None)
+        self.view.reset_zoom()
         self.view.set_frame(None)
         self.view.set_roi(None)
         self.panel.set_roi(None)
@@ -790,7 +793,15 @@ class MainWindow(QMainWindow):
 
     def _box_drawn(self, box):
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
-        self._status(self.panel.tracking.add_box(box, self._cur_ms(), shown))
+        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown)
+        img = self.view._img
+        if img is not None:     # how big the area is in the analysis picture
+            aw = self.panel.width.currentData()
+            px = min(box[2] * aw, box[3] * aw * img.height() / max(1, img.width()))
+            if px < 24:
+                msg += (f" · kleines Kästchen ({px:.0f} px bei {aw} px Auflösung): unter Optionen "
+                        "eine höhere Auflösung wählen")
+        self._status(msg)
 
     def _box_rotated(self, area: int, angle: float):
         self._status(self.panel.tracking.rotate_box(self._cur_ms(), area, angle))
@@ -907,6 +918,7 @@ class MainWindow(QMainWindow):
         self.curve.editable = not on
         # player: only the video, no tracking areas or analysis rectangle
         if on:
+            self.view.reset_zoom()
             self.view.set_mode("play")
         else:
             self.view.set_mode("track" if self.panel.mode == "track" else "roi")
@@ -1419,6 +1431,8 @@ class MainWindow(QMainWindow):
             "   Kästchen (am Abschnitt-Start): innen ziehen = verschieben, Ecke = Größe,\n"
             "   runder Griff oder Mausrad = drehen. Abgewandert: an der Stelle anpacken und\n"
             "   richtig hinschieben (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n"
+            "   Kleine Stellen: Strg+Mausrad zoomt ins Video, mittlere Maustaste verschiebt,\n"
+            "   Strg+0 setzt zurück. Kleine Kästchen brauchen eine höhere Auflösung (Optionen).\n"
             "   Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"

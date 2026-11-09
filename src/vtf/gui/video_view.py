@@ -31,7 +31,8 @@ from . import theme
 
 TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
 MAX_TRACKS = 3
-MIN_SIZE = 0.03          # smallest area side, as a fraction of the frame
+MIN_SIZE = 0.012         # smallest area side, as a fraction of the frame
+MAX_ZOOM = 8.0
 GRAB = 8                 # px around a handle that still grabs it
 
 
@@ -59,6 +60,9 @@ class VideoView(QWidget):
         self.editable = True                   # marked areas may be moved/resized/turned here
         self._correcting: list | None = None   # [overlay] saved while an area is put right
         self._countdown: int | None = None     # seconds until the script starts (player)
+        self._zoom = 1.0                       # Strg+wheel: zoom in to mark small things
+        self._zc = (0.5, 0.5)                  # image point (normalized) in the middle when zoomed
+        self._pan_from: tuple | None = None    # middle mouse drag: (start pos, centre then)
         self.setMouseTracking(True)
         self.set_mode("roi")
 
@@ -124,9 +128,36 @@ class VideoView(QWidget):
         if self._img is None:
             return QRectF(self.rect())
         iw, ih = self._img.width(), self._img.height()
-        scale = min(self.width() / iw, self.height() / ih)
+        scale = min(self.width() / iw, self.height() / ih) * self._zoom
         w, h = iw * scale, ih * scale
-        return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+        if self._zoom <= 1.0:
+            return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+        x = self.width() / 2 - self._zc[0] * w
+        y = self.height() / 2 - self._zc[1] * h
+        # keep the picture filling the view where it can
+        x = min(0.0, max(self.width() - w, x)) if w > self.width() else (self.width() - w) / 2
+        y = min(0.0, max(self.height() - h, y)) if h > self.height() else (self.height() - h) / 2
+        return QRectF(x, y, w, h)
+
+    def reset_zoom(self) -> None:
+        self._zoom, self._zc = 1.0, (0.5, 0.5)
+        self.update()
+
+    def _zoom_at(self, pos: QPointF, factor: float) -> None:
+        """Zoom by factor keeping the image point under pos where it is."""
+        before = self._to_norm(pos)
+        self._zoom = float(min(MAX_ZOOM, max(1.0, self._zoom * factor)))
+        if self._zoom <= 1.0:
+            self._zc = (0.5, 0.5)
+        else:
+            r = self._image_rect()
+            # choose the centre so that `before` lands under the cursor again
+            cx = before.x() - (pos.x() - self.width() / 2) / r.width()
+            cy = before.y() - (pos.y() - self.height() / 2) / r.height()
+            self._zc = (cx, cy)
+            r = self._image_rect()                         # store the clamped centre
+            self._zc = ((self.width() / 2 - r.x()) / r.width(), (self.height() / 2 - r.y()) / r.height())
+        self.update()
 
     def _to_norm(self, p: QPointF) -> QPointF:
         r = self._image_rect()
@@ -144,6 +175,12 @@ class VideoView(QWidget):
         r = self._image_rect()
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawImage(r, self._img)
+        if self._zoom > 1.0 and self.mode != "play":
+            p.setFont(theme.mono_font(11))
+            tag = QRectF(self.width() - 92, 8, 84, 20)
+            p.fillRect(tag, QColor(0, 0, 0, 150))
+            p.setPen(theme.qcolor(theme.TEXT))
+            p.drawText(tag, Qt.AlignCenter, f"Zoom {self._zoom * 100:.0f} %")
         if self._countdown is not None:
             self._paint_countdown(p, r)
         if self.mode == "play":                     # player: just the video
@@ -334,6 +371,10 @@ class VideoView(QWidget):
     def mousePressEvent(self, ev):
         if self._img is None or self.mode == "play":
             return
+        if ev.button() == Qt.MiddleButton and self._zoom > 1.0:     # move the zoomed picture
+            self._pan_from = (ev.position(), self._zc)
+            self.setCursor(QCursor(Qt.ClosedHandCursor))
+            return
         if ev.button() == Qt.RightButton:
             if self.mode == "track":
                 self.tracksCleared.emit()
@@ -390,6 +431,15 @@ class VideoView(QWidget):
         self.update()
 
     def mouseMoveEvent(self, ev):
+        if self._pan_from is not None:
+            start, (cx, cy) = self._pan_from
+            r = self._image_rect()
+            self._zc = (cx - (ev.position().x() - start.x()) / r.width(),
+                        cy - (ev.position().y() - start.y()) / r.height())
+            r = self._image_rect()
+            self._zc = ((self.width() / 2 - r.x()) / r.width(), (self.height() / 2 - r.y()) / r.height())
+            self.update()
+            return
         if self._rotating is not None:
             r = self._image_rect()
             _pts, c, _a = self._poly(r, self._tracks[self._rotating])
@@ -420,6 +470,10 @@ class VideoView(QWidget):
             self.setCursor(QCursor(shape))
 
     def mouseReleaseEvent(self, ev):
+        if self._pan_from is not None:
+            self._pan_from = None
+            self.unsetCursor()
+            return
         if self._rotating is not None:
             i, self._rotating = self._rotating, None
             self.boxRotated.emit(i, self._angle(i))
@@ -452,7 +506,14 @@ class VideoView(QWidget):
         self.update()
 
     def wheelEvent(self, ev):
-        """Mouse wheel over a marked area turns it (5 degrees, with Shift 1 degree)."""
+        """Strg+wheel zooms the picture (to mark small things); the wheel over a
+        marked area turns it (5 degrees, with Shift 1 degree)."""
+        if ev.modifiers() & Qt.ControlModifier and self._img is not None and self.mode != "play":
+            d = ev.angleDelta().y() or ev.angleDelta().x()
+            if d:
+                self._zoom_at(ev.position(), 1.25 ** (d / 120))
+            ev.accept()
+            return
         boxes = self._grab_boxes()
         if boxes:
             r = self._image_rect()
