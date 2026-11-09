@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.5.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 0.5.1. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
@@ -11,8 +11,8 @@ Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
 - [ ] **Test mit dem echten Fredorch F21S**: Gerät in Intiface Central finden
       (Bluetooth-Name `YXlinksSPP`), Zeitversatz und Höchsttempo einstellen.
       Wartet, bis das Gerät ausgepackt ist.
-- [ ] **Rückmeldung zur Grafikkarte**: Hilfe → „Dekodierung testen…“ auf
-      Nobara. Klappt VAAPI (Grafikkarte dekodiert und verkleinert)?
+- [x] **Rückmeldung zur Grafikkarte**: VAAPI läuft auf Nobara (RX 5700 XT,
+      „Video dekodieren“ ~96 % während der Analyse).
 - [ ] **Tracking und Kalibrierung an echten Videos** prüfen und nachschärfen.
 
 ## Phase 4 (0.5.0)
@@ -39,6 +39,9 @@ auf der anderen Bildseite.
       Stelle neu ziehen (Stützpunkt), ohne einen neuen Abschnitt anzufangen.
       Das Tracking verfolgt dann von dort aus weiter, die Abweichung davor
       wird rückwärts bis zum vorigen Stützpunkt ausgeglichen.
+
+- [x] **Kästchen nachträglich ändern** (0.5.1): am Abschnitt-Start
+      verschieben, Größe ändern, drehen; „Alle löschen“ zum Neuanfang.
 
 ### Stapel mit Tracking
 
