@@ -254,6 +254,7 @@ class MainWindow(QMainWindow):
         self.view.roiChanged.connect(self.panel.set_roi)
         self.view.boxDrawn.connect(self._box_drawn)
         self.view.boxRotated.connect(self._box_rotated)
+        self.view.boxEdited.connect(self._box_edited)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -326,6 +327,7 @@ class MainWindow(QMainWindow):
                   lambda: self._track_cmd(self.panel.tracking.calibrate, "out"), "A")
         m.addSeparator()
         self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
@@ -563,12 +565,21 @@ class MainWindow(QMainWindow):
     def _box_rotated(self, area: int, angle: float):
         self._status(self.panel.tracking.rotate_box(self._cur_ms(), area, angle))
 
+    def _box_edited(self, area: int, box):
+        self._status(self.panel.tracking.update_box(self._cur_ms(), area, box))
+
     def _track_cmd(self, fn, *args):
         """Tracking commands from the menu: only in mode Tracking."""
         if self.panel.mode != "track":
             self._status("Nur bei Analyse-Methode „Tracking“")
             return
         self._status(fn(*args, self._cur_ms()))
+
+    def _clear_tracking(self):
+        if self.panel.mode != "track":
+            self._status("Nur bei Analyse-Methode „Tracking“")
+            return
+        self.panel.tracking._clear_clicked()
 
     def _edit_points(self) -> list[int]:
         out = []
@@ -623,8 +634,12 @@ class MainWindow(QMainWindow):
         if self.view.mode != "track":
             self.view.set_track_overlay(None)
             return
+        # at a section start or a correction the marked areas can be edited
+        editable = any(abs(k - ms) <= 1000 / self.fps * 0.6 for k in self._edit_points())
+        self.view.set_editable(editable)
         m = self.motion
-        if m is not None and m.tracks is not None and m.track_section is not None and len(m.tracks):
+        if (m is not None and m.tracks is not None and m.track_section is not None and len(m.tracks)
+                and not editable and self.panel.tracking.index_at(ms) is not None):
             i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
             sec = int(m.track_section[i])
             if sec >= 0 and m.track_sizes is not None and sec < len(m.track_sizes):
@@ -637,14 +652,9 @@ class MainWindow(QMainWindow):
                     sc = 1.0 if np.isnan(sc) else float(sc)
                     ang = 0.0 if np.isnan(ang) else float(ang)
                     boxes.append((cx - w * sc / 2, cy - h * sc / 2, w * sc, h * sc, ang, bool(lo)))
-                # at a section start or a correction the marked areas can be edited (turned)
-                if any(abs(k - ms) <= 1000 / self.fps * 0.6 for k in self._edit_points()):
-                    self.view.set_track_overlay(None)
-                    self.view.set_tracks(self.panel.tracking.boxes_at(ms))
-                else:
-                    self.view.set_track_overlay(boxes)
+                self.view.set_track_overlay(boxes)
                 return
-        # not analysed (yet) here: show the areas as marked
+        # editable here, or not analysed (yet): show the areas as marked
         self.view.set_track_overlay(None)
         self.view.set_tracks(self.panel.tracking.boxes_at(ms))
 
@@ -1145,8 +1155,10 @@ class MainWindow(QMainWindow):
             "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n"
             "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
             "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
-            "   Kästchen drehen: runder Griff oder Mausrad. Abgewandert: neues Kästchen darüber\n"
-            "   ziehen (nachjustieren). Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
+            "   Kästchen (am Abschnitt-Start): innen ziehen = verschieben, Ecke = Größe,\n"
+            "   runder Griff oder Mausrad = drehen. Abgewandert: neues Kästchen darüber\n"
+            "   ziehen (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n"
+            "   Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
             "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"

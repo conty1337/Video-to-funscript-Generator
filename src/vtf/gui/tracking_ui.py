@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -62,7 +63,9 @@ class TrackingBox(QWidget):
         self.del_btn = QPushButton("Löschen")
         self.in_btn = QPushButton("Ganz drin")
         self.out_btn = QPushButton("Ganz draußen")
+        self.clear_btn = QPushButton("Alle löschen")
         tips = ((self.end_btn, "Abschnitt an der Abspielposition beenden (E)"),
+                (self.clear_btn, "Alle Abschnitte und Kästchen löschen und von vorne anfangen"),
                 (self.del_btn, "Abschnitt an der Abspielposition löschen"),
                 (self.in_btn, "Kalibrieren: an dieser Stelle ist es ganz drin = Position 0 (D)"),
                 (self.out_btn, "Kalibrieren: an dieser Stelle ist es ganz draußen = Position 100 (A)"))
@@ -73,6 +76,7 @@ class TrackingBox(QWidget):
         grid.addWidget(self.del_btn, 0, 1)
         grid.addWidget(self.in_btn, 1, 0)
         grid.addWidget(self.out_btn, 1, 1)
+        grid.addWidget(self.clear_btn, 2, 0, 1, 2)
         lay.addLayout(grid)
 
         # bound methods, no lambdas: a lambda holding self makes a reference cycle that
@@ -81,6 +85,7 @@ class TrackingBox(QWidget):
         self.del_btn.clicked.connect(self._del_clicked)
         self.in_btn.clicked.connect(self._in_clicked)
         self.out_btn.clicked.connect(self._out_clicked)
+        self.clear_btn.clicked.connect(self._clear_clicked)
         self.list.itemClicked.connect(self._clicked)
         self.refresh()
 
@@ -121,6 +126,17 @@ class TrackingBox(QWidget):
 
     def _out_clicked(self):
         self._say(self.calibrate("out", self.current_ms()))
+
+    def _clear_clicked(self):
+        n = len(self.sections)
+        if not n:
+            return
+        ans = QMessageBox.question(
+            self, "Alle löschen",
+            f"Alle {n} Abschnitt{'e' if n > 1 else ''} mit ihren Kästchen, Korrekturen und der "
+            "Kalibrierung löschen?")
+        if ans == QMessageBox.Yes:
+            self._say(self.clear_all())
 
     def _say(self, msg: str | None) -> None:
         if msg:
@@ -169,25 +185,54 @@ class TrackingBox(QWidget):
         return (f"Bereich {area + 1} bei {fmt_ms(ms)} nachjustiert – nach neuer Analyse folgt er von hier "
                 "aus, die Abweichung davor wird ausgeglichen")
 
-    def rotate_box(self, ms: float, area: int, angle: float) -> str:
-        """Turn a marked area (at a section start or at a correction)."""
+    def _edit_marked(self, ms: float, area: int, fn) -> bool:
+        """Apply fn(box) -> box to marked area `area` at a section start or a correction at ms."""
         for i, s in enumerate(self.sections):
             if abs(s.start_ms - ms) <= self.frame_ms * 0.6 and area < len(s.boxes):
                 boxes = list(s.boxes)
-                boxes[area] = tuple(boxes[area][:4]) + (round(angle, 1),)
+                boxes[area] = fn(boxes[area])
                 self.sections[i] = replace(s, boxes=tuple(boxes))
-                self.refresh()
-                self.analysisChanged.emit()
-                return f"Bereich {area + 1} gedreht: {angle:.0f}°"
-            for k, (kms, karea, kbox) in enumerate(s.keys):
-                if abs(kms - ms) <= self.frame_ms * 0.6 and karea == area:
-                    keys = list(s.keys)
-                    keys[k] = (kms, karea, tuple(kbox[:4]) + (round(angle, 1),))
-                    self.sections[i] = replace(s, keys=tuple(keys))
-                    self.refresh()
-                    self.analysisChanged.emit()
-                    return f"Bereich {area + 1} gedreht: {angle:.0f}°"
+                break
+            k = next((k for k, (kms, karea, _b) in enumerate(s.keys)
+                      if abs(kms - ms) <= self.frame_ms * 0.6 and karea == area), None)
+            if k is not None:
+                keys = list(s.keys)
+                kms, karea, kbox = keys[k]
+                keys[k] = (kms, karea, fn(kbox))
+                self.sections[i] = replace(s, keys=tuple(keys))
+                break
+        else:
+            return False
+        self.refresh()
+        self.analysisChanged.emit()
+        return True
+
+    def rotate_box(self, ms: float, area: int, angle: float) -> str:
+        """Turn a marked area (at a section start or at a correction)."""
+        if self._edit_marked(ms, area, lambda b: tuple(b[:4]) + (round(angle, 1),)):
+            return f"Bereich {area + 1} gedreht: {angle:.0f}°"
         return "Drehen geht an der Startstelle eines Abschnitts (Klick in der Liste)"
+
+    def update_box(self, ms: float, area: int, box) -> str:
+        """Move/resize a marked area (at a section start or at a correction)."""
+        x, y, w, h = (round(float(v), 4) for v in box[:4])
+
+        def fn(old):
+            angle = box[4] if len(box) > 4 else (old[4] if len(old) > 4 else 0.0)
+            return (x, y, w, h, round(float(angle), 1))
+
+        if self._edit_marked(ms, area, fn):
+            return f"Bereich {area + 1} angepasst"
+        return "Ändern geht an der Startstelle eines Abschnitts (Klick in der Liste)"
+
+    def clear_all(self) -> str:
+        if not self.sections:
+            return "Keine Abschnitte"
+        n = len(self.sections)
+        self.sections = []
+        self.refresh()
+        self.analysisChanged.emit()
+        return f"{n} Abschnitt{'e' if n > 1 else ''} gelöscht – Bereiche neu aufziehen"
 
     def set_end(self, ms: float) -> str:
         cand = [i for i, s in enumerate(self.sections) if s.start_ms < ms]
@@ -252,16 +297,18 @@ class TrackingBox(QWidget):
         if has:          # as tall as the entries, at most four rows
             row = max(self.list.sizeHintForRow(0), 24)
             self.list.setFixedHeight(min(len(self.sections), 4) * (row + 2) + 6)
-        for b in (self.end_btn, self.del_btn, self.in_btn, self.out_btn):
+        for b in (self.end_btn, self.del_btn, self.in_btn, self.out_btn, self.clear_btn):
             b.setEnabled(has)
         if not has:
             self.help.setText("Im Video bis zu 3 Bereiche aufziehen, z.B. um die beiden Körperteile. "
-                              "Das startet einen Abschnitt an dieser Stelle. Am runden Griff oder mit dem "
-                              "Mausrad über dem Kästchen drehen. Nach einem Szenenwechsel einfach neu "
+                              "Das startet einen Abschnitt an dieser Stelle. Kästchen innen ziehen = "
+                              "verschieben, an einer Ecke = Größe, am runden Griff oder mit dem Mausrad "
+                              "drehen. Nach einem Szenenwechsel einfach neu "
                               "markieren. 2–3 Bereiche: Bereich 1 relativ zu den anderen, die Kamera "
                               "spielt dann keine Rolle.")
         else:
-            self.help.setText("Klick auf einen Abschnitt springt zu seinem Start. Wandert ein Kästchen ab: "
+            self.help.setText("Klick auf einen Abschnitt springt zu seinem Start, dort lassen sich die "
+                              "Kästchen verschieben, vergrößern und drehen. Wandert ein Kästchen ab: "
                               "an der Stelle ein neues Kästchen darüber ziehen (nachjustieren). Für echte "
                               "Tiefe: ganz drin → „Ganz drin“, ganz draußen → „Ganz draußen“.")
 

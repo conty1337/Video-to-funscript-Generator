@@ -2,8 +2,10 @@
 
 Mode "roi":   drag a rectangle = analysis area, right click removes it.
 Mode "track": drag up to three rectangles = areas to track (body parts,
-              objects), right click removes them all. After the analysis the
-              tracked areas are drawn where they are in the current frame.
+              objects), right click removes the section. Marked areas can be
+              moved (drag inside), resized (drag a corner) and turned (round
+              handle or mouse wheel). After the analysis the tracked areas are
+              drawn where they are in the current frame.
 """
 
 from __future__ import annotations
@@ -13,19 +15,30 @@ import math
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtGui import (
+    QColor,
+    QCursor,
+    QImage,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPolygonF,
+)
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from . import theme
 
 TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
 MAX_TRACKS = 3
+MIN_SIZE = 0.03          # smallest area side, as a fraction of the frame
+GRAB = 8                 # px around a handle that still grabs it
 
 
 class VideoView(QWidget):
     roiChanged = Signal(object)  # normalized (x, y, w, h) or None
     boxDrawn = Signal(tuple)      # mode "track": a new area (x, y, w, h), normalized
     boxRotated = Signal(int, float)  # mode "track": marked area i turned to angle (degrees)
+    boxEdited = Signal(int, tuple)   # mode "track": marked area i moved/resized to (x, y, w, h, angle)
     tracksCleared = Signal()      # mode "track": right click
 
     def __init__(self, parent=None):
@@ -40,6 +53,8 @@ class VideoView(QWidget):
         self._tracks: list[tuple[float, float, float, float]] = []
         self._overlay: list[tuple] | None = None
         self._rotating: int | None = None      # index of the marked area being turned
+        self._edit: tuple | None = None        # ("move"|"resize", area, start data) while dragging
+        self.editable = True                   # marked areas may be moved/resized/turned here
         self.setMouseTracking(True)
         self.set_mode("roi")
 
@@ -48,8 +63,9 @@ class VideoView(QWidget):
         self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
                         if mode == "roi" else
                         "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
-                        "Das startet einen Tracking-Abschnitt an dieser Stelle. Rechtsklick löscht den "
-                        "Abschnitt an dieser Stelle")
+                        "Das startet einen Tracking-Abschnitt an dieser Stelle. Kästchen innen ziehen = "
+                        "verschieben, an einer Ecke = Größe, runder Griff oder Mausrad = drehen. "
+                        "Rechtsklick löscht den Abschnitt an dieser Stelle")
         self.update()
 
     def set_tracks(self, boxes) -> None:
@@ -58,6 +74,14 @@ class VideoView(QWidget):
 
     def tracks(self) -> list:
         return list(self._tracks)
+
+    def set_editable(self, on: bool) -> None:
+        """Whether the marked areas shown can be changed (at a section start or a correction)."""
+        self.editable = bool(on)
+        self.update()
+
+    def _can_edit(self) -> bool:
+        return self.mode == "track" and self._overlay is None and self.editable
 
     def set_track_overlay(self, boxes) -> None:
         """Where the tracked areas are in the current frame (None = show the marked ones)."""
@@ -172,16 +196,18 @@ class VideoView(QWidget):
             p.setBrush(Qt.NoBrush)
             p.drawPolygon(QPolygonF(pts))
             top = min(pts, key=lambda q: q.y())
-            tag = QRectF(top.x() - 11, max(r.y(), top.y() - 20), 22 if not lost else 30, 18)
+            tag = QRectF(top.x() - 11, max(r.y(), top.y() - 24), 22 if not lost else 30, 18)
             p.fillRect(tag, color)
             p.setPen(QColor(theme.ON_ACCENT))
             p.drawText(tag, Qt.AlignCenter, f"{i + 1}" + ("?" if lost else ""))
-            if not analysed:                                   # turn handle
+            if not analysed and self.editable:                 # turn handle and corners
                 h = self._handle(r, box)
                 p.setPen(QPen(color, 1))
                 p.drawLine(QPointF((pts[0].x() + pts[1].x()) / 2, (pts[0].y() + pts[1].y()) / 2), h)
                 p.setBrush(color)
                 p.drawEllipse(h, 4.5, 4.5)
+                for q in pts:
+                    p.drawRect(QRectF(q.x() - 3.5, q.y() - 3.5, 7, 7))
         if self._drag_rect is not None:
             p.setPen(QPen(theme.qcolor(theme.TEXT, 0.8), 1, Qt.DashLine))
             p.setBrush(Qt.NoBrush)
@@ -214,6 +240,28 @@ class VideoView(QWidget):
         _keycaps(p, cx, cy + 48, ["Strg", "O"])
 
     # ------------------------------------------------------------ mouse
+    def _hit(self, pos: QPointF) -> tuple[str, int, int] | None:
+        """What a press at pos grabs: ("rotate"|"resize"|"move", area, corner)."""
+        if not self._can_edit():
+            return None
+        r = self._image_rect()
+
+        def near(q: QPointF) -> bool:
+            return (q.x() - pos.x()) ** 2 + (q.y() - pos.y()) ** 2 <= GRAB * GRAB
+
+        for i, box in enumerate(self._tracks):
+            if near(self._handle(r, box)):
+                return ("rotate", i, -1)
+        for i, box in enumerate(self._tracks):
+            pts, _c, _a = self._poly(r, box)
+            for k, q in enumerate(pts):
+                if near(q):
+                    return ("resize", i, k)
+        for i in reversed(range(len(self._tracks))):
+            if self._contains(r, self._tracks[i], pos):
+                return ("move", i, -1)
+        return None
+
     def mousePressEvent(self, ev):
         if self._img is None:
             return
@@ -225,15 +273,51 @@ class VideoView(QWidget):
                 self.roiChanged.emit(None)
             self.update()
         elif ev.button() == Qt.LeftButton:
-            if self.mode == "track" and self._overlay is None:
-                r = self._image_rect()
-                for i, box in enumerate(self._tracks):
-                    h = self._handle(r, box)
-                    if (h.x() - ev.position().x()) ** 2 + (h.y() - ev.position().y()) ** 2 <= 64:
-                        self._rotating = i                       # grabbed the turn handle
-                        return
+            hit = self._hit(ev.position())
+            if hit is not None:
+                kind, i, corner = hit
+                if kind == "rotate":
+                    self._rotating = i
+                elif kind == "resize":
+                    pts, _c, _a = self._poly(self._image_rect(), self._tracks[i])
+                    self._edit = ("resize", i, pts[(corner + 2) % 4])     # the opposite corner stays
+                else:
+                    self._edit = ("move", i, (ev.position(), self._tracks[i]))
+                return
             self._drag_start = ev.position()
             self._drag_rect = QRectF(self._drag_start, self._drag_start)
+
+    def _angle(self, i: int) -> float:
+        box = self._tracks[i]
+        return float(box[4]) if len(box) > 4 and box[4] is not None else 0.0
+
+    def _move_to(self, i: int, start: QPointF, orig, pos: QPointF) -> None:
+        r = self._image_rect()
+        x, y, w, h = orig[:4]
+        dx = (pos.x() - start.x()) / r.width()
+        dy = (pos.y() - start.y()) / r.height()
+        cx = min(max(x + w / 2 + dx, 0.0), 1.0)                 # the centre stays in the frame
+        cy = min(max(y + h / 2 + dy, 0.0), 1.0)
+        self._tracks[i] = (round(cx - w / 2, 4), round(cy - h / 2, 4), w, h, self._angle(i))
+        self.update()
+
+    def _resize_to(self, i: int, fixed: QPointF, pos: QPointF) -> None:
+        """Opposite corner fixed, dragged corner under the mouse, angle kept."""
+        r = self._image_rect()
+        ang = math.radians(self._angle(i))
+        ca, sa = math.cos(ang), math.sin(ang)
+        vx, vy = pos.x() - fixed.x(), pos.y() - fixed.y()
+        lx, ly = vx * ca + vy * sa, -vx * sa + vy * ca           # in the area's own directions
+        min_w, min_h = MIN_SIZE * r.width(), MIN_SIZE * r.height()
+        lx = math.copysign(max(abs(lx), min_w), lx or 1.0)
+        ly = math.copysign(max(abs(ly), min_h), ly or 1.0)
+        cx = fixed.x() + (lx * ca - ly * sa) / 2
+        cy = fixed.y() + (lx * sa + ly * ca) / 2
+        w, h = abs(lx) / r.width(), abs(ly) / r.height()
+        x = (cx - r.x()) / r.width() - w / 2
+        y = (cy - r.y()) / r.height() - h / 2
+        self._tracks[i] = (round(x, 4), round(y, 4), round(w, 4), round(h, 4), self._angle(i))
+        self.update()
 
     def mouseMoveEvent(self, ev):
         if self._rotating is not None:
@@ -245,15 +329,37 @@ class VideoView(QWidget):
                 ang = round(ang / 15) * 15                       # Shift: 15-degree steps
             self._set_angle(self._rotating, ang)
             return
+        if self._edit is not None:
+            kind, i, data = self._edit
+            if kind == "move":
+                self._move_to(i, data[0], data[1], ev.position())
+            else:
+                self._resize_to(i, data, ev.position())
+            return
         if self._drag_start is not None:
             self._drag_rect = QRectF(self._drag_start, ev.position()).normalized() & self._image_rect()
             self.update()
+            return
+        hit = self._hit(ev.position()) if self._img is not None else None
+        shape = {"rotate": Qt.PointingHandCursor, "move": Qt.SizeAllCursor}.get(hit[0]) if hit else None
+        if hit and hit[0] == "resize":
+            shape = Qt.SizeFDiagCursor if hit[2] in (0, 2) else Qt.SizeBDiagCursor
+        if shape is None:
+            self.unsetCursor()
+        else:
+            self.setCursor(QCursor(shape))
 
     def mouseReleaseEvent(self, ev):
         if self._rotating is not None:
             i, self._rotating = self._rotating, None
-            box = self._tracks[i]
-            self.boxRotated.emit(i, float(box[4]) if len(box) > 4 else 0.0)
+            self.boxRotated.emit(i, self._angle(i))
+            return
+        if self._edit is not None:
+            kind, i, data = self._edit
+            self._edit = None
+            if kind == "move" and self._tracks[i] == tuple(data[1][:4]) + (self._angle(i),):
+                return                                           # just a click
+            self.boxEdited.emit(i, tuple(self._tracks[i]))
             return
         if self._drag_start is None or ev.button() != Qt.LeftButton:
             return
@@ -261,7 +367,7 @@ class VideoView(QWidget):
         self._drag_start = self._drag_rect = None
         x0, x1 = sorted((a.x(), b.x()))
         y0, y1 = sorted((a.y(), b.y()))
-        if x1 - x0 > 0.03 and y1 - y0 > 0.03:
+        if x1 - x0 > MIN_SIZE and y1 - y0 > MIN_SIZE:
             box = (x0, y0, x1 - x0, y1 - y0)
             if self.mode == "track":
                 self.boxDrawn.emit(box)
@@ -270,10 +376,9 @@ class VideoView(QWidget):
                 self.roiChanged.emit(self._roi)
         self.update()
 
-
     def wheelEvent(self, ev):
         """Mouse wheel over a marked area turns it (5 degrees, with Shift 1 degree)."""
-        if self.mode == "track" and self._overlay is None and self._tracks:
+        if self._can_edit() and self._tracks:
             r = self._image_rect()
             for i, box in enumerate(self._tracks):
                 if self._contains(r, box, ev.position()):
