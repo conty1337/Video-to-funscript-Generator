@@ -22,8 +22,8 @@ from .video import VideoInfo, iter_gray_frames, probe, scaled_size
 ProgressCb = Callable[[float], None]
 CancelCb = Callable[[], bool]
 
-MOTION_FORMAT_VERSION = 3
-READABLE_VERSIONS = (1, 2, 3)
+MOTION_FORMAT_VERSION = 4
+READABLE_VERSIONS = (1, 2, 3, 4)
 
 
 class AnalysisCancelled(Exception):
@@ -46,6 +46,7 @@ class TrackSection:
     end_ms: int | None = None
     calib_in_ms: int | None = None
     calib_out_ms: int | None = None
+    keys: tuple = ()                       # corrections: (ms, area index, box) - "nachjustieren"
 
     @property
     def calibrated(self) -> bool:
@@ -53,7 +54,8 @@ class TrackSection:
 
     def analysis_key(self) -> tuple:
         return (int(self.start_ms), None if self.end_ms is None else int(self.end_ms),
-                tuple(tuple(round(v, 4) for v in b) for b in self.boxes))
+                tuple(tuple(round(v, 4) for v in b) for b in self.boxes),
+                tuple((int(ms), int(a), tuple(round(v, 4) for v in b)) for ms, a, b in self.keys))
 
 
 def section_ranges(sections, duration_ms: float) -> list[tuple[int, float, float]]:
@@ -114,6 +116,8 @@ class MotionData:
     tracks: np.ndarray | None = None       # (n, areas, 2) normalized area centres, NaN = not tracked
     track_sizes: np.ndarray | None = None  # (sections, areas, 2) normalized width/height, NaN-padded
     track_section: np.ndarray | None = None  # (n,) index into the sections, -1 = not tracked
+    track_geom: np.ndarray | None = None     # (n, areas, 2) scale and angle (degrees) per area
+    track_lost: np.ndarray | None = None     # (n, areas) True where an area could not be followed
 
     def __len__(self) -> int:
         return len(self.dx)
@@ -128,6 +132,10 @@ class MotionData:
         if self.tracks is not None:
             extra = {"tracks": self.tracks, "track_sizes": self.track_sizes,
                      "track_section": self.track_section}
+            if self.track_geom is not None:
+                extra["track_geom"] = self.track_geom
+            if self.track_lost is not None:
+                extra["track_lost"] = self.track_lost
         np.savez_compressed(tmp, dx=self.dx, dy=self.dy, fps=self.fps,
                             version=MOTION_FORMAT_VERSION, **extra)
         os.replace(tmp, path)
@@ -143,8 +151,11 @@ class MotionData:
             if tracks is not None and sect is None:          # format 2: one section, whole video
                 sizes = sizes[None] if sizes is not None and sizes.ndim == 2 else sizes
                 sect = np.zeros(len(tracks), np.int16)
+            geom = d["track_geom"].astype(np.float32) if "track_geom" in d.files else None
+            lost = d["track_lost"].astype(bool) if "track_lost" in d.files else None
             return cls(video, float(d["fps"]), d["dx"].astype(np.float32), d["dy"].astype(np.float32),
-                       tracks=tracks, track_sizes=sizes, track_section=sect)
+                       tracks=tracks, track_sizes=sizes, track_section=sect, track_geom=geom,
+                       track_lost=lost)
 
 
 def _roi_slices(shape: tuple[int, int], roi) -> tuple[slice, slice]:
@@ -225,6 +236,34 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
                        "decoder": report.get("decoder"), "decoder_errors": report.get("errors", [])})
 
 
+def _spread_corrections(events, centers, owner, plan, dx, dy, k) -> None:
+    """A correction moves an area at once; the drift that made it necessary built
+    up since the previous anchor (section start or earlier correction). Spread the
+    offset back linearly over that stretch, in the positions and in the motion."""
+    last: dict[tuple[int, int], int] = {}
+    starts = {sec: a for sec, a, _b in plan}
+    for i, sec, area, off in sorted(events, key=lambda e: e[0]):
+        j0 = last.get((sec, area), starts.get(sec, i))
+        n = i - j0
+        last[(sec, area)] = i
+        if n <= 0:
+            continue
+        for j in range(j0 + 1, i):
+            if centers[j] is not None and owner[j] == sec:
+                centers[j][area] = centers[j][area] + off * ((j - j0) / n)
+        n_areas = sum(1 for c in (centers[i] if centers[i] is not None else [])
+                      if not np.isnan(c[0]))
+        per = off / n
+        if n_areas <= 1:
+            contrib = per
+        elif area == 0:
+            contrib = per
+        else:
+            contrib = -per / (n_areas - 1)
+        dx[j0 + 1:i + 1] += contrib[0]
+        dy[j0 + 1:i + 1] += contrib[1]
+
+
 def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: ProgressCb | None = None,
                      cancel: CancelCb | None = None, info: VideoInfo | None = None) -> MotionData:
     """Mode "track": follow the marked areas section by section. Each section
@@ -249,7 +288,17 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     dx: list[float] = []
     dy: list[float] = []
     centers: list[np.ndarray | None] = []
+    geoms: list[np.ndarray | None] = []
+    losts: list[np.ndarray | None] = []
     owner: list[int] = []
+    # corrections by frame index: {i: [(area, box), ...]}
+    key_at: dict[int, list] = {}
+    for sec, a, b in plan:
+        for ms, area, bx in sections[sec].keys:
+            ki = to_i(ms)
+            if a < ki < b:
+                key_at.setdefault(ki, []).append((int(area), bx))
+    events: list[tuple] = []                      # (frame, section, area, offset px)
     tracker = None
     active = -1
     prev = None
@@ -263,23 +312,40 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             dx.append(0.0)
             dy.append(0.0)
             centers.append(None)
+            geoms.append(None)
+            losts.append(None)
             owner.append(-1)
         else:
             cur = cv2.GaussianBlur(np.ascontiguousarray(frame), (3, 3), 0)
             if sec != active:                         # section starts: areas marked on this frame
                 boxes = sections[sec].boxes[:MAX_AREAS]
-                boxes_px = [(x * w, y * h, bw * w, bh * h) for x, y, bw, bh in boxes]
-                tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera)
+                boxes_px = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h, *b[4:5]) for b in boxes]
+                tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur)
                 active = sec
                 d = np.zeros(2)
             else:
                 d = tracker.step(prev, cur)
+                # correction: the area is really here in this frame (after following it)
+                for area, bx in key_at.get(i, ()):
+                    if area < len(tracker.areas):
+                        before = tracker.areas[area].center.copy()
+                        tracker.reset_area(area, (bx[0] * w, bx[1] * h, bx[2] * w, bx[3] * h, *bx[4:5]),
+                                           cur)
+                        events.append((i, sec, area, tracker.areas[area].center - before))
             dx.append(float(d[0]))
             dy.append(float(d[1]))
             c = np.full((k, 2), np.nan)
             cs = tracker.centers()
             c[:len(cs)] = cs
             centers.append(c)
+            g = np.full((k, 2), np.nan)
+            gs = tracker.geometry()
+            g[:len(gs)] = gs
+            geoms.append(g)
+            lo = np.zeros(k, bool)
+            ls = tracker.lost()
+            lo[:len(ls)] = ls
+            losts.append(lo)
             owner.append(sec)
             prev = cur
         if progress and i % 25 == 0:
@@ -288,18 +354,26 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
         raise RuntimeError(f"Keine Frames gelesen: {path}")
     if all(o < 0 for o in owner):
         raise RuntimeError("Kein Tracking-Abschnitt liegt im Video")
+    dx_a = np.asarray(dx, np.float64)
+    dy_a = np.asarray(dy, np.float64)
+    _spread_corrections(events, centers, owner, plan, dx_a, dy_a, k)
+    dx, dy = dx_a, dy_a
     nan = np.full((k, 2), np.nan)
     tracks = np.array([nan if c is None else c for c in centers], np.float32) / np.array([w, h], np.float32)
     sizes = np.full((len(sections), k, 2), np.nan, np.float32)
     for si, s in enumerate(sections):
-        for ai, (_x, _y, bw, bh) in enumerate(s.boxes[:k]):
-            sizes[si, ai] = (bw, bh)
+        for ai, b in enumerate(s.boxes[:k]):
+            sizes[si, ai] = (b[2], b[3])
+    nan2 = np.full((k, 2), np.nan)
+    geom = np.array([nan2 if g is None else g for g in geoms], np.float32)
+    lost = np.array([np.zeros(k, bool) if lo is None else lo for lo in losts], bool)
     if progress:
         progress(1.0)
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32), np.asarray(dy, np.float32),
                       {"opencl": False, "width": w, "height": h, "mode": "track",
                        "decoder": report.get("decoder"), "decoder_errors": report.get("errors", [])},
-                      tracks=tracks, track_sizes=sizes, track_section=np.asarray(owner, np.int16))
+                      tracks=tracks, track_sizes=sizes, track_section=np.asarray(owner, np.int16),
+                      track_geom=geom, track_lost=lost)
 
 
 # ---------------------------------------------------------------- cache

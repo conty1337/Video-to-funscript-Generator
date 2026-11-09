@@ -99,8 +99,16 @@ class TrackingBox(QWidget):
         return next((i for i, a, b in self._ranges() if a <= ms < b), None)
 
     def boxes_at(self, ms: float) -> list:
+        """Marked areas of the section at ms; at a correction, the corrected ones."""
         i = self.index_at(ms)
-        return list(self.sections[i].boxes) if i is not None else []
+        if i is None:
+            return []
+        s = self.sections[i]
+        boxes = list(s.boxes)
+        for kms, area, kbox in s.keys:
+            if abs(kms - ms) <= self.frame_ms * 0.6 and area < len(boxes):
+                boxes[area] = kbox
+        return boxes
 
     def _end_clicked(self):
         self._say(self.set_end(self.current_ms()))
@@ -118,9 +126,16 @@ class TrackingBox(QWidget):
         if msg:
             self.message.emit(msg)
 
-    def add_box(self, box, ms: float) -> str:
-        """An area was drawn on the frame at ms."""
+    def add_box(self, box, ms: float, shown=()) -> str:
+        """An area was drawn on the frame at ms. `shown` = the areas visible there
+        (tracked positions after an analysis): drawing over one of them inside a
+        section corrects that area instead of starting a new section."""
         box = tuple(round(v, 4) for v in box)
+        cur = self.index_at(ms)
+        if cur is not None and abs(self.sections[cur].start_ms - ms) > self.frame_ms * 0.6:
+            hit = _overlapping(box, shown)
+            if hit is not None:
+                return self._add_key(cur, ms, hit, box, shown[hit])
         for i, s in enumerate(self.sections):
             if abs(s.start_ms - ms) <= self.frame_ms * 0.6:          # same frame: one more area
                 boxes = (s.boxes + (box,))[-MAX_AREAS:]
@@ -141,6 +156,38 @@ class TrackingBox(QWidget):
         i = next(k for k, s in enumerate(self.sections) if s.start_ms == int(ms))
         return (f"Neuer Abschnitt {self._number(i)} ab {fmt_ms(ms)}"
                 + (" – der vorige endet hier" if cut is not None else ""))
+
+    def _add_key(self, i: int, ms: float, area: int, box, shown_box) -> str:
+        s = self.sections[i]
+        angle = shown_box[4] if len(shown_box) > 4 else (s.boxes[area][4] if len(s.boxes[area]) > 4 else 0.0)
+        key_box = tuple(box[:4]) + (round(float(angle), 1),)
+        keys = tuple(k for k in s.keys if not (abs(k[0] - ms) <= self.frame_ms * 0.6 and k[1] == area))
+        keys = tuple(sorted(keys + ((int(ms), area, key_box),)))
+        self.sections[i] = replace(s, keys=keys)
+        self.refresh()
+        self.analysisChanged.emit()
+        return (f"Bereich {area + 1} bei {fmt_ms(ms)} nachjustiert – nach neuer Analyse folgt er von hier "
+                "aus, die Abweichung davor wird ausgeglichen")
+
+    def rotate_box(self, ms: float, area: int, angle: float) -> str:
+        """Turn a marked area (at a section start or at a correction)."""
+        for i, s in enumerate(self.sections):
+            if abs(s.start_ms - ms) <= self.frame_ms * 0.6 and area < len(s.boxes):
+                boxes = list(s.boxes)
+                boxes[area] = tuple(boxes[area][:4]) + (round(angle, 1),)
+                self.sections[i] = replace(s, boxes=tuple(boxes))
+                self.refresh()
+                self.analysisChanged.emit()
+                return f"Bereich {area + 1} gedreht: {angle:.0f}°"
+            for k, (kms, karea, kbox) in enumerate(s.keys):
+                if abs(kms - ms) <= self.frame_ms * 0.6 and karea == area:
+                    keys = list(s.keys)
+                    keys[k] = (kms, karea, tuple(kbox[:4]) + (round(angle, 1),))
+                    self.sections[i] = replace(s, keys=tuple(keys))
+                    self.refresh()
+                    self.analysisChanged.emit()
+                    return f"Bereich {area + 1} gedreht: {angle:.0f}°"
+        return "Drehen geht an der Startstelle eines Abschnitts (Klick in der Liste)"
 
     def set_end(self, ms: float) -> str:
         cand = [i for i, s in enumerate(self.sections) if s.start_ms < ms]
@@ -188,9 +235,12 @@ class TrackingBox(QWidget):
             n = len(s.boxes)
             half = s.calib_in_ms is not None or s.calib_out_ms is not None
             cal = "kalibriert" if s.calibrated else ("halb kalibriert" if half else "relativ")
-            item = QListWidgetItem(f"{i + 1}   {fmt_ms(a)} – {fmt_ms(b)}   ·  {n} Ber.  ·  {cal}")
+            fix = f"  ·  {len(s.keys)}× korr." if s.keys else ""
+            item = QListWidgetItem(f"{i + 1}   {fmt_ms(a)} – {fmt_ms(b)}   ·  {n} Ber.  ·  {cal}{fix}")
             item.setData(Qt.UserRole, s.start_ms)
             tip = [f"Bereiche: {n}"]
+            if s.keys:
+                tip.append(f"Nachjustiert: {len(s.keys)}× (" + ", ".join(fmt_ms(k[0]) for k in s.keys) + ")")
             if s.calib_in_ms is not None:
                 tip.append(f"ganz drin bei {fmt_ms(s.calib_in_ms)}")
             if s.calib_out_ms is not None:
@@ -206,13 +256,33 @@ class TrackingBox(QWidget):
             b.setEnabled(has)
         if not has:
             self.help.setText("Im Video bis zu 3 Bereiche aufziehen, z.B. um die beiden Körperteile. "
-                              "Das startet einen Abschnitt an dieser Stelle. Nach einem Szenenwechsel "
-                              "einfach neu markieren. 2–3 Bereiche: Bereich 1 relativ zu den anderen, "
-                              "die Kamera spielt dann keine Rolle.")
+                              "Das startet einen Abschnitt an dieser Stelle. Am runden Griff oder mit dem "
+                              "Mausrad über dem Kästchen drehen. Nach einem Szenenwechsel einfach neu "
+                              "markieren. 2–3 Bereiche: Bereich 1 relativ zu den anderen, die Kamera "
+                              "spielt dann keine Rolle.")
         else:
-            self.help.setText("Klick auf einen Abschnitt springt zu seinem Start. Für echte Tiefe: zu einer "
-                              "Stelle spulen, wo es ganz drin ist → „Ganz drin“, dann ganz draußen → "
-                              "„Ganz draußen“.")
+            self.help.setText("Klick auf einen Abschnitt springt zu seinem Start. Wandert ein Kästchen ab: "
+                              "an der Stelle ein neues Kästchen darüber ziehen (nachjustieren). Für echte "
+                              "Tiefe: ganz drin → „Ganz drin“, ganz draußen → „Ganz draußen“.")
 
     def _clicked(self, item: QListWidgetItem) -> None:
         self.seekRequested.emit(int(item.data(Qt.UserRole)))
+
+
+def _overlapping(box, shown) -> int | None:
+    """Index of the shown area the new box lies over (its centre inside, or a clear overlap)."""
+    bx, by, bw, bh = box[:4]
+    cx, cy = bx + bw / 2, by + bh / 2
+    best, best_iou = None, 0.15
+    for j, sb in enumerate(shown or ()):
+        x, y, w, h = sb[:4]
+        if x <= cx <= x + w and y <= cy <= y + h:
+            return j
+        ix = max(0.0, min(bx + bw, x + w) - max(bx, x))
+        iy = max(0.0, min(by + bh, y + h) - max(by, y))
+        inter = ix * iy
+        union = bw * bh + w * h - inter
+        iou = inter / union if union > 0 else 0.0
+        if iou > best_iou:
+            best, best_iou = j, iou
+    return best

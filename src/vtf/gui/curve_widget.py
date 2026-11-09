@@ -19,7 +19,7 @@ from typing import ClassVar
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
 from .. import editing
@@ -55,6 +55,7 @@ class CurveWidget(QWidget):
         self.follow = True
         self.editable = True           # False in player mode: view, seek and scroll only
         self.sections: list[tuple] = []  # tracking: (start, end, calib_in_ms, calib_out_ms)
+        self.lost: list[tuple] = []      # tracking: (start, end) where an area was lost
         self._sel: set[int] = set()          # selected action indices
         self._drag_from: QPointF | None = None
         self._drag_base: list[Action] | None = None
@@ -79,6 +80,10 @@ class CurveWidget(QWidget):
         self.view_ms = min(self.view_ms, self.duration_ms)
         self._sel = set()
         self._clamp_view()
+        self.update()
+
+    def set_lost(self, stretches) -> None:
+        self.lost = list(stretches)
         self.update()
 
     def set_sections(self, sections) -> None:
@@ -208,6 +213,12 @@ class CurveWidget(QWidget):
                 p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
                 p.setPen(theme.qcolor(theme.TEXT_2))
                 p.drawText(QPointF(x + 4, y), label)
+        # lost tracking: red bars along the bottom
+        for a, b in self.lost:
+            x0, x1 = self._x(a), self._x(b)
+            if x1 < r.left() or x0 > r.right():
+                continue
+            p.fillRect(QRectF(x0, r.bottom() - 6, max(2.0, x1 - x0), 6), QColor(229, 83, 75, 200))
         # analysis curve
         if len(self.t_ms):
             i0 = max(0, int(np.searchsorted(self.t_ms, self.start_ms)) - 1)

@@ -245,6 +245,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self.cancel_analysis)
         self.view.roiChanged.connect(self.panel.set_roi)
         self.view.boxDrawn.connect(self._box_drawn)
+        self.view.boxRotated.connect(self._box_rotated)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -539,7 +540,11 @@ class MainWindow(QMainWindow):
         return max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0.0
 
     def _box_drawn(self, box):
-        self._status(self.panel.tracking.add_box(box, self._cur_ms()))
+        shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
+        self._status(self.panel.tracking.add_box(box, self._cur_ms(), shown))
+
+    def _box_rotated(self, area: int, angle: float):
+        self._status(self.panel.tracking.rotate_box(self._cur_ms(), area, angle))
 
     def _track_cmd(self, fn, *args):
         """Tracking commands from the menu: only in mode Tracking."""
@@ -547,6 +552,32 @@ class MainWindow(QMainWindow):
             self._status("Nur bei Analyse-Methode „Tracking“")
             return
         self._status(fn(*args, self._cur_ms()))
+
+    def _edit_points(self) -> list[int]:
+        out = []
+        for s in self.panel.tracking.sections:
+            out.append(s.start_ms)
+            out += [k[0] for k in s.keys]
+        return out
+
+    def _lost_stretches(self) -> list[tuple[float, float, list[int]]]:
+        """(start ms, end ms, areas) where an area could not be followed."""
+        m = self.motion
+        if m is None or m.track_lost is None:
+            return []
+        anyl = m.track_lost.any(axis=1) & (m.track_section >= 0)
+        out, i, n = [], 0, len(anyl)
+        while i < n:
+            if anyl[i]:
+                j = i
+                while j < n and anyl[j]:
+                    j += 1
+                areas = sorted({int(a) + 1 for a in np.nonzero(m.track_lost[i:j].any(axis=0))[0]})
+                out.append((i / m.fps * 1000, j / m.fps * 1000, areas))
+                i = j
+            else:
+                i += 1
+        return out
 
     def _sections_changed(self):
         self._update_track_overlay(self._cur_ms())
@@ -563,6 +594,7 @@ class MainWindow(QMainWindow):
             sec = tb.sections[i]
             marks.append((a, b, sec.calib_in_ms, sec.calib_out_ms))
         self.curve.set_sections(marks)
+        self.curve.set_lost([(a, b) for a, b, _ar in self._lost_stretches()])
 
     def _update_track_overlay(self, ms: float):
         if self.view.mode != "track":
@@ -573,10 +605,21 @@ class MainWindow(QMainWindow):
             i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
             sec = int(m.track_section[i])
             if sec >= 0 and m.track_sizes is not None and sec < len(m.track_sizes):
-                boxes = [(cx - w / 2, cy - h / 2, w, h)
-                         for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes[sec])
-                         if not (np.isnan(cx) or np.isnan(w))]
-                self.view.set_track_overlay(boxes)
+                geom = m.track_geom[i] if m.track_geom is not None else [(1.0, 0.0)] * len(m.tracks[i])
+                lost = m.track_lost[i] if m.track_lost is not None else [False] * len(m.tracks[i])
+                boxes = []
+                for (cx, cy), (w, h), (sc, ang), lo in zip(m.tracks[i], m.track_sizes[sec], geom, lost):
+                    if np.isnan(cx) or np.isnan(w):
+                        continue
+                    sc = 1.0 if np.isnan(sc) else float(sc)
+                    ang = 0.0 if np.isnan(ang) else float(ang)
+                    boxes.append((cx - w * sc / 2, cy - h * sc / 2, w * sc, h * sc, ang, bool(lo)))
+                # at a section start or a correction the marked areas can be edited (turned)
+                if any(abs(k - ms) <= 1000 / self.fps * 0.6 for k in self._edit_points()):
+                    self.view.set_track_overlay(None)
+                    self.view.set_tracks(self.panel.tracking.boxes_at(ms))
+                else:
+                    self.view.set_track_overlay(boxes)
                 return
         # not analysed (yet) here: show the areas as marked
         self.view.set_track_overlay(None)
@@ -742,10 +785,18 @@ class MainWindow(QMainWindow):
         self._push_undo()
         self.regenerate()
         self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
+        self._update_section_marks()
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
         dec = motion.meta.get("decoder")
         dec_txt = f" · Dekodierung: {DECODER_LABELS.get(dec, dec)}" if dec else " · aus dem Zwischenspeicher"
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{dec_txt}")
+        lost = [x for x in self._lost_stretches() if x[1] - x[0] >= 300]
+        lost_txt = ""
+        if lost:
+            a, _b, areas = lost[0]
+            lost_txt = (f" · Bereich {', '.join(map(str, areas))} ab {_fmt(a)} verloren"
+                        + (f" (+{len(lost) - 1} weitere Stellen, rot in der Kurve)" if len(lost) > 1 else
+                           " (rot in der Kurve) – dort nachjustieren"))
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}")
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")

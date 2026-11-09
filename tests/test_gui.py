@@ -456,3 +456,31 @@ def test_tracking_sections_in_main_window(app, tmp_path):
     w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
     w.dirty = False
     w.close()
+
+
+def test_tracking_rotate_and_correct(app):
+    """Turning a marked area, and drawing over a drifted area = correction (not a new section)."""
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    a = (0.1, 0.1, 0.2, 0.2)
+    b = (0.6, 0.6, 0.2, 0.2)
+    tb.add_box(a, 0)
+    tb.add_box(b, 0)
+    assert "gedreht" in tb.rotate_box(0, 1, 25.0)
+    assert tb.sections[0].boxes[1][4] == 25.0
+    assert "Startstelle" in tb.rotate_box(4000, 0, 10.0)        # nothing to turn there
+    # at 4 s area 2 has drifted to (0.5, 0.5); the user draws over it at its real place
+    shown = [(0.12, 0.1, 0.2, 0.2, 0.0), (0.5, 0.5, 0.2, 0.2, 30.0)]
+    msg = tb.add_box((0.55, 0.52, 0.2, 0.2), 4000, shown)
+    assert "nachjustiert" in msg and len(tb.sections) == 1
+    ms, area, box = tb.sections[0].keys[0]
+    assert (ms, area) == (4000, 1) and box[4] == 30.0           # keeps the tracked angle
+    assert tb.boxes_at(4000)[1][:2] == (0.55, 0.52)
+    assert "gedreht" in tb.rotate_box(4000, 1, 40.0)            # a correction can be turned too
+    # drawing somewhere free starts a new section as before
+    assert "Neuer Abschnitt" in tb.add_box((0.8, 0.05, 0.1, 0.1), 6000, shown)
+    assert len(tb.sections) == 2
+    tb.deleteLater()
+    app.processEvents()
