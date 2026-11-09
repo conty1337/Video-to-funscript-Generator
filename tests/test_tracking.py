@@ -362,3 +362,19 @@ def test_area_only_moves_when_turning_is_off(tmp_path):
     assert all(any(abs(p - e) <= 120 for p in peaks) for e in (750, 1750, 2750)), peaks
     s1 = AnalysisSettings(mode="track", track_boxes=(a,))
     assert s1.cache_key() != AnalysisSettings(mode="track", track_boxes=(a,), track_turn=False).cache_key()
+
+
+def test_area_dragged_away_counts_as_covered():
+    """A hand partly in front drags the area slowly away while it only half looks
+    like itself: after a few such checks it goes back and waits (covered)."""
+    from vtf.tracking import AreaTracker
+
+    frames = _covering_frames()
+    t = AreaTracker((200, 100, 40, 40), (H, W), first=frames[0])
+    good = t.center.copy()
+    t.center = good + [6.0, 0.0]                     # still close: half-good looks are fine
+    assert not any(t._check_covered(0.5) for _ in range(6)) and not t.covered
+    t.unsure_checks = 0
+    t.center = good + [25.0, 0.0]                    # pulled well away and not looking right
+    hits = [t._check_covered(0.5) for _ in range(4)]
+    assert hits[-1] and t.covered and np.allclose(t.center, good)

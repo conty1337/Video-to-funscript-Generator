@@ -98,6 +98,7 @@ class AreaTracker:
         # it goes back to where it last looked right and waits there until it shows again
         self.covered = False
         self.bad_checks = 0
+        self.unsure_checks = 0          # comparisons in a row that did not look quite right
         self.last_score = 1.0
         self.good = (self.center.copy(), self.scale, self.angle)
         if first is not None:
@@ -244,10 +245,16 @@ class AreaTracker:
         self.last_score = score
         if score >= self.GOOD_SCORE:
             self.bad_checks = 0
+            self.unsure_checks = 0
             self.good = (self.center.copy(), self.scale, self.angle)
             return False
-        if score < self.COVERED_SCORE:
-            self.bad_checks += 1
+        self.unsure_checks += 1
+        # something partly in front (a hand) can drag the points along slowly: not looking
+        # right for a while AND having moved well away from the last good place = covered too
+        away = float(np.hypot(*(self.center - self.good[0])))
+        dragged = self.unsure_checks >= 4 and away > 0.35 * float(np.max(self.size * self.scale))
+        if score < self.COVERED_SCORE or dragged:
+            self.bad_checks += 2 if dragged else 1
             if self.bad_checks >= 2:
                 # the points followed whatever moved over it: back to the last good place
                 self.center, self.scale, self.angle = self.good[0].copy(), self.good[1], self.good[2]
@@ -293,6 +300,7 @@ class AreaTracker:
             if self.frames % 2 == 0 and self._reacquire(cur, 2.0):
                 self.covered = False
                 self.bad_checks = 0
+                self.unsure_checks = 0
                 self.lost = False
                 self.lost_frames = 0
                 self.good = (self.center.copy(), self.scale, self.angle)
