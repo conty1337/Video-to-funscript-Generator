@@ -19,10 +19,12 @@ from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
 from ..generator import generate, generate_axes
+from ..prep import load_prep, prep_path, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .heatbar import HeatBar
 from .player_panel import PlayerPanel
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
@@ -121,7 +123,13 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.fwd_btn)
         controls.addWidget(self.next_btn)
         controls.addSpacing(8)
-        controls.addWidget(self.slider, 1)
+        self.heat = HeatBar()
+        timeline = QVBoxLayout()
+        timeline.setContentsMargins(0, 6, 0, 0)
+        timeline.setSpacing(2)
+        timeline.addWidget(self.slider)
+        timeline.addWidget(self.heat)
+        controls.addLayout(timeline, 1)
         controls.addSpacing(12)
         controls.addWidget(self.time_label)
         controls.addSpacing(12)
@@ -245,6 +253,7 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self.cancel_analysis)
         self.view.roiChanged.connect(self.panel.set_roi)
         self.view.boxDrawn.connect(self._box_drawn)
+        self.view.boxRotated.connect(self._box_rotated)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -302,6 +311,8 @@ class MainWindow(QMainWindow):
         self._act(m, "Ton an/aus", self.toggle_mute, "M")
         m.addSeparator()
         self._act(m, "Nächstes Video", self.play_next, "PgDown")
+        self._act(m, "Nächstes Video im Ordner", lambda: self.open_sibling(1), "Ctrl+PgDown")
+        self._act(m, "Vorheriges Video im Ordner", lambda: self.open_sibling(-1), "Ctrl+PgUp")
         self._act(m, "Vorheriges Video", self.play_prev, "PgUp")
         m = self.menuBar().addMenu("&Ansicht")
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
@@ -415,6 +426,12 @@ class MainWindow(QMainWindow):
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
         self.panel.tracking.reset(info.duration * 1000, info.fps)
+        prepared = load_prep(path)
+        if prepared:                  # prepared earlier: tracking with its areas
+            self.panel.tracking.sections = prepared
+            self.panel.tracking.refresh()
+            self.panel.method.setCurrentIndex(self.panel.method.findData("track"))
+            self._update_section_marks()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -431,6 +448,7 @@ class MainWindow(QMainWindow):
         else:
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
+        self._update_heat()
 
     def _read_frame(self):
         if not self.cap:
@@ -539,7 +557,11 @@ class MainWindow(QMainWindow):
         return max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0.0
 
     def _box_drawn(self, box):
-        self._status(self.panel.tracking.add_box(box, self._cur_ms()))
+        shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
+        self._status(self.panel.tracking.add_box(box, self._cur_ms(), shown))
+
+    def _box_rotated(self, area: int, angle: float):
+        self._status(self.panel.tracking.rotate_box(self._cur_ms(), area, angle))
 
     def _track_cmd(self, fn, *args):
         """Tracking commands from the menu: only in mode Tracking."""
@@ -548,9 +570,41 @@ class MainWindow(QMainWindow):
             return
         self._status(fn(*args, self._cur_ms()))
 
+    def _edit_points(self) -> list[int]:
+        out = []
+        for s in self.panel.tracking.sections:
+            out.append(s.start_ms)
+            out += [k[0] for k in s.keys]
+        return out
+
+    def _lost_stretches(self) -> list[tuple[float, float, list[int]]]:
+        """(start ms, end ms, areas) where an area could not be followed."""
+        m = self.motion
+        if m is None or m.track_lost is None:
+            return []
+        anyl = m.track_lost.any(axis=1) & (m.track_section >= 0)
+        out, i, n = [], 0, len(anyl)
+        while i < n:
+            if anyl[i]:
+                j = i
+                while j < n and anyl[j]:
+                    j += 1
+                areas = sorted({int(a) + 1 for a in np.nonzero(m.track_lost[i:j].any(axis=0))[0]})
+                out.append((i / m.fps * 1000, j / m.fps * 1000, areas))
+                i = j
+            else:
+                i += 1
+        return out
+
     def _sections_changed(self):
         self._update_track_overlay(self._cur_ms())
         self._update_section_marks()
+        if self.video_path and self.panel.mode == "track":
+            # keep the preparation next to the video, for the batch and for next time
+            try:
+                save_prep(self.video_path, self.panel.tracking.sections)
+            except OSError as e:
+                self._status(f"Tracking-Vorbereitung nicht gespeichert: {e}")
 
     def _update_section_marks(self):
         """Sections and calibration moments as marks in the curve."""
@@ -563,6 +617,7 @@ class MainWindow(QMainWindow):
             sec = tb.sections[i]
             marks.append((a, b, sec.calib_in_ms, sec.calib_out_ms))
         self.curve.set_sections(marks)
+        self.curve.set_lost([(a, b) for a, b, _ar in self._lost_stretches()])
 
     def _update_track_overlay(self, ms: float):
         if self.view.mode != "track":
@@ -573,10 +628,21 @@ class MainWindow(QMainWindow):
             i = min(len(m.tracks) - 1, max(0, int(ms / 1000 * m.fps)))
             sec = int(m.track_section[i])
             if sec >= 0 and m.track_sizes is not None and sec < len(m.track_sizes):
-                boxes = [(cx - w / 2, cy - h / 2, w, h)
-                         for (cx, cy), (w, h) in zip(m.tracks[i], m.track_sizes[sec])
-                         if not (np.isnan(cx) or np.isnan(w))]
-                self.view.set_track_overlay(boxes)
+                geom = m.track_geom[i] if m.track_geom is not None else [(1.0, 0.0)] * len(m.tracks[i])
+                lost = m.track_lost[i] if m.track_lost is not None else [False] * len(m.tracks[i])
+                boxes = []
+                for (cx, cy), (w, h), (sc, ang), lo in zip(m.tracks[i], m.track_sizes[sec], geom, lost):
+                    if np.isnan(cx) or np.isnan(w):
+                        continue
+                    sc = 1.0 if np.isnan(sc) else float(sc)
+                    ang = 0.0 if np.isnan(ang) else float(ang)
+                    boxes.append((cx - w * sc / 2, cy - h * sc / 2, w * sc, h * sc, ang, bool(lo)))
+                # at a section start or a correction the marked areas can be edited (turned)
+                if any(abs(k - ms) <= 1000 / self.fps * 0.6 for k in self._edit_points()):
+                    self.view.set_track_overlay(None)
+                    self.view.set_tracks(self.panel.tracking.boxes_at(ms))
+                else:
+                    self.view.set_track_overlay(boxes)
                 return
         # not analysed (yet) here: show the areas as marked
         self.view.set_track_overlay(None)
@@ -626,6 +692,22 @@ class MainWindow(QMainWindow):
                 self.toggle_play()
         self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
                      + ("" if self.stroke_actions() else "  (kein Script)"))
+
+    def open_sibling(self, direction: int):
+        """Next/previous video in the same folder (quick preparing of many videos)."""
+        if not self.video_path:
+            return
+        cur = Path(self.video_path)
+        vids = sorted(p for p in cur.parent.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+        if cur not in vids:
+            return
+        i = vids.index(cur) + direction
+        if 0 <= i < len(vids):
+            self.open_video(str(vids[i]))
+            prep = " · Tracking vorbereitet" if prep_path(vids[i]).is_file() else ""
+            self._status(f"Video {i + 1}/{len(vids)} im Ordner: {vids[i].name}{prep}")
+        else:
+            self._status("Kein weiteres Video in diesem Ordner")
 
     def play_next(self):
         i = self.player.playlist.next_index()
@@ -742,10 +824,18 @@ class MainWindow(QMainWindow):
         self._push_undo()
         self.regenerate()
         self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
+        self._update_section_marks()
         ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
         dec = motion.meta.get("decoder")
         dec_txt = f" · Dekodierung: {DECODER_LABELS.get(dec, dec)}" if dec else " · aus dem Zwischenspeicher"
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{dec_txt}")
+        lost = [x for x in self._lost_stretches() if x[1] - x[0] >= 300]
+        lost_txt = ""
+        if lost:
+            a, _b, areas = lost[0]
+            lost_txt = (f" · Bereich {', '.join(map(str, areas))} ab {_fmt(a)} verloren"
+                        + (f" (+{len(lost) - 1} weitere Stellen, rot in der Kurve)" if len(lost) > 1 else
+                           " (rot in der Kurve) – dort nachjustieren"))
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}")
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")
@@ -904,9 +994,14 @@ class MainWindow(QMainWindow):
         self._refresh_position()
         self._status("Punkte bearbeitet")
 
+    def _update_heat(self):
+        dur = self.frame_count / self.fps * 1000 if self.cap else 0.0
+        self.heat.set_actions(self.stroke_actions(), dur)
+
     def _refresh_position(self):
         self.devices.set_actions(self.stroke_actions())
         self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))
+        self._update_heat()
         self._update_meta()
 
     def _restore(self, src: list, dst: list):
@@ -1050,6 +1145,8 @@ class MainWindow(QMainWindow):
             "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n"
             "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
             "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
+            "   Kästchen drehen: runder Griff oder Mausrad. Abgewandert: neues Kästchen darüber\n"
+            "   ziehen (nachjustieren). Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
             "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"

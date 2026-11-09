@@ -1,4 +1,6 @@
 """Tracking of marked areas: camera-independent strokes, caching, overlay data."""
+import itertools
+
 import cv2
 import numpy as np
 import pytest
@@ -123,3 +125,123 @@ def test_depth_calibration_keeps_small_strokes_small(tmp_path):
     # the calibration does not change the analysis cache key
     assert s.cache_key() == AnalysisSettings(mode="track", track_sections=cal, width=W,
                                              hwaccel="none").cache_key()
+
+
+def _rot_video(path, seconds=2.0, cover=None):
+    """A textured square turns by 30 degrees and grows by 20 % while moving right.
+    `cover` = (t0, t1): the square is hidden (grey) in that time."""
+    rng = np.random.default_rng(1)
+    bg = (rng.random((H, W)) * 60).astype(np.uint8)
+    tex = (rng.random((60, 60)) * 255).astype(np.uint8)
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), FPS, (W, H))
+    n = int(seconds * FPS)
+    for i in range(n):
+        t = i / n
+        f = bg.copy()
+        if not (cover and cover[0] <= i / FPS < cover[1]):
+            ang, sc = 30 * t, 1 + 0.2 * t
+            cx, cy = 150 + 120 * t, 135
+            m = cv2.getRotationMatrix2D((30, 30), -ang, sc)
+            m[:, 2] += (cx - 30, cy - 30)
+            patch = cv2.warpAffine(tex, m, (W, H), flags=cv2.INTER_LINEAR, borderValue=0)
+            mask = cv2.warpAffine(np.full((60, 60), 255, np.uint8), m, (W, H)) > 128
+            f[mask] = patch[mask]
+        else:
+            f[100:170, 100:300] = 90
+        vw.write(cv2.cvtColor(f, cv2.COLOR_GRAY2BGR))
+    vw.release()
+    return path, (120 / W, 105 / H, 60 / W, 60 / H)
+
+
+def test_area_turns_and_grows_with_the_object(tmp_path):
+    from vtf.analysis import TrackSection
+
+    path, box = _rot_video(tmp_path / "rot.avi")
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(TrackSection(0, (box,)),),
+                                              width=W, hwaccel="none", compensate_camera=False))
+    scale, angle = m.track_geom[-1, 0]
+    assert 20 <= angle <= 40, angle                 # turned along (30 degrees)
+    assert 1.08 <= scale <= 1.35, scale             # and grew (20 %)
+    cx = m.tracks[-1, 0, 0] * W
+    assert abs(cx - 266) < 15, cx                   # followed to the right
+
+
+def test_hidden_area_is_lost_not_thrown_away(tmp_path):
+    from vtf.analysis import TrackSection
+
+    path, box = _rot_video(tmp_path / "cover.avi", seconds=2.0, cover=(0.6, 0.9))
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(TrackSection(0, (box,)),),
+                                              width=W, hwaccel="none", compensate_camera=False))
+    t = np.arange(len(m)) / m.fps
+    hidden = (t > 0.65) & (t < 0.85)
+    assert m.track_lost[hidden, 0].any()            # noticed
+    xs = m.tracks[:, 0, 0] * W
+    assert np.abs(np.diff(xs)).max() < 60           # no jump across the picture
+    assert not m.track_lost[t > 1.5, 0].all()       # found again afterwards
+
+
+def test_jump_is_rejected():
+    """The object teleports across the picture: the area must not follow."""
+    from vtf.tracking import AreaTracker
+
+    rng = np.random.default_rng(2)
+    bg = (rng.random((H, W)) * 60).astype(np.uint8)
+    tex = (rng.random((40, 40)) * 255).astype(np.uint8)
+    prev, cur = bg.copy(), bg.copy()
+    prev[100:140, 100:140] = tex
+    cur[150:190, 380:420] = tex                     # 290 px away
+    a = AreaTracker((100, 100, 40, 40), (H, W), first=prev)
+    a.step(prev, cur)
+    assert np.hypot(*(a.center - (120, 120))) < a.max_jump()
+    assert a.center[0] < 250
+
+
+def test_rotated_corners():
+    from vtf.tracking import box_corners
+
+    c = box_corners(0, 0, 20, 10, 90)
+    assert np.allclose(sorted(np.round(c[:, 0])), [-5, -5, 5, 5])
+    assert np.allclose(sorted(np.round(c[:, 1])), [-10, -10, 10, 10])
+
+
+def test_correction_moves_area_and_spreads_drift(tmp_path):
+    """A correction ("nachjustieren") puts the area where it really is; the error is
+    spread back so the positions do not jump."""
+    from vtf.analysis import TrackSection
+
+    path, a, b = _video(tmp_path / "k.avi", seconds=2.0, pan=False)
+    # deliberately wrong second area at the start (30 px too far left) ...
+    wrong_b = (b[0] - 30 / W, b[1], b[2], b[3])
+    # ... corrected at 1 s to the real place
+    sec = TrackSection(0, (a, wrong_b), keys=((1000, 1, b),))
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(sec,), width=W, hwaccel="none"))
+    i = int(round(1.0 * m.fps))
+    real_cx = (b[0] + b[2] / 2) * W
+    assert abs(m.tracks[i, 1, 0] * W - real_cx) < 3              # corrected at the key
+    xs = m.tracks[:i + 1, 1, 0] * W
+    assert np.abs(np.diff(xs)).max() < 5                        # spread back: no jump
+    assert abs(m.tracks[0, 1, 0] * W - (real_cx - 30)) < 3       # start unchanged
+    # a correction is part of the analysis (new cache entry)
+    plain = AnalysisSettings(mode="track", track_sections=(TrackSection(0, (a, wrong_b)),))
+    assert plain.cache_key() != AnalysisSettings(mode="track", track_sections=(sec,)).cache_key()
+
+
+def test_area_is_found_again_after_a_loss():
+    """The texture vanishes for some frames and comes back a bit further on."""
+    from vtf.tracking import AreaTracker
+
+    rng = np.random.default_rng(3)
+    tex = (rng.random((40, 40)) * 255).astype(np.uint8)
+    flat = np.full((H, W), 40, np.uint8)
+    f0 = flat.copy()
+    f0[100:140, 100:140] = tex
+    back = flat.copy()
+    back[100:140, 125:165] = tex                     # reappears 25 px to the right
+    a = AreaTracker((100, 100, 40, 40), (H, W), first=f0)
+    seq = [f0, flat, flat, flat, flat, back, back]
+    lost = []
+    for prev, cur in itertools.pairwise(seq):
+        a.step(prev, cur)
+        lost.append(a.lost)
+    assert any(lost[:4])                             # noticed the loss
+    assert abs(a.center[0] - 145) < 4 and abs(a.center[1] - 120) < 4   # and found it again

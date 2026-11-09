@@ -22,6 +22,7 @@ class GeneratorSettings:
     pos_min: int = 0
     pos_max: int = 100
     full_stroke: bool = False       # peaks -> pos_max, valleys -> pos_min
+    max_speed: int = 0              # positions per second the device can do; 0 = no limit
 
 
 @dataclass
@@ -196,13 +197,38 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
     return actions
 
 
+def limit_speed(actions: list[Action], max_speed: float) -> list[Action]:
+    """Shorten strokes the device cannot do: no step faster than max_speed
+    positions per second. Each point moves towards the previous one, so the
+    timing stays and only the amplitude shrinks."""
+    if max_speed <= 0 or len(actions) < 2:
+        return list(actions)
+    out = [actions[0]]
+    for a in actions[1:]:
+        prev = out[-1]
+        dt = max(1, a.at - prev.at)
+        reach = max_speed * dt / 1000.0
+        delta = a.pos - prev.pos
+        if abs(delta) > reach:
+            pos = int(round(prev.pos + (reach if delta > 0 else -reach)))
+            out.append(Action(a.at, max(0, min(100, pos))))
+        else:
+            out.append(a)
+    return out
+
+
+def speeds(actions: list[Action]) -> list[float]:
+    """Speed of each step in positions per second (len = len(actions) - 1)."""
+    return [abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at) for a, b in zip(actions, actions[1:])]
+
+
 def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()) -> GeneratedScript:
     """Script from the analysis. With tracking sections, points are only made
     inside them, and calibrated sections use the real depth."""
     s = s or GeneratorSettings()
     t_ms, sig = build_signal(motion, s)
     if motion.track_section is None or not sections:
-        return GeneratedScript(t_ms, sig, extract_actions(t_ms, sig, s))
+        return GeneratedScript(t_ms, sig, limit_speed(extract_actions(t_ms, sig, s), s.max_speed))
     sig = sig.copy()
     ranges = section_ranges(sections, motion.duration_ms + 1000)
     calibrated: set[int] = set()
@@ -220,6 +246,7 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
             scale = 0.4 if sec in calibrated else 1.0
             actions += extract_actions(t_ms[inside], sig[inside], s, delta_scale=scale)
     actions.sort(key=lambda x: x.at)
+    actions = limit_speed(actions, s.max_speed)
     return GeneratedScript(t_ms, sig, actions)
 
 

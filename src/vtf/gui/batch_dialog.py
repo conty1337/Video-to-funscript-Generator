@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLa
                                QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout)
 
 from ..batch import find_videos, is_analyzed
+from ..prep import is_prepared
 from . import theme
 from .workers import BatchWorker
 
@@ -27,8 +28,11 @@ class BatchDialog(QDialog):
         title = QLabel("Ordner stapelweise verarbeiten")
         title.setObjectName("section")
         lay.addWidget(title)
-        cap = QLabel("Verwendet die aktuellen Einstellungen inklusive Analysebereich")
+        cap = QLabel("Verwendet die aktuellen Einstellungen inklusive Analysebereich. Videos, die im "
+                     "Editor mit Tracking vorbereitet wurden (<Video>.vtf.json), nutzen ihre "
+                     "markierten Bereiche, Abschnitte und Kalibrierung.")
         cap.setObjectName("caption")
+        cap.setWordWrap(True)
         lay.addWidget(cap)
         lay.addSpacing(8)
         row = QHBoxLayout()
@@ -100,15 +104,19 @@ class BatchDialog(QDialog):
         except OSError:
             vids = []
         done = sum(is_analyzed(v) for v in vids)
-        self.info.setText(f"{len(vids)} Videos · {done} bereits analysiert · {len(vids) - done} offen")
+        prep = sum(is_prepared(v) for v in vids)
+        self.info.setText(f"{len(vids)} Videos · {done} bereits analysiert · {len(vids) - done} offen"
+                          f" · {prep} mit Tracking vorbereitet")
 
     def _start(self):
         f = self.folder.text().strip()
         if not f:
             return
         self.log.clear()
-        # tracking areas belong to one video: the batch always uses motion in the image
-        a = dataclasses.replace(self.panel.analysis_settings(), mode="flow", track_boxes=())
+        # tracking areas belong to one video: prepared videos bring their own (<video>.vtf.json),
+        # all others use motion in the image
+        a = dataclasses.replace(self.panel.analysis_settings(), mode="flow", track_boxes=(),
+                                track_sections=())
         self.worker = BatchWorker(f, a, self.panel.generator_settings(),
                                   self.recursive.isChecked(), self.overwrite.isChecked())
         self.worker.fileStarted.connect(self._file)

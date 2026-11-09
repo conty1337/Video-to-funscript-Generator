@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable
 
@@ -10,6 +10,7 @@ from . import __version__
 from .analysis import AnalysisCancelled, AnalysisSettings, analyze_motion_cached
 from .funscript import Funscript, funscript_path_for
 from .generator import GeneratorSettings, generate
+from .prep import is_prepared, load_prep
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts"}
 
@@ -36,8 +37,13 @@ def process_video(video: str | Path, an: AnalysisSettings, gen: GeneratorSetting
                   progress: Callable[[float], None] | None = None,
                   cancel: Callable[[], bool] | None = None,
                   output: str | Path | None = None) -> Path:
+    sections = load_prep(video)
+    if sections:            # prepared in the editor: track the marked areas
+        an = replace(an, mode="track", track_sections=tuple(sections), track_boxes=())
+    else:
+        an = replace(an, mode="flow", track_sections=(), track_boxes=())
     motion = analyze_motion_cached(video, an, progress, cancel)
-    script = generate(motion, gen)
+    script = generate(motion, gen, sections)
     out = Path(output) if output else funscript_path_for(video)
     Funscript(script.actions, metadata=make_metadata(video)).save(out)
     return out
@@ -73,9 +79,10 @@ def run_batch(folder: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
             log(f"Übersprungen (bereits analysiert): {v.name}")
             continue
         try:
+            prepared = is_prepared(v)
             out = process_video(v, an, gen, on_progress, cancel)
             res.done.append(v)
-            log(f"Fertig: {v.name} -> {out.name}")
+            log(f"Fertig: {v.name} -> {out.name}" + ("  (Tracking, vorbereitet)" if prepared else ""))
         except AnalysisCancelled:
             res.cancelled = True
             log("Abgebrochen.")
