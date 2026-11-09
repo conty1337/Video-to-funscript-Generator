@@ -509,3 +509,64 @@ def test_tracking_preparation_saved_and_restored(app, tmp_path):
     w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
     w.dirty = False
     w.close()
+
+
+def test_tracking_edit_and_clear(app):
+    """Moving/resizing a marked area, and clearing all sections."""
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    tb.add_box((0.1, 0.1, 0.2, 0.2), 0)
+    tb.rotate_box(0, 0, 30.0)
+    assert "angepasst" in tb.update_box(0, 0, (0.3, 0.4, 0.1, 0.15))
+    assert tb.sections[0].boxes[0] == (0.3, 0.4, 0.1, 0.15, 30.0)          # angle kept
+    assert "Startstelle" in tb.update_box(4000, 0, (0.5, 0.5, 0.1, 0.1))
+    tb.add_box((0.5, 0.5, 0.2, 0.2), 6000)
+    assert tb.clear_btn.isEnabled() and len(tb.sections) == 2
+    seen = []
+    tb.analysisChanged.connect(lambda: seen.append(1))
+    assert "2 Abschnitte gelöscht" in tb.clear_all()
+    assert not tb.sections and seen and not tb.clear_btn.isEnabled()
+    tb.deleteLater()
+
+
+def test_video_view_move_resize(app):
+    """Dragging inside a marked area moves it, dragging a corner resizes it."""
+    import numpy as np
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from vtf.gui.video_view import VideoView
+
+    v = VideoView()
+    v.resize(400, 300)
+    v.set_frame(np.zeros((300, 400, 3), np.uint8))     # image fills the widget: 1 norm = 400/300 px
+    v.set_mode("track")
+    v.set_tracks([(0.25, 0.25, 0.25, 0.25, 0.0)])
+    edits = []
+    v.boxEdited.connect(lambda i, b: edits.append((i, b)))
+    v.show()
+    # move: grab the middle (125, 112) and drag 40 px right, 30 px down
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(125, 112))
+    QTest.mouseMove(v, QPoint(165, 142))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(165, 142))
+    i, b = edits[-1]
+    assert i == 0 and abs(b[0] - 0.35) < 0.01 and abs(b[1] - 0.35) < 0.01 and abs(b[2] - 0.25) < 1e-6
+    # resize: bottom right corner (now at 240, 180) out to (280, 240); top left stays
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(240, 180))
+    QTest.mouseMove(v, QPoint(280, 240))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(280, 240))
+    i, b = edits[-1]
+    assert abs(b[0] - 0.35) < 0.01 and abs(b[2] - 0.35) < 0.01 and abs(b[3] - 0.45) < 0.01
+    # not editable (away from a section start): a drag draws a new area instead
+    v.set_editable(False)
+    drawn = []
+    v.boxDrawn.connect(drawn.append)
+    n = len(edits)
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(180, 150))
+    QTest.mouseMove(v, QPoint(230, 200))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(230, 200))
+    assert len(edits) == n and drawn
+    v.close()
+    v.deleteLater()
