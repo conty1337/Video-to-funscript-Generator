@@ -78,3 +78,17 @@ def test_m3u_roundtrip(tmp_path):
     third = Playlist()
     third.load_m3u(rel)
     assert third.items == [str((tmp_path / "b.mp4").resolve())]
+
+
+def test_script_start_and_intro_skip():
+    from vtf.funscript import Action
+    from vtf.playlist import intro_skip_ms, script_start_ms
+
+    quiet = [Action(0, 50), Action(60_000, 52), Action(120_000, 50)]
+    acts = quiet + [Action(120_400, 95), Action(120_800, 5)]
+    assert script_start_ms(acts) == 120_000
+    assert intro_skip_ms(acts) == 110_000                     # 10 s before it starts
+    assert script_start_ms(quiet) is None and intro_skip_ms(quiet) == 0
+    early = [Action(0, 50), Action(8_000, 50), Action(8_400, 90)]
+    assert intro_skip_ms(early) == 0                          # starts soon anyway
+    assert intro_skip_ms([]) == 0

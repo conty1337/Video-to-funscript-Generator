@@ -72,6 +72,7 @@ class AreaTracker:
 
     TEMPLATE_EVERY = 5            # frames between drift corrections
     TEMPLATE_MIN_SCORE = 0.7
+    MAX_TEMPLATES = 6
 
     def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None):
         self.h, self.w = shape
@@ -79,17 +80,34 @@ class AreaTracker:
         self.size = np.array([max(8.0, bw), max(8.0, bh)], np.float64)
         self.center = np.array([x + bw / 2, y + bh / 2], np.float64)
         self.angle = float(box[4]) if len(box) > 4 else 0.0
-        self.angle0 = self.angle
         self.scale = 1.0
         self.pts: np.ndarray | None = None
         self.lost = False
         self.frames = 0
         self.lost_frames = 0
-        self.template = None
-        self.recent = None              # (patch, angle) seen lately while tracking was sure
+        # appearances to compare with: (upright patch, scale then, angle offset). The patch
+        # is cut out along the area (turned with it), 1 patch px = 1 image px at `scale then`.
+        self.templates: list[tuple[np.ndarray, float, float]] = []
+        self.recent = None              # same kind, seen lately while tracking was sure
         if first is not None:
-            self._take_template(first)
-            self.recent = (self.template, self.angle) if self.template is not None else None
+            t = self._capture(first)
+            if t is not None:
+                self.templates.append(t)
+                self.recent = t
+
+    @property
+    def template(self):
+        """The appearance when the area was marked (None if too small)."""
+        return self.templates[0][0] if self.templates else None
+
+    def inherit(self, old: AreaTracker) -> None:
+        """Keep the appearances `old` knew (after a correction): the area then has
+        several views to compare with, e.g. from the front and from the side."""
+        s_old = max(old.scale, 1e-3)
+        for patch, ref, off in old.templates:
+            if len(self.templates) >= self.MAX_TEMPLATES:
+                break
+            self.templates.append((patch, ref / s_old, old.angle + off - self.angle))
 
     # ------------------------------------------------------------ geometry
     def corners(self) -> np.ndarray:
@@ -124,56 +142,71 @@ class AreaTracker:
         return np.all(np.abs(local) <= half, axis=1)
 
     # ------------------------------------------------------------ appearance
-    def _take_template(self, gray: np.ndarray) -> None:
-        x0, y0, x1, y1 = self.rect()
-        if x1 - x0 >= 12 and y1 - y0 >= 12:
-            self.template = gray[y0:y1, x0:x1].copy()
+    def _sample(self, gray: np.ndarray, angle: float, per_px: float, wh) -> np.ndarray:
+        """Image around the centre, turned by `angle`, `per_px` image px per patch px."""
+        pw, ph = int(round(wh[0])), int(round(wh[1]))
+        a = np.radians(angle)
+        c, s = np.cos(a), np.sin(a)
+        mat = per_px * np.array([[c, -s], [s, c]])
+        b = self.center - mat @ np.array([pw / 2, ph / 2])
+        m = np.hstack([mat, b[:, None]])
+        return cv2.warpAffine(gray, m, (pw, ph), flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
+                              borderMode=cv2.BORDER_REPLICATE)
 
-    def _patch(self, gray: np.ndarray):
-        x0, y0, x1, y1 = self.rect()
-        return gray[y0:y1, x0:x1].copy() if x1 - x0 >= 12 and y1 - y0 >= 12 else None
+    def _capture(self, gray: np.ndarray):
+        wh = self.size * self.scale
+        if wh.min() < 12:
+            return None
+        return (self._sample(gray, self.angle, 1.0, wh), self.scale, 0.0)
+
+    def _match(self, gray: np.ndarray, tpl, reach: float) -> tuple[float, np.ndarray]:
+        """Best place of a template within `reach` box sizes around the centre:
+        (score, offset of the centre in image px)."""
+        patch, ref, off = tpl
+        per_px = self.scale / max(ref, 1e-3)
+        th, tw = patch.shape
+        if not 0.4 < per_px < 2.5:
+            return -1.0, np.zeros(2)
+        area = self._sample(gray, self.angle + off, per_px, (tw * (1 + 2 * reach), th * (1 + 2 * reach)))
+        if area.shape[0] <= th or area.shape[1] <= tw:
+            return -1.0, np.zeros(2)
+        res = cv2.matchTemplate(area, patch, cv2.TM_CCOEFF_NORMED)
+        _mn, score, _ml, (bx, by) = cv2.minMaxLoc(res)
+        local = np.array([bx + tw / 2 - area.shape[1] / 2, by + th / 2 - area.shape[0] / 2])
+        a = np.radians(self.angle + off)
+        c, s = np.cos(a), np.sin(a)
+        return float(score), per_px * (np.array([[c, -s], [s, c]]) @ local)
+
+    def _best(self, gray: np.ndarray, tpls, reach: float) -> tuple[float, np.ndarray]:
+        best = (-1.0, np.zeros(2))
+        for t in tpls:
+            r = self._match(gray, t, reach)
+            if r[0] > best[0]:
+                best = r
+        return best
 
     def _reacquire(self, gray: np.ndarray) -> bool:
-        """After a loss: look for the recent appearance around the last position."""
-        if self.recent is None:
+        """After a loss: look for a known appearance around the last position."""
+        tpls = ([self.recent] if self.recent is not None else []) + self.templates
+        if not tpls:
             return False
-        tpl = self.recent[0]
-        th, tw = tpl.shape
-        cx, cy = self.center
-        rx, ry = tw * 1.0, th * 1.0
-        x0, y0 = int(max(0, cx - tw / 2 - rx)), int(max(0, cy - th / 2 - ry))
-        x1, y1 = int(min(self.w, cx + tw / 2 + rx)), int(min(self.h, cy + th / 2 + ry))
-        if x1 - x0 <= tw or y1 - y0 <= th:
-            return False
-        res = cv2.matchTemplate(gray[y0:y1, x0:x1], tpl, cv2.TM_CCOEFF_NORMED)
-        _mn, score, _ml, (bx, by) = cv2.minMaxLoc(res)
+        score, off = self._best(gray, tpls, 1.0)
         if score < 0.6:
             return False
-        self.center = np.array([x0 + bx + tw / 2, y0 + by + th / 2], np.float64)
-        self.angle = self.recent[1]
+        self.center = np.clip(self.center + off, [0, 0], [self.w - 1, self.h - 1])
         self.pts = None
         return True
 
     def _drift_correction(self, gray: np.ndarray) -> None:
-        """Pull the area back to where it looks like it did when it was marked.
-        Only while it is about as big and as turned as then (the template is upright)."""
-        if self.template is None or abs(self.angle - self.angle0) > 15 or not 0.85 < self.scale < 1.2:
+        """Pull the area back to where it looks like it did when it was marked (or
+        corrected). The comparison turns and scales with the area."""
+        if not self.templates:
             return
-        th, tw = self.template.shape
-        cx, cy = self.center
-        rx, ry = tw * 0.5, th * 0.5                         # search +-half a box around
-        x0, y0 = int(max(0, cx - tw / 2 - rx)), int(max(0, cy - th / 2 - ry))
-        x1, y1 = int(min(self.w, cx + tw / 2 + rx)), int(min(self.h, cy + th / 2 + ry))
-        if x1 - x0 <= tw or y1 - y0 <= th:
-            return
-        res = cv2.matchTemplate(gray[y0:y1, x0:x1], self.template, cv2.TM_CCOEFF_NORMED)
-        _mn, score, _ml, (bx, by) = cv2.minMaxLoc(res)
+        score, off = self._best(gray, self.templates, 0.5)
         if score < self.TEMPLATE_MIN_SCORE:
             return
-        found = np.array([x0 + bx + tw / 2, y0 + by + th / 2])
-        off = found - self.center
-        if 1.0 < np.hypot(*off) < 0.5 * max(tw, th):
-            self.center = self.center + 0.5 * off            # gently, half the way
+        if 1.0 < np.hypot(*off) < 0.5 * float(np.max(self.size * self.scale)):
+            self.center = np.clip(self.center + 0.5 * off, [0, 0], [self.w - 1, self.h - 1])
 
     # ------------------------------------------------------------ tracking
     def _refill(self, gray: np.ndarray) -> None:
@@ -199,9 +232,9 @@ class AreaTracker:
         else:
             self.lost_frames = 0
             if self.frames % 15 == 0 and self.pts is not None and len(self.pts) >= MIN_POINTS * 1.5:
-                patch = self._patch(cur)
-                if patch is not None:
-                    self.recent = (patch, self.angle)
+                t = self._capture(cur)
+                if t is not None:
+                    self.recent = t
         return d
 
     def _step(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
@@ -277,8 +310,11 @@ class MultiTracker:
         return np.array([a.center for a in self.areas])
 
     def reset_area(self, index: int, box_px, gray: np.ndarray) -> None:
-        """Put area `index` where the user says it is (a correction) and start over there."""
-        self.areas[index] = AreaTracker(box_px, self.shape, gray)
+        """Put area `index` where the user says it is (a correction) and start over there.
+        The appearances known so far are kept for comparing."""
+        new = AreaTracker(box_px, self.shape, gray)
+        new.inherit(self.areas[index])
+        self.areas[index] = new
 
     def geometry(self) -> np.ndarray:
         """(scale, angle_deg) per area."""

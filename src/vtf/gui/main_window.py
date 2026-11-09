@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import cv2
@@ -19,6 +20,7 @@ from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
 from ..generator import generate, generate_axes
+from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
 from ..prep import load_prep, prep_path, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
@@ -255,6 +257,7 @@ class MainWindow(QMainWindow):
         self.view.boxDrawn.connect(self._box_drawn)
         self.view.boxRotated.connect(self._box_rotated)
         self.view.boxEdited.connect(self._box_edited)
+        self.view.boxCorrected.connect(self._box_corrected)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -472,10 +475,20 @@ class MainWindow(QMainWindow):
         self._show_time(ms)
 
     def _show_time(self, ms: float):
+        self._update_countdown(ms)
         self._update_track_overlay(ms)
         self.curve.set_playhead(ms)
         self.rail.set_position(position_at(self.stroke_actions(), ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
+
+    def _update_countdown(self, ms: float):
+        """Player: count the last seconds down before the script starts."""
+        sec = None
+        if self.player_mode and self.player.countdown_cb.isChecked():
+            start = script_start_ms(self.stroke_actions())
+            if start is not None and 0 < start - ms <= LEAD_MS:
+                sec = math.ceil((start - ms) / 1000)
+        self.view.set_countdown(sec)
 
     def seek_frame(self, idx: int):
         if not self.cap:
@@ -567,6 +580,10 @@ class MainWindow(QMainWindow):
 
     def _box_edited(self, area: int, box):
         self._status(self.panel.tracking.update_box(self._cur_ms(), area, box))
+
+    def _box_corrected(self, area: int, box):
+        self._status(self.panel.tracking.correct_area(self._cur_ms(), area, box))
+        self._update_track_overlay(self._cur_ms())
 
     def _track_cmd(self, fn, *args):
         """Tracking commands from the menu: only in mode Tracking."""
@@ -698,6 +715,9 @@ class MainWindow(QMainWindow):
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
+            skip = intro_skip_ms(self.stroke_actions()) if self.player.intro_cb.isChecked() else 0
+            if skip:
+                self.seek_ms(skip)
             if not self.timer.isActive():
                 self.toggle_play()
         self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
@@ -1156,8 +1176,8 @@ class MainWindow(QMainWindow):
             "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
             "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
             "   Kästchen (am Abschnitt-Start): innen ziehen = verschieben, Ecke = Größe,\n"
-            "   runder Griff oder Mausrad = drehen. Abgewandert: neues Kästchen darüber\n"
-            "   ziehen (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n"
+            "   runder Griff oder Mausrad = drehen. Abgewandert: an der Stelle anpacken und\n"
+            "   richtig hinschieben (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n"
             "   Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
@@ -1168,7 +1188,8 @@ class MainWindow(QMainWindow):
             "6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\n"
             "Player (Strg+P)\n"
             "Videos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\n"
-            "Video, F11 = Vollbild.\n\n"
+            "Video, F11 = Vollbild. Ein ruhiger Anfang wird übersprungen (Start 10 s vor dem Script),\n"
+            "die letzten 10 s vor dem Start zählt ein Countdown herunter (beides abschaltbar).\n\n"
             "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 
