@@ -268,6 +268,39 @@ class TrackingBox(QWidget):
         self.analysisChanged.emit()
         return f"Abschnitt {n} gelöscht"
 
+    def move_edge(self, i: int, which: str, ms: float) -> str:
+        """Start or end of section i dragged in the curve to ms."""
+        if not 0 <= i < len(self.sections):
+            return ""
+        s = self.sections[i]
+        ms = int(round(ms))
+        gap = int(self.frame_ms * 2)
+        ranges = {k: (a, b) for k, a, b in self._ranges()}
+        n = self._number(i)
+        if which == "end":
+            ms = max(s.start_ms + gap, min(ms, int(self.duration_ms or ms)))
+            self.sections[i] = replace(s, end_ms=ms)
+            msg = f"Abschnitt {n} endet bei {fmt_ms(ms)}"
+        else:
+            prev = max((o.start_ms for o in self.sections if o.start_ms < s.start_ms), default=None)
+            lo = 0 if prev is None else prev + gap
+            hi = int(ranges.get(i, (0, s.end_ms or self.duration_ms))[1]) - gap
+            ms = max(lo, min(ms, hi))
+            keys = tuple(k for k in s.keys if k[0] > ms + gap)
+            end = s.end_ms if s.end_ms is None or s.end_ms > ms + gap else None
+
+            def inside(c):
+                return c if c is not None and ms <= c < (end or hi + gap) else None
+
+            self.sections[i] = replace(s, start_ms=ms, keys=keys, end_ms=end,
+                                       calib_in_ms=inside(s.calib_in_ms), calib_out_ms=inside(s.calib_out_ms))
+            self.sections.sort(key=lambda x: x.start_ms)
+            msg = (f"Abschnitt {n} beginnt jetzt bei {fmt_ms(ms)} – die Kästchen gelten ab hier, "
+                   "bitte dort prüfen")
+        self.refresh()
+        self.analysisChanged.emit()
+        return msg
+
     def calibrate(self, kind: str, ms: float) -> str:
         i = self.index_at(ms)
         if i is None:

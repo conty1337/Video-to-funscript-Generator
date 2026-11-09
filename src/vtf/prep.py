@@ -27,16 +27,50 @@ def _opt_int(d: dict, key: str) -> int | None:
     return None if d.get(key) is None else int(d[key])
 
 
-def save_prep(video: str | Path, sections) -> Path | None:
-    """Write the sections; with no sections the file is removed. Returns the path written."""
-    path = prep_path(video)
-    secs = [s for s in sections if s.boxes]
-    if not secs:
+def _read(path: Path) -> dict:
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write(path: Path, data: dict) -> Path | None:
+    """Write the file; with neither sections nor bookmarks it is removed."""
+    if not data.get("sections") and not data.get("bookmarks"):
         try:
             path.unlink()
         except FileNotFoundError:
             pass
         return None
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
+    return path
+
+
+def save_bookmarks(video: str | Path, bookmarks) -> Path | None:
+    """Bookmarks/chapters [(ms, name), ...] in the same file (sections are kept)."""
+    path = prep_path(video)
+    data = _read(path)
+    data.setdefault("version", PREP_VERSION)
+    data["bookmarks"] = [[int(ms), str(name)] for ms, name in sorted(bookmarks)]
+    return _write(path, data)
+
+
+def load_bookmarks(video: str | Path) -> list[tuple[int, str]]:
+    try:
+        return sorted((int(b[0]), str(b[1])) for b in _read(prep_path(video)).get("bookmarks", []))
+    except (ValueError, TypeError, IndexError):
+        return []
+
+
+def save_prep(video: str | Path, sections) -> Path | None:
+    """Write the sections (bookmarks are kept); with neither the file is removed.
+    Returns the path written."""
+    path = prep_path(video)
+    secs = [s for s in sections if s.boxes]
+    old = _read(path)
     data = {
         "version": PREP_VERSION,
         "mode": "track",
@@ -49,10 +83,9 @@ def save_prep(video: str | Path, sections) -> Path | None:
             "keys": [[int(ms), int(a), list(_box(b))] for ms, a, b in s.keys],
         } for s in secs],
     }
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
-    return path
+    if old.get("bookmarks"):
+        data["bookmarks"] = old["bookmarks"]
+    return _write(path, data) if secs or data.get("bookmarks") else _write(path, {})
 
 
 def load_prep(video: str | Path) -> list[TrackSection]:
