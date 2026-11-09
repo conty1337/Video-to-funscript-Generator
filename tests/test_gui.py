@@ -791,3 +791,26 @@ def test_layout_sides(app):
     w.dirty = False
     w.close()
     w.deleteLater()
+
+
+def test_curve_follows_again_after_scrolling(app):
+    """Scrolling by hand stops following the playhead only for a while; zooming
+    never stops it."""
+    from vtf.gui import curve_widget
+    from vtf.gui.curve_widget import CurveWidget
+
+    c = CurveWidget()
+    c.resize(640, 240)
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 120_000)
+    c.view_ms = 20_000
+    c.set_playhead(1000)
+    c.scroll_by(30_000)                                 # looked somewhere else
+    assert not c.follow
+    c.set_playhead(2000)                                # right after: stays where the user looks
+    assert not c.follow and c.start_ms > 20_000
+    c._scrolled_at -= curve_widget.FOLLOW_AGAIN_S + 1   # a while later
+    c.set_playhead(3000)
+    assert c.follow and c.start_ms <= 3000 <= c.start_ms + c.view_ms
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 120_000)   # a new video always follows
+    assert c.follow
+    c.deleteLater()

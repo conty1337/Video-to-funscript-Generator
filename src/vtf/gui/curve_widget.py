@@ -15,6 +15,7 @@ Mouse:
 from __future__ import annotations
 
 import bisect
+import time
 from typing import ClassVar
 
 import numpy as np
@@ -30,6 +31,7 @@ HIT_PX = 7
 SCROLL_H = 10
 MARGIN_L, MARGIN_R, MARGIN_T, MARGIN_B = 40, 16, 12, 24 + SCROLL_H + 6
 PAN_THRESHOLD_PX = 4
+FOLLOW_AGAIN_S = 3.0           # after scrolling by hand, follow the playhead again
 
 
 class CurveWidget(QWidget):
@@ -54,6 +56,7 @@ class CurveWidget(QWidget):
         self.start_ms = 0.0
         self.playhead_ms = 0.0
         self.follow = True
+        self._scrolled_at = 0.0         # when the user last scrolled by hand (monotonic s)
         self.editable = True           # False in player mode: view, seek and scroll only
         # tracking: (start, end, calib_in_ms, calib_out_ms[, section index, end set by the user])
         self.sections: list[tuple] = []
@@ -80,6 +83,7 @@ class CurveWidget(QWidget):
     def set_data(self, t_ms: np.ndarray, signal: np.ndarray, actions: list[Action], duration_ms: float):
         self.t_ms, self.signal = t_ms, signal
         self.actions = actions
+        self.follow = True
         self.duration_ms = max(duration_ms, 1000.0)
         self.view_ms = min(self.view_ms, self.duration_ms)
         self._sel = set()
@@ -121,8 +125,16 @@ class CurveWidget(QWidget):
         self._sel = set()
         self.update()
 
+    def _user_scrolled(self) -> None:
+        self.follow = False
+        self._scrolled_at = time.monotonic()
+
     def set_playhead(self, ms: float):
         self.playhead_ms = ms
+        if (not self.follow and time.monotonic() - self._scrolled_at > FOLLOW_AGAIN_S
+                and not (self.start_ms <= ms <= self.start_ms + self.view_ms)):
+            # scrolled away by hand a while ago and the playhead left the view: follow again
+            self.follow = True
         if self.follow and not (self.start_ms <= ms <= self.start_ms + self.view_ms * 0.9):
             self.start_ms = ms - self.view_ms * 0.1
             self._clamp_view()
@@ -168,13 +180,13 @@ class CurveWidget(QWidget):
         sb.setVisible(sb.maximum() > 0)
 
     def _scrolled(self, v: int):
-        self.follow = False
+        self._user_scrolled()
         self.start_ms = float(v)
         self.update()
 
     def scroll_by(self, ms: float):
         """Move the visible window (positive = later)."""
-        self.follow = False
+        self._user_scrolled()
         self.start_ms += ms
         self._clamp_view()
         self.update()
@@ -412,7 +424,7 @@ class CurveWidget(QWidget):
                 self._panning = True
                 self.setCursor(Qt.ClosedHandCursor)
             if self._panning:
-                self.follow = False
+                self._user_scrolled()
                 self.start_ms = self._pan_from - dx / self._plot().width() * self.view_ms
                 self._clamp_view()
                 self.update()
@@ -496,7 +508,10 @@ class CurveWidget(QWidget):
             self.view_ms *= factor
             self._clamp_view()
             self.start_ms = anchor - (anchor - self.start_ms) * factor
-        self.follow = False
+            self._clamp_view()
+            self.update()
+            return                       # zooming keeps following the playhead
+        self._user_scrolled()
         self._clamp_view()
         self.update()
 

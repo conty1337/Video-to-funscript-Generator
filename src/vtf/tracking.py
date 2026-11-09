@@ -70,7 +70,7 @@ class AreaTracker:
     """One marked area. Box (px): (x, y, w, h) or (x, y, w, h, angle_deg), where
     x/y/w/h describe the unrotated rectangle and the angle turns it around its centre."""
 
-    TEMPLATE_EVERY = 5            # frames between drift corrections
+    TEMPLATE_EVERY = 3            # frames between drift corrections
     TEMPLATE_MIN_SCORE = 0.65     # this sure: pull the area back to where it looks right
     GOOD_SCORE = 0.6              # still looks like itself
     COVERED_SCORE = 0.35          # looks like something else: covered (twice in a row)
@@ -228,7 +228,7 @@ class AreaTracker:
         if score < self.TEMPLATE_MIN_SCORE:
             return score
         if 1.0 < np.hypot(*off) < 0.5 * float(np.max(self.size * self.scale)):
-            pull = 1.0 if score > 0.85 else 0.5               # very sure: all the way
+            pull = 1.0 if score > 0.8 else 0.5                # very sure: all the way
             self.center = np.clip(self.center + pull * off, [0, 0], [self.w - 1, self.h - 1])
         return score
 
