@@ -378,3 +378,22 @@ def test_area_dragged_away_counts_as_covered():
     t.center = good + [25.0, 0.0]                    # pulled well away and not looking right
     hits = [t._check_covered(0.5) for _ in range(4)]
     assert hits[-1] and t.covered and np.allclose(t.center, good)
+
+
+def test_box_does_not_grow_from_a_small_cluster():
+    """Only a small textured spot inside a big area: the area follows it but does
+    not start to grow or tilt from the wobbly few points."""
+    from vtf.tracking import AreaTracker
+
+    rng = np.random.default_rng(11)
+    spot = (rng.random((18, 18)) * 255).astype(np.uint8)
+    frames = []
+    for i in range(60):
+        f = np.full((H, W), 60, np.uint8)
+        x = 200 + int(20 * np.sin(i / 6))
+        f[120:138, x:x + 18] = spot
+        frames.append(cv2.GaussianBlur(f, (3, 3), 0))
+    t = AreaTracker((170, 90, 80, 80), (H, W), first=frames[0])
+    for prev, cur in itertools.pairwise(frames):
+        t.step(prev, cur)
+    assert 0.9 < t.scale < 1.1 and abs(t.angle) < 5, (t.scale, t.angle)

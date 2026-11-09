@@ -343,16 +343,22 @@ class AreaTracker:
             m, inl = cv2.estimateAffinePartial2D(p0, p1, method=cv2.RANSAC, ransacReprojThreshold=2.0,
                                                  maxIters=200, confidence=0.98)
             if m is not None and inl is not None and int(inl.sum()) >= 5:
+                keep = inl.ravel().astype(bool)
                 sc = float(np.hypot(m[0, 0], m[1, 0]))
                 rot = float(np.degrees(np.arctan2(m[1, 0], m[0, 0])))
-                if 0.8 < sc < 1.25 and abs(rot) < 20:        # believable change in one frame
-                    new_c = m[:, :2] @ self.center + m[:, 2]
-                    self.center = new_c
-                    self.scale = float(np.clip(self.scale * sc, 0.5, 2.0))
+                # turning and size can only be read from points that spread over the area;
+                # a small cluster of points makes them wobble and the box grows or tilts
+                spread = np.ptp(p0[keep], axis=0) if keep.sum() >= 2 else np.zeros(2)
+                wide = bool(np.all(spread >= 0.4 * self.size * self.scale))
+                if wide and 0.8 < sc < 1.25 and abs(rot) < 20:   # believable change in one frame
+                    self.center = m[:, :2] @ self.center + m[:, 2]
+                    # size changes slowly and stays within a sensible range
+                    self.scale = float(np.clip(self.scale * sc ** 0.5, 0.6, 1.6))
                     self.angle += rot
-                    keep = inl.ravel().astype(bool)
-                    p1 = p1[keep]
-                    moved = True
+                else:
+                    self.center = self.center + np.median((p1 - p0)[keep], axis=0)
+                p1 = p1[keep]
+                moved = True
         if not moved:
             self.center = self.center + np.median(p1 - p0, axis=0)
         d = self.center - old
