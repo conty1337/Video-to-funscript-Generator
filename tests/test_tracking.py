@@ -348,3 +348,17 @@ def test_area_comes_back_after_being_covered():
     assert any(lost[25:60]), "covering should show as lost"
     assert not any(lost[-10:])
     assert np.hypot(*(t.center - [220, 120])) < 4, t.center     # back on the object
+
+
+def test_area_only_moves_when_turning_is_off(tmp_path):
+    """Machines: with turning off the area keeps its angle and size and still follows."""
+    path, a, _b = _video(tmp_path / "rig.avi", pan=False)
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_boxes=(a,), width=W, hwaccel="none",
+                                              compensate_camera=False, track_turn=False))
+    assert (m.track_geom[:, 0, 1] == 0.0).all() and (m.track_geom[:, 0, 0] == 1.0).all()
+    ys = m.tracks[:, 0, 1] * H
+    assert ys.max() - ys.min() > 60                      # followed the strokes (2 x 38 px)
+    peaks = _peaks(m)
+    assert all(any(abs(p - e) <= 120 for p in peaks) for e in (750, 1750, 2750)), peaks
+    s1 = AnalysisSettings(mode="track", track_boxes=(a,))
+    assert s1.cache_key() != AnalysisSettings(mode="track", track_boxes=(a,), track_turn=False).cache_key()

@@ -76,8 +76,11 @@ class AreaTracker:
     COVERED_SCORE = 0.35          # looks like something else: covered (twice in a row)
     MAX_TEMPLATES = 6
 
-    def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None):
+    def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None,
+                 turn: bool = True):
         self.h, self.w = shape
+        # turn = follow turning and size too; off: the area only moves (machines, rigid things)
+        self.turn = turn
         x, y, bw, bh = box[:4]
         self.size = np.array([max(8.0, bw), max(8.0, bh)], np.float64)
         self.center = np.array([x + bw / 2, y + bh / 2], np.float64)
@@ -201,8 +204,10 @@ class AreaTracker:
         # it may have turned or changed size meanwhile: try a few turns and sizes
         base = (self.angle, self.scale)
         best = (-1.0, np.zeros(2), base)
-        for d_ang in (0.0, -8.0, 8.0, -16.0, 16.0):
-            for d_sc in (1.0, 1.1, 1 / 1.1):
+        turns = (0.0, -8.0, 8.0, -16.0, 16.0) if self.turn else (0.0,)
+        sizes = (1.0, 1.1, 1 / 1.1) if self.turn else (1.0,)
+        for d_ang in turns:
+            for d_sc in sizes:
                 self.angle, self.scale = base[0] + d_ang, base[1] * d_sc
                 score, off = self._best(gray, tpls, reach)
                 if score > best[0]:
@@ -315,7 +320,17 @@ class AreaTracker:
         p1 = nxt[good].reshape(-1, 2)
         old = self.center.copy()
         moved = False
-        if len(p0) >= 6:
+        if len(p0) >= 6 and not self.turn:
+            # only moving: the shift on which most points agree (RANSAC on a pure shift)
+            m, inl = cv2.estimateAffinePartial2D(p0, p1, method=cv2.RANSAC, ransacReprojThreshold=2.0,
+                                                 maxIters=200, confidence=0.98)
+            keep = inl.ravel().astype(bool) if inl is not None and int(inl.sum()) >= 5 else None
+            shift = np.median((p1 - p0)[keep] if keep is not None else (p1 - p0), axis=0)
+            self.center = self.center + shift
+            if keep is not None:
+                p1 = p1[keep]
+            moved = True
+        elif len(p0) >= 6:
             # shift + rotation + scale from the points; RANSAC ignores points that slipped
             m, inl = cv2.estimateAffinePartial2D(p0, p1, method=cv2.RANSAC, ransacReprojThreshold=2.0,
                                                  maxIters=200, confidence=0.98)
@@ -360,11 +375,12 @@ class MultiTracker:
     """Tracks up to MAX_AREAS areas plus the background (camera)."""
 
     def __init__(self, boxes_px: list, shape: tuple[int, int], compensate_camera: bool = True,
-                 first: np.ndarray | None = None):
+                 first: np.ndarray | None = None, turn: bool = True):
+        self.turn = turn
         if not boxes_px:
             raise ValueError("mindestens ein Tracking-Bereich nötig")
         self.shape = shape
-        self.areas = [AreaTracker(b, shape, first) for b in boxes_px[:MAX_AREAS]]
+        self.areas = [AreaTracker(b, shape, first, turn) for b in boxes_px[:MAX_AREAS]]
         self.compensate = compensate_camera
         self._bg: np.ndarray | None = None     # background points, kept from frame to frame
 
@@ -374,7 +390,7 @@ class MultiTracker:
     def reset_area(self, index: int, box_px, gray: np.ndarray) -> None:
         """Put area `index` where the user says it is (a correction) and start over there.
         The appearances known so far are kept for comparing."""
-        new = AreaTracker(box_px, self.shape, gray)
+        new = AreaTracker(box_px, self.shape, gray, self.turn)
         new.inherit(self.areas[index])
         self.areas[index] = new
 
