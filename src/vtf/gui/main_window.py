@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self):
         m = self.menuBar().addMenu("&Datei")
         self._act(m, "Video öffnen…", self.open_dialog, QKeySequence.Open)
+        self._act(m, "Video schließen", self.close_video, "Ctrl+W")
         self._act(m, "Funscript exportieren", self.export, QKeySequence.Save)
         self._act(m, "Funscript exportieren unter…", self.export_as, QKeySequence.SaveAs)
         self._act(m, "Funscript laden…", self.load_funscript_dialog)
@@ -370,6 +371,9 @@ class MainWindow(QMainWindow):
         self.file_label = QLabel()
         self.file_label.setObjectName("meta")
         tb.addWidget(self.file_label)
+        self.close_act = tb.addAction(theme.icon("x"), "", self.close_video)
+        self.close_act.setToolTip("Video schließen (Strg+W)")
+        self.close_act.setVisible(False)
         self._toolbar = tb
 
     def _transport(self, name: str, tip: str) -> QPushButton:
@@ -440,6 +444,7 @@ class MainWindow(QMainWindow):
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
+        self.close_act.setVisible(True)
         self._l0_signal = None
         loaded = load_axes(path)
         self.axis_actions = {k: v for k, v in loaded.items()}
@@ -454,6 +459,46 @@ class MainWindow(QMainWindow):
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
         self._update_heat()
+
+    def close_video(self):
+        """Take the video out (asks first if the script is not saved)."""
+        if not self.cap or not self._confirm_discard():
+            return
+        self.cancel_analysis()
+        self.pause()
+        self.cap.release()
+        self.cap = None
+        self.video_path = None
+        self.audio.load(None)
+        self.motion = None
+        self._l0_signal = None
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.dirty = False
+        self._cur_idx = 0
+        self.slider.setRange(0, 0)
+        self.slider.setEnabled(False)
+        for b in (self.play_btn, self.back_btn, self.fwd_btn, self.analyze_btn):
+            b.setEnabled(False)
+        self.view.set_countdown(None)
+        self.view.set_frame(None)
+        self.view.set_roi(None)
+        self.panel.set_roi(None)
+        self.view.set_tracks([])
+        self.view.set_track_overlay(None)
+        self.panel.tracking.reset(0, 30)
+        self.axis_actions = {}
+        self.axis = "L0"
+        self.axis_box.setCurrentIndex(0)
+        self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], 0)
+        self._update_axis_labels()
+        self._update_section_marks()
+        self.setWindowTitle(f"Video-to-Funscript Generator {__version__}")
+        self.file_label.setText("")
+        self.close_act.setVisible(False)
+        self.time_label.setText("0:00.00 / 0:00.00")
+        self._refresh_position()
+        self._status("Video geschlossen – neues Video öffnen (Strg+O) oder hierher ziehen")
 
     def _read_frame(self):
         if not self.cap:

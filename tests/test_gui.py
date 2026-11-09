@@ -655,3 +655,25 @@ def test_player_hides_tracking_areas(app):
     w.dirty = False
     w.close()
     w.deleteLater()
+
+
+def test_close_video(app, tmp_path):
+    from pathlib import Path
+
+    from videogen import make_video
+    from vtf.gui.main_window import MainWindow
+
+    vid = tmp_path / "c.avi"
+    make_video(Path(vid))
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(vid))
+    assert w.cap is not None and w.close_act.isVisible() is not None
+    w.close_video()
+    assert w.cap is None and w.video_path is None and not w.analyze_btn.isEnabled()
+    assert w.view._img is None and not w.curve.actions
+    w.open_video(str(vid))                                    # a new one can be opened again
+    assert w.cap is not None
+    w.dirty = False
+    w.close()
+    w.deleteLater()
