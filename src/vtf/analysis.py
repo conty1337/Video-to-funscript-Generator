@@ -83,6 +83,7 @@ class AnalysisSettings:
     track_boxes: tuple = ()               # shortcut for one section: boxes marked at track_start_ms
     track_start_ms: int = 0
     track_sections: tuple = ()            # TrackSection, ... (mode "track"); wins over track_boxes
+    track_turn: bool = True               # areas follow turning and size, not only moving
 
     def sections(self) -> tuple:
         if self.track_sections:
@@ -99,6 +100,7 @@ class AnalysisSettings:
             d.pop(k)
         if d["mode"] == "flow":       # same key as before tracking existed: old caches stay valid
             d.pop("mode")
+            d.pop("track_turn")
         else:
             d.pop("roi")
             # calibration is applied when generating, it does not need a new analysis
@@ -282,7 +284,7 @@ def _spread_corrections(events, centers, owner, plan, dx, dy, k) -> None:
         dy[j0 + 1:i + 1] += steps[:, 1]
 
 
-def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None) -> np.ndarray:
+def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: bool = True) -> np.ndarray:
     """Follow one area backwards from frame b (where the user put it) to frame a.
     Returns its centre per frame a..b (NaN where it was lost)."""
     from .tracking import AreaTracker
@@ -291,7 +293,7 @@ def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None) -> np.
         return cv2.imdecode(frames[j], cv2.IMREAD_GRAYSCALE)
 
     nxt = dec(b)
-    t = AreaTracker(box_px, shape, nxt)
+    t = AreaTracker(box_px, shape, nxt, turn)
     out = np.full((b - a + 1, 2), np.nan)
     out[-1] = t.center
     for j in range(b - 1, a - 1, -1):
@@ -383,7 +385,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             if sec != active:                         # section starts: areas marked on this frame
                 boxes = sections[sec].boxes[:MAX_AREAS]
                 boxes_px = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h, *b[4:5]) for b in boxes]
-                tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur)
+                tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur,
+                                       turn=settings.track_turn)
                 active = sec
                 d = np.zeros(2)
             else:
@@ -397,7 +400,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                         back = None
                         seg = back_segs.get((sec, area, i))
                         if seg is not None and all(j in frames for j in range(seg[0], i + 1)):
-                            back = _track_back(frames, seg[0], i, box_px, cur.shape, cancel)
+                            back = _track_back(frames, seg[0], i, box_px, cur.shape, cancel,
+                                               settings.track_turn)
                         events.append((i, sec, area, tracker.areas[area].center - before, back))
             dx.append(float(d[0]))
             dy.append(float(d[1]))

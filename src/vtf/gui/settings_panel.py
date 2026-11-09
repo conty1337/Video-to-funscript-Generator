@@ -215,7 +215,12 @@ class SettingsPanel(QWidget):
         self.cam = QCheckBox("Kamerabewegung ausgleichen")
         self.cam.setChecked(True)
         self.opencl = QCheckBox("GPU über OpenCL")
+        self.turn = QCheckBox("Kästchen drehen und skalieren mit")
+        self.turn.setChecked(True)
+        self.turn.setToolTip("Tracking: die Kästchen folgen auch Drehung und Größe (Körper). Aus: sie "
+                             "verschieben sich nur, besser für Maschinen und starre Teile")
         ol.addWidget(self.cam)
+        ol.addWidget(self.turn)
         ol.addWidget(self.opencl)
         self.options.setVisible(False)
         self.options_btn.toggled.connect(self._options_toggled)
@@ -235,6 +240,7 @@ class SettingsPanel(QWidget):
         self.width.currentIndexChanged.connect(self.analysisChanged)
         self.step.valueChanged.connect(self.analysisChanged)
         self.cam.toggled.connect(self.analysisChanged)
+        self.turn.toggled.connect(self.analysisChanged)
         self.method.currentIndexChanged.connect(self._method_changed)
 
     def _options_toggled(self, on: bool) -> None:
@@ -289,7 +295,7 @@ class SettingsPanel(QWidget):
             width=self.width.currentData(), roi=self._roi, frame_step=self.step.value(),
             compensate_camera=self.cam.isChecked(), use_opencl=self.opencl.isChecked(),
             hwaccel=self.hwaccel.currentData(), mode=self.mode,
-            track_sections=tuple(self.sections))
+            track_sections=tuple(self.sections), track_turn=self.turn.isChecked())
 
     def to_dict(self) -> dict:
         a = asdict(self.analysis_settings())
@@ -303,7 +309,7 @@ class SettingsPanel(QWidget):
         a = d.get("analysis") or {}
         widgets = [self.axis, self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm,
                    self.pos_min, self.pos_max, self.invert, self.full_stroke, self.width, self.step,
-                   self.cam, self.opencl, self.hwaccel, self.method, self.max_speed]
+                   self.cam, self.opencl, self.hwaccel, self.method, self.max_speed, self.turn]
         for w in widgets:
             w.blockSignals(True)
         try:
@@ -319,6 +325,7 @@ class SettingsPanel(QWidget):
             _set_combo(self.width, a.get("width"))
             self.step.setValue(int(a.get("frame_step", 1)))
             self.cam.setChecked(bool(a.get("compensate_camera", True)))
+            self.turn.setChecked(bool(a.get("track_turn", True)))
             self.opencl.setChecked(bool(a.get("use_opencl", False)))
             _set_combo(self.hwaccel, a.get("hwaccel"))
             _set_combo(self.method, a.get("mode"))
