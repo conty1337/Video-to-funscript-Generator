@@ -814,3 +814,36 @@ def test_curve_follows_again_after_scrolling(app):
     c.set_data(c.t_ms[:0], c.signal[:0], [], 120_000)   # a new video always follows
     assert c.follow
     c.deleteLater()
+
+
+def test_video_zoom_for_small_areas(app):
+    """Strg+wheel zooms around the cursor; a small rectangle drawn while zoomed
+    becomes a small area of the frame."""
+    import numpy as np
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtTest import QTest
+
+    from vtf.gui.video_view import VideoView
+
+    v = VideoView()
+    v.resize(400, 300)
+    v.set_frame(np.zeros((300, 400, 3), np.uint8))
+    v.set_mode("track")
+    v.show()
+    p = QPointF(300, 75)
+    before = v._to_norm(p)
+    v._zoom_at(p, 4.0)
+    after = v._to_norm(p)
+    assert v._zoom == 4.0 and abs(before.x() - after.x()) < 1e-3 and abs(before.y() - after.y()) < 1e-3
+    drawn = []
+    v.boxDrawn.connect(drawn.append)
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(280, 60))
+    QTest.mouseMove(v, QPoint(320, 90))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(320, 90))
+    x, y, w, h = drawn[-1]
+    # 40 px at 4x zoom = 10 px of the 400 px frame, starting 20 px (5 px) left of the anchor
+    assert w < 0.03 and h < 0.03 and abs(x - (0.75 - 5 / 400)) < 0.005
+    v.reset_zoom()
+    assert v._zoom == 1.0 and v._image_rect().width() == 400
+    v.close()
+    v.deleteLater()

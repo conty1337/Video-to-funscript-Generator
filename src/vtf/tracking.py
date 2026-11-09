@@ -98,6 +98,7 @@ class AreaTracker:
         # it goes back to where it last looked right and waits there until it shows again
         self.covered = False
         self.bad_checks = 0
+        self.unsure_checks = 0          # comparisons in a row that did not look quite right
         self.last_score = 1.0
         self.good = (self.center.copy(), self.scale, self.angle)
         if first is not None:
@@ -244,10 +245,16 @@ class AreaTracker:
         self.last_score = score
         if score >= self.GOOD_SCORE:
             self.bad_checks = 0
+            self.unsure_checks = 0
             self.good = (self.center.copy(), self.scale, self.angle)
             return False
-        if score < self.COVERED_SCORE:
-            self.bad_checks += 1
+        self.unsure_checks += 1
+        # something partly in front (a hand) can drag the points along slowly: not looking
+        # right for a while AND having moved well away from the last good place = covered too
+        away = float(np.hypot(*(self.center - self.good[0])))
+        dragged = self.unsure_checks >= 4 and away > 0.35 * float(np.max(self.size * self.scale))
+        if score < self.COVERED_SCORE or dragged:
+            self.bad_checks += 2 if dragged else 1
             if self.bad_checks >= 2:
                 # the points followed whatever moved over it: back to the last good place
                 self.center, self.scale, self.angle = self.good[0].copy(), self.good[1], self.good[2]
@@ -293,6 +300,7 @@ class AreaTracker:
             if self.frames % 2 == 0 and self._reacquire(cur, 2.0):
                 self.covered = False
                 self.bad_checks = 0
+                self.unsure_checks = 0
                 self.lost = False
                 self.lost_frames = 0
                 self.good = (self.center.copy(), self.scale, self.angle)
@@ -335,16 +343,22 @@ class AreaTracker:
             m, inl = cv2.estimateAffinePartial2D(p0, p1, method=cv2.RANSAC, ransacReprojThreshold=2.0,
                                                  maxIters=200, confidence=0.98)
             if m is not None and inl is not None and int(inl.sum()) >= 5:
+                keep = inl.ravel().astype(bool)
                 sc = float(np.hypot(m[0, 0], m[1, 0]))
                 rot = float(np.degrees(np.arctan2(m[1, 0], m[0, 0])))
-                if 0.8 < sc < 1.25 and abs(rot) < 20:        # believable change in one frame
-                    new_c = m[:, :2] @ self.center + m[:, 2]
-                    self.center = new_c
-                    self.scale = float(np.clip(self.scale * sc, 0.5, 2.0))
+                # turning and size can only be read from points that spread over the area;
+                # a small cluster of points makes them wobble and the box grows or tilts
+                spread = np.ptp(p0[keep], axis=0) if keep.sum() >= 2 else np.zeros(2)
+                wide = bool(np.all(spread >= 0.4 * self.size * self.scale))
+                if wide and 0.8 < sc < 1.25 and abs(rot) < 20:   # believable change in one frame
+                    self.center = m[:, :2] @ self.center + m[:, 2]
+                    # size changes slowly and stays within a sensible range
+                    self.scale = float(np.clip(self.scale * sc ** 0.5, 0.6, 1.6))
                     self.angle += rot
-                    keep = inl.ravel().astype(bool)
-                    p1 = p1[keep]
-                    moved = True
+                else:
+                    self.center = self.center + np.median((p1 - p0)[keep], axis=0)
+                p1 = p1[keep]
+                moved = True
         if not moved:
             self.center = self.center + np.median(p1 - p0, axis=0)
         d = self.center - old
