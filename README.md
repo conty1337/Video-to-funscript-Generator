@@ -3,7 +3,12 @@
 Kostenlose, quelloffene Software zur **lokalen** Videoanalyse und automatischen
 Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 
-![Screenshot](docs/screenshot.png)
+![Bearbeiten: analysierte Kurve, Heatmap und Einstellungen](docs/screenshot.png)
+
+| Tracking | Player | Gerät |
+|---|---|---|
+| [![Tracking mit zwei Bereichen, Abschnitt und Tiefen-Kalibrierung](docs/tracking.png)](docs/tracking.png) | [![Player-Modus mit Playlist](docs/player.png)](docs/player.png) | [![Geräte-Dialog mit Simulation](docs/device.png)](docs/device.png) |
+| Bereiche verfolgen, Abschnitte, Kalibrierung „drin/raus“ | Playlist, Videos mit Script nacheinander | Fredorch F21S über Intiface oder Simulation |
 
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
