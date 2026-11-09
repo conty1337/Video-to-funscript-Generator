@@ -562,6 +562,8 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ tracking
     def _method_changed(self, mode: str):
+        if self.player_mode:
+            return
         self.view.set_mode("track" if mode == "track" else "roi")
         if mode == "track":       # bring the section buttons into view
             QTimer.singleShot(0, lambda: self._side_scroll.ensureWidgetVisible(self.panel.tracking, 0, 16))
@@ -687,6 +689,12 @@ class MainWindow(QMainWindow):
         self.mode_edit.setChecked(not on)
         self.player_action.setChecked(on)
         self.curve.editable = not on
+        # player: only the video, no tracking areas or analysis rectangle
+        if on:
+            self.view.set_mode("play")
+        else:
+            self.view.set_mode("track" if self.panel.mode == "track" else "roi")
+            self._update_track_overlay(self._cur_ms())
         self.save_action.setEnabled(not on)
         self.prev_btn.setVisible(on)
         self.next_btn.setVisible(on)

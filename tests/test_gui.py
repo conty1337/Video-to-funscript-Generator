@@ -638,3 +638,20 @@ def test_player_countdown(app):
     w.dirty = False
     w.close()
     w.deleteLater()
+
+
+def test_player_hides_tracking_areas(app):
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    assert w.view.mode == "track"
+    w.set_player_mode(True)
+    assert w.view.mode == "play"
+    w.set_player_mode(False)
+    assert w.view.mode == "track"
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()
+    w.deleteLater()

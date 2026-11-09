@@ -64,6 +64,10 @@ class VideoView(QWidget):
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
+        if mode == "play":
+            self.setToolTip("")
+            self.update()
+            return
         self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
                         if mode == "roi" else
                         "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
@@ -142,6 +146,8 @@ class VideoView(QWidget):
         p.drawImage(r, self._img)
         if self._countdown is not None:
             self._paint_countdown(p, r)
+        if self.mode == "play":                     # player: just the video
+            return
         if self.mode == "track":
             self._paint_tracks(p, r)
             return
@@ -326,7 +332,7 @@ class VideoView(QWidget):
         self._overlay = None
 
     def mousePressEvent(self, ev):
-        if self._img is None:
+        if self._img is None or self.mode == "play":
             return
         if ev.button() == Qt.RightButton:
             if self.mode == "track":
