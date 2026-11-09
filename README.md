@@ -8,7 +8,7 @@ Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.4)
+## Funktionen (Stand 0.5)
 
 | | Funktion | Status |
 |---|---|---|
@@ -27,6 +27,9 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 13 | Tracking: markierte Körperteile/Objekte verfolgen, Abschnitte, Tiefen-Kalibrierung | ✅ |
 | 14 | Editor: Mehrfachauswahl, Kopieren/Einfügen, Abschnitt glätten/verstärken | ✅ |
 | 15 | Weitere Achsen (Surge, Sway, Twist, Roll, Pitch) | ✅ |
+| 16 | Robusteres Tracking: drehbare Kästchen, Drift-Korrektur, Nachjustieren | ✅ |
+| 17 | Stapel mit Tracking (Videos vorbereiten, dann durchlaufen lassen) | ✅ |
+| 18 | Heatmap und Tempo-Grenze | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -148,6 +151,24 @@ Kalibrierung wirkt sofort, ohne neue Analyse.
 
 Beim Abspielen zeigt die Vorschau, wo die Bereiche gerade sind.
 
+*Drehen*: Kästchen am runden Griff über der Oberkante drehen oder mit dem
+Mausrad über dem Kästchen (Umschalt = feinere Schritte). Beim Verfolgen drehen
+und skalieren sich die Bereiche mit.
+
+*Wandernde Kästchen*: Das Tracking prüft auf unmögliche Sprünge, gleicht
+regelmäßig mit dem Aussehen beim Markieren ab und sucht verlorene Bereiche
+wieder. Stellen, an denen ein Bereich verloren war, sind rot in der Kurve
+markiert. Wandert ein Kästchen trotzdem ab: an der Stelle einfach ein neues
+Kästchen **über** das abgewanderte ziehen (*nachjustieren*). Nach der nächsten
+Analyse folgt der Bereich von dort aus, die Abweichung davor wird ausgeglichen.
+Ein Kästchen an einer freien Stelle beginnt dagegen einen neuen Abschnitt.
+
+*Vorbereitung*: Bereiche, Abschnitte und Kalibrierung werden sofort als
+`<Video>.vtf.json` neben dem Video gespeichert und beim nächsten Öffnen
+geladen. Strg+Bild↓ / Strg+Bild↑ öffnet das nächste/vorige Video im Ordner,
+so lassen sich viele Videos schnell vorbereiten. Die Stapelverarbeitung nutzt
+die Vorbereitung, Videos ohne sie laufen mit „Bewegung im Bild“.
+
 **Weitere Achsen**: Über der Kurve wählst du die Achse: Hub (L0), Surge (L1),
 Sway (L2), Twist (R0), Roll (R1) oder Pitch (R2). Jede Achse hat eigene Punkte
 und wird beim Speichern als `<Video>.roll.funscript` usw. neben dem Video
@@ -165,6 +186,11 @@ wiederholen, zufällige Reihenfolge, Videos ohne Script überspringen. Bild ↑/
 springt zum vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es,
 zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
 speichern, die letzte merkt sich die App.
+
+**Heatmap und Tempo-Grenze**: Die farbige Leiste unter der Zeitleiste zeigt das
+Tempo des Scripts (dunkel = langsam, grün, gelb, rot = schnell). Mit
+**Tempo-Grenze** (Script-Einstellungen) werden zu schnelle Hübe schon beim
+Erzeugen gekürzt. Für den F21S passt etwa 500 /s (voller Hub in ca. 200 ms).
 
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für

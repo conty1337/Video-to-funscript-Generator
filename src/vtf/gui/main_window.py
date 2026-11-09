@@ -24,6 +24,7 @@ from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .heatbar import HeatBar
 from .player_panel import PlayerPanel
 from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
@@ -122,7 +123,13 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.fwd_btn)
         controls.addWidget(self.next_btn)
         controls.addSpacing(8)
-        controls.addWidget(self.slider, 1)
+        self.heat = HeatBar()
+        timeline = QVBoxLayout()
+        timeline.setContentsMargins(0, 6, 0, 0)
+        timeline.setSpacing(2)
+        timeline.addWidget(self.slider)
+        timeline.addWidget(self.heat)
+        controls.addLayout(timeline, 1)
         controls.addSpacing(12)
         controls.addWidget(self.time_label)
         controls.addSpacing(12)
@@ -441,6 +448,7 @@ class MainWindow(QMainWindow):
         else:
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
+        self._update_heat()
 
     def _read_frame(self):
         if not self.cap:
@@ -986,9 +994,14 @@ class MainWindow(QMainWindow):
         self._refresh_position()
         self._status("Punkte bearbeitet")
 
+    def _update_heat(self):
+        dur = self.frame_count / self.fps * 1000 if self.cap else 0.0
+        self.heat.set_actions(self.stroke_actions(), dur)
+
     def _refresh_position(self):
         self.devices.set_actions(self.stroke_actions())
         self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))
+        self._update_heat()
         self._update_meta()
 
     def _restore(self, src: list, dst: list):
@@ -1132,6 +1145,8 @@ class MainWindow(QMainWindow):
             "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n"
             "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
             "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
+            "   Kästchen drehen: runder Griff oder Mausrad. Abgewandert: neues Kästchen darüber\n"
+            "   ziehen (nachjustieren). Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
             "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
             "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
             "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"

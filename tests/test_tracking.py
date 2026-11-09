@@ -1,5 +1,6 @@
 """Tracking of marked areas: camera-independent strokes, caching, overlay data."""
 import itertools
+
 import cv2
 import numpy as np
 import pytest

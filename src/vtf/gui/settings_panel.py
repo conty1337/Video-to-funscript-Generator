@@ -5,8 +5,17 @@ from __future__ import annotations
 from dataclasses import asdict, fields
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
-                               QLabel, QSlider, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..analysis import AnalysisSettings
 from ..generator import GeneratorSettings
@@ -103,6 +112,20 @@ class SettingsPanel(QWidget):
         box, self.norm = _slider(0, 20000, 5000, " ms")
         self.norm.setToolTip("Fenster für die lokale Amplituden-Normalisierung, 0 = ganzes Video")
         _row(f, "Normalisierung", box)
+        box, self.max_speed = _slider(0, 1000, 0, " /s")
+        lbl = box.findChild(QLabel)
+
+        def fmt(v: int) -> str:
+            return "aus" if v == 0 else f"{v} /s"
+
+        lbl.setText(fmt(0))
+        self.max_speed.valueChanged.connect(lambda v: lbl.setText(fmt(v)))
+        self.max_speed.setSingleStep(10)
+        self.max_speed.setPageStep(50)
+        self.max_speed.setToolTip("Höchstes Tempo in Positionen pro Sekunde: schnellere Hübe werden beim "
+                                  "Erzeugen gekürzt. F21S: voller Hub frühestens in ca. 200 ms = 500 /s. "
+                                  "0 = aus")
+        _row(f, "Tempo-Grenze", box)
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -178,7 +201,7 @@ class SettingsPanel(QWidget):
         self.tracking.analysisChanged.connect(self.analysisChanged)
         self.tracking.generatorChanged.connect(self.generatorChanged)
 
-        for w in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm):
+        for w in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm, self.max_speed):
             w.valueChanged.connect(self.generatorChanged)
         for w in (self.pos_min, self.pos_max):
             w.valueChanged.connect(self.generatorChanged)
@@ -230,7 +253,8 @@ class SettingsPanel(QWidget):
             sensitivity=self.sensitivity.value(), smoothing_ms=self.smoothing.value(),
             drift_window_ms=self.drift.value(), normalize_window_ms=self.norm.value(),
             min_interval_ms=self.min_interval.value(), pos_min=self.pos_min.value(),
-            pos_max=self.pos_max.value(), full_stroke=self.full_stroke.isChecked())
+            pos_max=self.pos_max.value(), full_stroke=self.full_stroke.isChecked(),
+            max_speed=self.max_speed.value())
 
     def analysis_settings(self) -> AnalysisSettings:
         return AnalysisSettings(
@@ -251,7 +275,7 @@ class SettingsPanel(QWidget):
         a = d.get("analysis") or {}
         widgets = [self.axis, self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm,
                    self.pos_min, self.pos_max, self.invert, self.full_stroke, self.width, self.step,
-                   self.cam, self.opencl, self.hwaccel, self.method]
+                   self.cam, self.opencl, self.hwaccel, self.method, self.max_speed]
         for w in widgets:
             w.blockSignals(True)
         try:
@@ -259,7 +283,7 @@ class SettingsPanel(QWidget):
             for key, w in (("sensitivity", self.sensitivity), ("smoothing_ms", self.smoothing),
                            ("min_interval_ms", self.min_interval), ("drift_window_ms", self.drift),
                            ("normalize_window_ms", self.norm), ("pos_min", self.pos_min),
-                           ("pos_max", self.pos_max)):
+                           ("pos_max", self.pos_max), ("max_speed", self.max_speed)):
                 if key in g:
                     w.setValue(int(g[key]))
             self.invert.setChecked(bool(g.get("invert", False)))
@@ -276,7 +300,7 @@ class SettingsPanel(QWidget):
         self._update_roi_label()
         self.methodChanged.emit(self.mode)
         # slider labels are updated via valueChanged; refresh them once
-        for s in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm):
+        for s in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm, self.max_speed):
             s.valueChanged.emit(s.value())
 
 
