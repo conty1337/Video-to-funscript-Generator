@@ -165,7 +165,7 @@ class VideoView(QWidget):
         boxes = self._overlay if analysed else self._tracks
         p.setFont(theme.mono_font(11))
         for i, box in enumerate(boxes):
-            pts, c, ang = self._poly(r, box)
+            pts, _c, _ang = self._poly(r, box)
             lost = len(box) > 5 and bool(box[5])
             color = QColor("#e5534b") if lost else QColor(TRACK_COLORS[i % len(TRACK_COLORS)])
             p.setPen(QPen(color, 2 if analysed else 1.5, Qt.SolidLine if analysed else Qt.DashLine))

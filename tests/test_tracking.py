@@ -1,4 +1,5 @@
 """Tracking of marked areas: camera-independent strokes, caching, overlay data."""
+import itertools
 import cv2
 import numpy as np
 import pytest
@@ -238,7 +239,7 @@ def test_area_is_found_again_after_a_loss():
     a = AreaTracker((100, 100, 40, 40), (H, W), first=f0)
     seq = [f0, flat, flat, flat, flat, back, back]
     lost = []
-    for prev, cur in zip(seq, seq[1:]):
+    for prev, cur in itertools.pairwise(seq):
         a.step(prev, cur)
         lost.append(a.lost)
     assert any(lost[:4])                             # noticed the loss

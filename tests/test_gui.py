@@ -484,3 +484,28 @@ def test_tracking_rotate_and_correct(app):
     assert len(tb.sections) == 2
     tb.deleteLater()
     app.processEvents()
+
+
+def test_tracking_preparation_saved_and_restored(app, tmp_path):
+    from test_tracking import _video
+    from vtf.gui.main_window import MainWindow
+    from vtf.prep import prep_path
+
+    path, a, b = _video(tmp_path / "p.avi", seconds=2.0, pan=False)
+    other, _a, _b = _video(tmp_path / "q.avi", seconds=1.0, pan=False)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(path))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    w._box_drawn(a)
+    w._box_drawn(b)
+    assert prep_path(path).is_file()                          # saved right away
+    w.open_sibling(1)                                         # next video in the folder
+    assert w.video_path.endswith("q.avi") and not w.panel.tracking.sections
+    w.open_sibling(-1)
+    assert w.video_path.endswith("p.avi")
+    assert len(w.panel.tracking.sections) == 1 and len(w.panel.tracking.sections[0].boxes) == 2
+    assert w.panel.mode == "track"
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()

@@ -19,6 +19,7 @@ from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
 from ..generator import generate, generate_axes
+from ..prep import load_prep, prep_path, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
@@ -303,6 +304,8 @@ class MainWindow(QMainWindow):
         self._act(m, "Ton an/aus", self.toggle_mute, "M")
         m.addSeparator()
         self._act(m, "Nächstes Video", self.play_next, "PgDown")
+        self._act(m, "Nächstes Video im Ordner", lambda: self.open_sibling(1), "Ctrl+PgDown")
+        self._act(m, "Vorheriges Video im Ordner", lambda: self.open_sibling(-1), "Ctrl+PgUp")
         self._act(m, "Vorheriges Video", self.play_prev, "PgUp")
         m = self.menuBar().addMenu("&Ansicht")
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
@@ -416,6 +419,12 @@ class MainWindow(QMainWindow):
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
         self.panel.tracking.reset(info.duration * 1000, info.fps)
+        prepared = load_prep(path)
+        if prepared:                  # prepared earlier: tracking with its areas
+            self.panel.tracking.sections = prepared
+            self.panel.tracking.refresh()
+            self.panel.method.setCurrentIndex(self.panel.method.findData("track"))
+            self._update_section_marks()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -582,6 +591,12 @@ class MainWindow(QMainWindow):
     def _sections_changed(self):
         self._update_track_overlay(self._cur_ms())
         self._update_section_marks()
+        if self.video_path and self.panel.mode == "track":
+            # keep the preparation next to the video, for the batch and for next time
+            try:
+                save_prep(self.video_path, self.panel.tracking.sections)
+            except OSError as e:
+                self._status(f"Tracking-Vorbereitung nicht gespeichert: {e}")
 
     def _update_section_marks(self):
         """Sections and calibration moments as marks in the curve."""
@@ -669,6 +684,22 @@ class MainWindow(QMainWindow):
                 self.toggle_play()
         self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
                      + ("" if self.stroke_actions() else "  (kein Script)"))
+
+    def open_sibling(self, direction: int):
+        """Next/previous video in the same folder (quick preparing of many videos)."""
+        if not self.video_path:
+            return
+        cur = Path(self.video_path)
+        vids = sorted(p for p in cur.parent.iterdir() if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+        if cur not in vids:
+            return
+        i = vids.index(cur) + direction
+        if 0 <= i < len(vids):
+            self.open_video(str(vids[i]))
+            prep = " · Tracking vorbereitet" if prep_path(vids[i]).is_file() else ""
+            self._status(f"Video {i + 1}/{len(vids)} im Ordner: {vids[i].name}{prep}")
+        else:
+            self._status("Kein weiteres Video in diesem Ordner")
 
     def play_next(self):
         i = self.player.playlist.next_index()
