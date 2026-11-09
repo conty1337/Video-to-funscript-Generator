@@ -197,7 +197,7 @@ class SettingsPanel(QWidget):
         self.width = QComboBox()
         for w in (160, 240, 320, 480, 640):
             self.width.addItem(f"{w} px", w)
-        self.width.setCurrentIndex(2)
+        self.width.setCurrentIndex(self.width.findData(640))     # fine detail; slower, but worth it
         _row(f, "Auflösung", self.width)
         self.step = QSpinBox()
         self.step.setRange(1, 6)

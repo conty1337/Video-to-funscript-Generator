@@ -308,6 +308,10 @@ class MainWindow(QMainWindow):
             self.panel.load_dict(json.loads(self.qsettings.value("settings", "{}")))
         except (TypeError, ValueError):
             pass
+        if str(self.qsettings.value("width640_default", "")) != "1":
+            # 0.8.3: 640 px is the new default analysis resolution, once for everyone
+            self.panel.width.setCurrentIndex(self.panel.width.findData(640))
+            self.qsettings.setValue("width640_default", "1")
         self.setAcceptDrops(True)
 
     # ------------------------------------------------------------ menu

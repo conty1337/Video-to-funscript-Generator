@@ -847,3 +847,11 @@ def test_video_zoom_for_small_areas(app):
     assert v._zoom == 1.0 and v._image_rect().width() == 400
     v.close()
     v.deleteLater()
+
+
+def test_default_resolution_is_640(app):
+    from vtf.gui.settings_panel import SettingsPanel
+
+    p = SettingsPanel()
+    assert p.width.currentData() == 640 and p.analysis_settings().width == 640
+    p.deleteLater()
