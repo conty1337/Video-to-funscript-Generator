@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import json
 import math
 from pathlib import Path
@@ -21,7 +22,8 @@ from ..batch import VIDEO_EXTS, make_metadata
 from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
 from ..generator import generate, generate_axes
 from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
-from ..prep import load_prep, prep_path, save_prep
+from ..editing import rhythm
+from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
@@ -97,6 +99,7 @@ class MainWindow(QMainWindow):
         self.curve_title = QLabel("Script")
         self.curve_title.setObjectName("section")
         self.axis = "L0"                       # axis shown in the curve
+        self.bookmarks: list[tuple[int, str]] = []   # (ms, name), saved next to the video
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -268,6 +271,7 @@ class MainWindow(QMainWindow):
         self.panel.generatorChanged.connect(self.regen_timer.start)
         self.panel.analysisChanged.connect(self._analysis_outdated)
         self.curve.seekRequested.connect(self.seek_ms)
+        self.curve.sectionEdgeMoved.connect(self._section_edge_moved)
         self.curve.editStarted.connect(self._push_undo)
         self.curve.actionsEdited.connect(self._edited)
         self.axis_box.activated.connect(lambda i: self.switch_axis(self.axis_box.itemData(i)))
@@ -282,6 +286,7 @@ class MainWindow(QMainWindow):
     def _build_menu(self):
         m = self.menuBar().addMenu("&Datei")
         self._act(m, "Video öffnen…", self.open_dialog, QKeySequence.Open)
+        self._act(m, "Video schließen", self.close_video, "Ctrl+W")
         self._act(m, "Funscript exportieren", self.export, QKeySequence.Save)
         self._act(m, "Funscript exportieren unter…", self.export_as, QKeySequence.SaveAs)
         self._act(m, "Funscript laden…", self.load_funscript_dialog)
@@ -305,6 +310,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
         self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
+        self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -322,6 +328,18 @@ class MainWindow(QMainWindow):
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
         self.player_action.setCheckable(True)
         self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
+        self.preview_action = self._act(m, "Geräte-Vorschau im Video", self._preview_toggled, "V")
+        self.preview_action.setCheckable(True)
+        self.preview_action.setChecked(str(self.qsettings.value("preview", "true")).lower() == "true")
+        m = self.menuBar().addMenu("&Lesezeichen")
+        self._act(m, "Lesezeichen setzen…", self.add_bookmark, "B")
+        self._act(m, "Nächstes Lesezeichen", lambda: self.jump_bookmark(1), "Alt+Right")
+        self._act(m, "Vorheriges Lesezeichen", lambda: self.jump_bookmark(-1), "Alt+Left")
+        self._act(m, "Lesezeichen hier löschen", self.delete_bookmark)
+        m.addSeparator()
+        self._bookmark_menu = m
+        self._bookmark_items: list = []
+        m.aboutToShow.connect(self._fill_bookmark_menu)
         m = self.menuBar().addMenu("&Tracking")
         self._act(m, "Abschnitt-Ende hier", lambda: self._track_cmd(self.panel.tracking.set_end), "E")
         self._act(m, "Ganz drin hier (Position 0)",
@@ -370,6 +388,9 @@ class MainWindow(QMainWindow):
         self.file_label = QLabel()
         self.file_label.setObjectName("meta")
         tb.addWidget(self.file_label)
+        self.close_act = tb.addAction(theme.icon("x"), "", self.close_video)
+        self.close_act.setToolTip("Video schließen (Strg+W)")
+        self.close_act.setVisible(False)
         self._toolbar = tb
 
     def _transport(self, name: str, tip: str) -> QPushButton:
@@ -437,9 +458,12 @@ class MainWindow(QMainWindow):
             self.panel.tracking.refresh()
             self.panel.method.setCurrentIndex(self.panel.method.findData("track"))
             self._update_section_marks()
+        self.bookmarks = load_bookmarks(path)
+        self._show_bookmarks()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
+        self.close_act.setVisible(True)
         self._l0_signal = None
         loaded = load_axes(path)
         self.axis_actions = {k: v for k, v in loaded.items()}
@@ -454,6 +478,49 @@ class MainWindow(QMainWindow):
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
         self._update_heat()
+
+    def close_video(self):
+        """Take the video out (asks first if the script is not saved)."""
+        if not self.cap or not self._confirm_discard():
+            return
+        self.cancel_analysis()
+        self.pause()
+        self.cap.release()
+        self.cap = None
+        self.video_path = None
+        self.audio.load(None)
+        self.motion = None
+        self._l0_signal = None
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.dirty = False
+        self._cur_idx = 0
+        self.slider.setRange(0, 0)
+        self.slider.setEnabled(False)
+        for b in (self.play_btn, self.back_btn, self.fwd_btn, self.analyze_btn):
+            b.setEnabled(False)
+        self.view.set_countdown(None)
+        self.view.set_frame(None)
+        self.view.set_roi(None)
+        self.panel.set_roi(None)
+        self.view.set_tracks([])
+        self.view.set_track_overlay(None)
+        self.panel.tracking.reset(0, 30)
+        self.bookmarks = []
+        self._show_bookmarks()
+        self.view.set_preview(None)
+        self.axis_actions = {}
+        self.axis = "L0"
+        self.axis_box.setCurrentIndex(0)
+        self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], 0)
+        self._update_axis_labels()
+        self._update_section_marks()
+        self.setWindowTitle(f"Video-to-Funscript Generator {__version__}")
+        self.file_label.setText("")
+        self.close_act.setVisible(False)
+        self.time_label.setText("0:00.00 / 0:00.00")
+        self._refresh_position()
+        self._status("Video geschlossen – neues Video öffnen (Strg+O) oder hierher ziehen")
 
     def _read_frame(self):
         if not self.cap:
@@ -476,10 +543,130 @@ class MainWindow(QMainWindow):
 
     def _show_time(self, ms: float):
         self._update_countdown(ms)
+        self._update_preview(ms)
         self._update_track_overlay(ms)
         self.curve.set_playhead(ms)
         self.rail.set_position(position_at(self.stroke_actions(), ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
+
+    def _update_preview(self, ms: float):
+        """The animated device in the video corner."""
+        acts = self.stroke_actions()
+        if not self.preview_action.isChecked() or len(acts) < 2:
+            self.view.set_preview(None)
+            return
+        i = bisect.bisect_right([a.at for a in acts], ms)
+        speed = 0.0
+        if 0 < i < len(acts):
+            a, b = acts[i - 1], acts[i]
+            speed = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
+        self.view.set_preview(position_at(acts, ms), speed)
+
+    def _preview_toggled(self, on: bool):
+        self.qsettings.setValue("preview", "true" if on else "false")
+        self._update_preview(self._cur_ms())
+
+    # ------------------------------------------------------------ bookmarks
+    def _show_bookmarks(self):
+        self.curve.set_bookmarks(self.bookmarks)
+        self.slider.set_marks(int(ms / 1000 * self.fps) for ms, _n in self.bookmarks)
+
+    def _bookmarks_changed(self):
+        self._show_bookmarks()
+        if self.video_path:
+            try:
+                save_bookmarks(self.video_path, self.bookmarks)
+            except OSError as e:
+                self._status(f"Lesezeichen nicht gespeichert: {e}")
+
+    def add_bookmark_at(self, ms: float, name: str) -> None:
+        ms = int(ms)
+        keep = [b for b in self.bookmarks if abs(b[0] - ms) > 500]
+        self.bookmarks = sorted([*keep, (ms, name.strip() or "Lesezeichen")])
+        self._bookmarks_changed()
+        self._status(f"Lesezeichen „{name}“ bei {_fmt(ms)}")
+
+    def add_bookmark(self):
+        if not self.cap:
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        ms = self._cur_ms()
+        name, ok = QInputDialog.getText(self, "Lesezeichen setzen", f"Name für {_fmt(ms)}:",
+                                        text=f"Kapitel {len(self.bookmarks) + 1}")
+        if ok:
+            self.add_bookmark_at(ms, name)
+
+    def jump_bookmark(self, direction: int):
+        if not self.bookmarks:
+            self._status("Noch keine Lesezeichen – mit B setzen")
+            return
+        cur = self._cur_ms()
+        if direction > 0:
+            nxt = next((b for b in self.bookmarks if b[0] > cur + 50), None)
+        else:   # a bit of slack so pressing again while playing goes further back
+            nxt = next((b for b in reversed(self.bookmarks) if b[0] < cur - 1000), None)
+        if nxt is None:
+            self._status("Kein weiteres Lesezeichen")
+            return
+        self.seek_ms(nxt[0])
+        self._status(f"Lesezeichen: {nxt[1]} ({_fmt(nxt[0])})")
+
+    def delete_bookmark(self):
+        if not self.bookmarks:
+            return
+        cur = self._cur_ms()
+        b = min(self.bookmarks, key=lambda x: abs(x[0] - cur))
+        if abs(b[0] - cur) > 2000:
+            self._status("Hier ist kein Lesezeichen (bis 2 s Abstand)")
+            return
+        self.bookmarks.remove(b)
+        self._bookmarks_changed()
+        self._status(f"Lesezeichen „{b[1]}“ gelöscht")
+
+    def _fill_bookmark_menu(self):
+        for a in self._bookmark_items:
+            self._bookmark_menu.removeAction(a)
+        self._bookmark_items = []
+        if not self.bookmarks:
+            a = self._bookmark_menu.addAction("(keine Lesezeichen)")
+            a.setEnabled(False)
+            self._bookmark_items.append(a)
+        for ms, name in self.bookmarks:
+            a = self._bookmark_menu.addAction(f"{_fmt(ms)}   {name}")
+            a.triggered.connect(lambda _c=False, t=ms: self.seek_ms(t))
+            self._bookmark_items.append(a)
+
+    # ------------------------------------------------------------ rhythm
+    def insert_rhythm(self):
+        if not self.cap or not self.curve.editable:
+            self._status("Rhythmus einfügen geht im Modus „Bearbeiten“ mit geladenem Video")
+            return
+        from .rhythm_dialog import RhythmDialog
+
+        sel = sorted(self.curve.selection)
+        acts = self.curve.actions
+        if len(sel) >= 2:
+            a, b = acts[sel[0]].at, acts[sel[-1]].at
+        else:
+            a = self._cur_ms()
+            b = min(a + 10_000, self.curve.duration_ms)
+        dlg = RhythmDialog(a, b, self.curve.duration_ms, self)
+        if dlg.exec():
+            self.apply_rhythm(**dlg.values())
+
+    def apply_rhythm(self, start_ms, end_ms, bpm, lo, hi, pattern):
+        self.curve.editStarted.emit()
+        self.curve.actions, sel = rhythm(self.curve.actions, start_ms, end_ms, bpm, lo, hi, pattern)
+        self.curve.actionsEdited.emit()
+        self.curve.set_selection(sel)
+        self._status(f"Rhythmus eingefügt: {len(sel)} Punkte, {bpm} Hübe/min")
+
+    def _section_edge_moved(self, idx: int, which: str, ms: int):
+        tb = self.panel.tracking
+        self._status(tb.move_edge(idx, which, ms))
+        if which == "start" and tb.sections:   # show the new start: the areas apply from there
+            self.seek_ms(min(tb.sections, key=lambda s: abs(s.start_ms - ms)).start_ms)
 
     def _update_countdown(self, ms: float):
         """Player: count the last seconds down before the script starts."""
@@ -562,6 +749,8 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ tracking
     def _method_changed(self, mode: str):
+        if self.player_mode:
+            return
         self.view.set_mode("track" if mode == "track" else "roi")
         if mode == "track":       # bring the section buttons into view
             QTimer.singleShot(0, lambda: self._side_scroll.ensureWidgetVisible(self.panel.tracking, 0, 16))
@@ -643,7 +832,7 @@ class MainWindow(QMainWindow):
         marks = []
         for i, a, b in tb._ranges():
             sec = tb.sections[i]
-            marks.append((a, b, sec.calib_in_ms, sec.calib_out_ms))
+            marks.append((a, b, sec.calib_in_ms, sec.calib_out_ms, i, sec.end_ms is not None))
         self.curve.set_sections(marks)
         self.curve.set_lost([(a, b) for a, b, _ar in self._lost_stretches()])
 
@@ -687,6 +876,12 @@ class MainWindow(QMainWindow):
         self.mode_edit.setChecked(not on)
         self.player_action.setChecked(on)
         self.curve.editable = not on
+        # player: only the video, no tracking areas or analysis rectangle
+        if on:
+            self.view.set_mode("play")
+        else:
+            self.view.set_mode("track" if self.panel.mode == "track" else "roi")
+            self._update_track_overlay(self._cur_ms())
         self.save_action.setEnabled(not on)
         self.prev_btn.setVisible(on)
         self.next_btn.setVisible(on)
@@ -1184,7 +1379,11 @@ class MainWindow(QMainWindow):
             "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"
             "   Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub stärker/schwächer.\n"
             "   Fläche ziehen = scrollen, Mausrad = Zoom.\n"
+            "   Strg+T = Rhythmus einfügen (gleichmäßiger Takt für einen Bereich).\n"
+            "   Tracking-Abschnitte: Anfang/Ende in der Kurve mit der Maus ziehen.\n"
             "5. Achse über der Kurve wählen (Hub, Roll, Twist …).\n"
+            "   Lesezeichen: B = setzen, Alt+→/← = nächstes/voriges, Liste im Menü „Lesezeichen“.\n"
+            "   V = Geräte-Vorschau im Video an/aus.\n"
             "6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\n"
             "Player (Strg+P)\n"
             "Videos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\n"

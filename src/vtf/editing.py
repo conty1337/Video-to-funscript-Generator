@@ -6,6 +6,8 @@ returns a new, time-sorted action list; the input is never modified.
 
 from __future__ import annotations
 
+import math
+
 from .funscript import Action
 
 Clip = list[tuple[int, int]]          # (ms relative to the first point, position)
@@ -107,3 +109,55 @@ def in_rect(actions: list[Action], t0: float, t1: float, p0: float, p1: float) -
     t0, t1 = sorted((t0, t1))
     p0, p1 = sorted((p0, p1))
     return {i for i, a in enumerate(actions) if t0 <= a.at <= t1 and p0 <= a.pos <= p1}
+
+
+#: rhythm patterns: (code, label)
+PATTERNS = (("even", "Gleichmäßig"), ("faster", "Schneller werdend"), ("slower", "Langsamer werdend"),
+            ("double", "Doppelschlag"), ("wave", "Wellen (Tiefe schwankt)"))
+
+
+def _rhythm_points(start: int, end: int, bpm: float, lo: int, hi: int, pattern: str) -> list[Action]:
+    span = end - start
+    half = 30_000.0 / max(1.0, bpm)               # ms from top to bottom (one stroke = down + up)
+    pts: list[Action] = []
+    t, k = float(start), 0
+    while t <= end + 0.5:
+        frac = (t - start) / span if span > 0 else 0.0
+        top = k % 2 == 0
+        a, b = lo, hi
+        if pattern == "wave":                     # depth swells over ~8 strokes
+            amp = 0.55 + 0.45 * math.sin(2 * math.pi * (t - start) / (16 * half))
+            mid = (lo + hi) / 2
+            a, b = mid - (mid - lo) * amp, mid + (hi - mid) * amp
+        pts.append(Action(int(round(t)), _clamp_pos(b if top else a)))
+        if pattern == "faster":
+            step = half / (1.0 + frac)            # up to twice the tempo at the end
+        elif pattern == "slower":
+            step = half / (2.0 - frac)            # from twice the tempo down to the tempo
+        elif pattern == "double":                 # two quick strokes, then a pause
+            step = half * 0.5
+            if k % 4 == 3:                        # hold at the bottom, then go on
+                if t + half <= end:
+                    pts.append(Action(int(round(t + half)), pts[-1].pos))
+                step = half * 1.5
+        else:
+            step = half
+        t += step
+        k += 1
+    return pts
+
+
+def rhythm(actions: list[Action], start_ms: float, end_ms: float, bpm: float, lo: int = 0,
+           hi: int = 100, pattern: str = "even") -> tuple[list[Action], set[int]]:
+    """Replace the points between start and end with a regular rhythm.
+    bpm = strokes per minute (one stroke = down and up). Returns the new list and
+    the indices of the inserted points."""
+    start, end = int(round(min(start_ms, end_ms))), int(round(max(start_ms, end_ms)))
+    lo, hi = sorted((int(lo), int(hi)))
+    if end - start < 50:
+        return list(actions), set()
+    new = _rhythm_points(start, end, bpm, lo, hi, pattern)
+    keep = [a for a in actions if not start <= a.at <= end]
+    out = sorted(keep + new, key=lambda a: a.at)
+    ids = {id(a) for a in new}
+    return out, {i for i, a in enumerate(out) if id(a) in ids}

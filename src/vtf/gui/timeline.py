@@ -7,7 +7,8 @@ hands the press to QSlider, which sees a press on the handle and starts a drag.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider
 
 
@@ -17,6 +18,31 @@ class TimelineSlider(QSlider):
         self.wheel_step = 30            # frames per wheel notch (set to fps = 1 s)
         self._wheel_acc = 0
         self.setCursor(Qt.PointingHandCursor)
+        self.marks: list[int] = []      # bookmarks (frame numbers), drawn as small ticks
+
+    def set_marks(self, frames) -> None:
+        self.marks = sorted(int(f) for f in frames)
+        self.update()
+
+    def x_of(self, v: int) -> float:
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
+        handle = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderHandle, self)
+        lo = groove.x() + handle.width() / 2
+        span = max(1.0, groove.width() - handle.width())
+        rng = max(1, self.maximum() - self.minimum())
+        return lo + (v - self.minimum()) / rng * span
+
+    def paintEvent(self, ev):
+        super().paintEvent(ev)
+        if not self.marks:
+            return
+        p = QPainter(self)
+        p.setPen(QPen(QColor(190, 165, 240), 2))
+        for f in self.marks:
+            x = self.x_of(f)
+            p.drawLine(QPointF(x, 1), QPointF(x, 6))
 
     def value_at(self, x: float) -> int:
         opt = QStyleOptionSlider()

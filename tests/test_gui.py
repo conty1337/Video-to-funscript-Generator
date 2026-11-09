@@ -638,3 +638,134 @@ def test_player_countdown(app):
     w.dirty = False
     w.close()
     w.deleteLater()
+
+
+def test_player_hides_tracking_areas(app):
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    assert w.view.mode == "track"
+    w.set_player_mode(True)
+    assert w.view.mode == "play"
+    w.set_player_mode(False)
+    assert w.view.mode == "track"
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()
+    w.deleteLater()
+
+
+def test_close_video(app, tmp_path):
+    from pathlib import Path
+
+    from videogen import make_video
+    from vtf.gui.main_window import MainWindow
+
+    vid = tmp_path / "c.avi"
+    make_video(Path(vid))
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(vid))
+    assert w.cap is not None and w.close_act.isVisible() is not None
+    w.close_video()
+    assert w.cap is None and w.video_path is None and not w.analyze_btn.isEnabled()
+    assert w.view._img is None and not w.curve.actions
+    w.open_video(str(vid))                                    # a new one can be opened again
+    assert w.cap is not None
+    w.dirty = False
+    w.close()
+    w.deleteLater()
+
+
+def test_bookmarks_rhythm_preview(app, tmp_path):
+    from pathlib import Path
+
+    from videogen import make_video
+    from vtf.gui.main_window import MainWindow
+    from vtf.prep import load_bookmarks
+
+    vid = tmp_path / "bm.avi"
+    make_video(Path(vid))
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(vid))
+    w.add_bookmark_at(1000, "Szene A")
+    w.add_bookmark_at(3000, "Szene B")
+    assert load_bookmarks(vid) == [(1000, "Szene A"), (3000, "Szene B")]
+    assert w.curve.bookmarks == w.bookmarks and len(w.slider.marks) == 2
+    w.seek_ms(0)
+    w.jump_bookmark(1)
+    assert abs(w._cur_ms() - 1000) < 50
+    w.jump_bookmark(1)
+    assert abs(w._cur_ms() - 3000) < 50
+    w.jump_bookmark(-1)
+    assert abs(w._cur_ms() - 1000) < 50
+    w.delete_bookmark()
+    assert w.bookmarks == [(3000, "Szene B")]
+    # rhythm template with undo
+    w.apply_rhythm(0, 4000, 60, 10, 90, "even")
+    assert len(w.curve.actions) >= 8 and {a.pos for a in w.curve.actions} == {10, 90}
+    w.undo()
+    assert not w.curve.actions
+    w.apply_rhythm(0, 4000, 60, 10, 90, "even")
+    # device preview follows the script
+    w.preview_action.setChecked(True)
+    w._update_preview(250)
+    pos, speed = w.view._preview
+    assert 10 <= pos <= 90 and speed > 100
+    w.preview_action.setChecked(False)
+    w._update_preview(250)
+    assert w.view._preview is None
+    # reopening loads the bookmarks again
+    w.dirty = False
+    w.close_video()
+    assert w.bookmarks == []
+    w.open_video(str(vid))
+    assert w.bookmarks == [(3000, "Szene B")]
+    w.dirty = False
+    w.close()
+    w.deleteLater()
+
+
+def test_section_edges_move(app):
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(20_000, 30)
+    tb.add_box((0.1, 0.1, 0.2, 0.2), 0)
+    tb.add_box((0.5, 0.5, 0.2, 0.2), 8000)
+    tb.calibrate("in", 9000)
+    assert "endet" in tb.move_edge(0, "end", 6000)
+    assert tb.sections[0].end_ms == 6000
+    assert "beginnt" in tb.move_edge(1, "start", 9500)
+    s = tb.sections[1]
+    assert s.start_ms == 9500 and s.calib_in_ms is None          # calibration before the start dropped
+    tb.move_edge(1, "start", 100)                                 # cannot pass the previous start
+    assert tb.sections[1].start_ms > tb.sections[0].start_ms
+    tb.deleteLater()
+
+
+def test_curve_drags_section_edge(app):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from vtf.gui.curve_widget import CurveWidget
+
+    c = CurveWidget()
+    c.resize(640, 240)
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 20_000)
+    c.view_ms, c.start_ms = 20_000, 0
+    c.set_sections([(2000, 10_000, None, None, 0, True)])
+    moved = []
+    c.sectionEdgeMoved.connect(lambda i, w, ms: moved.append((i, w, ms)))
+    c.show()
+    x_end = int(c._x(10_000))
+    x_to = int(c._x(12_000))
+    QTest.mousePress(c, Qt.LeftButton, Qt.NoModifier, QPoint(x_end, 100))
+    QTest.mouseMove(c, QPoint(x_to, 100))
+    QTest.mouseRelease(c, Qt.LeftButton, Qt.NoModifier, QPoint(x_to, 100))
+    assert moved and moved[-1][:2] == (0, "end") and abs(moved[-1][2] - 12_000) < 100
+    c.close()
+    c.deleteLater()

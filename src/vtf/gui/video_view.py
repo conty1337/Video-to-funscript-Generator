@@ -59,11 +59,16 @@ class VideoView(QWidget):
         self.editable = True                   # marked areas may be moved/resized/turned here
         self._correcting: list | None = None   # [overlay] saved while an area is put right
         self._countdown: int | None = None     # seconds until the script starts (player)
+        self._preview: tuple[float, float] | None = None   # device preview: (position, speed)
         self.setMouseTracking(True)
         self.set_mode("roi")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
+        if mode == "play":
+            self.setToolTip("")
+            self.update()
+            return
         self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
                         if mode == "roi" else
                         "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
@@ -83,6 +88,13 @@ class VideoView(QWidget):
         """Big countdown over the video: seconds until the script starts (None = off)."""
         if seconds != self._countdown:
             self._countdown = seconds
+            self.update()
+
+    def set_preview(self, pos: float | None, speed: float = 0.0) -> None:
+        """Small animated device in the corner: where it is now (None = hidden)."""
+        val = None if pos is None else (float(pos), float(speed))
+        if val != self._preview:
+            self._preview = val
             self.update()
 
     def set_editable(self, on: bool) -> None:
@@ -140,8 +152,12 @@ class VideoView(QWidget):
         r = self._image_rect()
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawImage(r, self._img)
+        if self._preview is not None:
+            self._paint_preview(p, r)
         if self._countdown is not None:
             self._paint_countdown(p, r)
+        if self.mode == "play":                     # player: just the video
+            return
         if self.mode == "track":
             self._paint_tracks(p, r)
             return
@@ -165,6 +181,31 @@ class VideoView(QWidget):
             p.setPen(theme.qcolor(theme.TEXT_2))
             p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
                        "Analysebereich")
+
+    def _paint_preview(self, p: QPainter, r: QRectF) -> None:
+        """A stroker seen from the side: housing, rod and the moving sleeve,
+        coloured by speed like the heatmap."""
+        from .heatbar import heat_color
+
+        pos, speed = self._preview
+        h = max(80.0, min(r.height() * 0.42, 240.0))
+        x = r.right() - 46
+        top = r.bottom() - h - 30
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 120))
+        p.drawRoundedRect(QRectF(x - 14, top - 10, 52, h + 34), 10, 10)
+        p.setBrush(QColor(70, 70, 76))
+        p.drawRoundedRect(QRectF(x + 8, top, 8, h), 4, 4)                  # rod
+        travel = h - 22
+        y = top + (1 - pos / 100) * travel
+        col = heat_color(speed)
+        col.setAlpha(255)
+        p.setBrush(col)
+        p.setPen(QPen(QColor(255, 255, 255, 160), 1))
+        p.drawRoundedRect(QRectF(x - 2, y, 28, 22), 6, 6)                  # sleeve
+        p.setPen(QColor(255, 255, 255, 220))
+        p.setFont(theme.mono_font(11))
+        p.drawText(QRectF(x - 14, top + h + 4, 52, 16), Qt.AlignCenter, f"{pos:.0f}")
 
     def _paint_countdown(self, p: QPainter, r: QRectF) -> None:
         d = max(56.0, min(r.width(), r.height()) * 0.28)
@@ -326,7 +367,7 @@ class VideoView(QWidget):
         self._overlay = None
 
     def mousePressEvent(self, ev):
-        if self._img is None:
+        if self._img is None or self.mode == "play":
             return
         if ev.button() == Qt.RightButton:
             if self.mode == "track":

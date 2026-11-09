@@ -37,6 +37,7 @@ class CurveWidget(QWidget):
     actionsEdited = Signal()           # user changed actions
     editStarted = Signal()             # before a change (for undo)
     selectionChanged = Signal(int)     # number of selected points
+    sectionEdgeMoved = Signal(int, str, int)   # tracking section index, "start"/"end", ms
     clipboard: ClassVar[list] = []     # copied points, shared by all curves (editing.Clip)
 
     def __init__(self, parent=None):
@@ -54,7 +55,10 @@ class CurveWidget(QWidget):
         self.playhead_ms = 0.0
         self.follow = True
         self.editable = True           # False in player mode: view, seek and scroll only
-        self.sections: list[tuple] = []  # tracking: (start, end, calib_in_ms, calib_out_ms)
+        # tracking: (start, end, calib_in_ms, calib_out_ms[, section index, end set by the user])
+        self.sections: list[tuple] = []
+        self.bookmarks: list[tuple[int, str]] = []
+        self._edge: tuple[int, str] | None = None   # section edge being dragged
         self.lost: list[tuple] = []      # tracking: (start, end) where an area was lost
         self._sel: set[int] = set()          # selected action indices
         self._drag_from: QPointF | None = None
@@ -89,6 +93,28 @@ class CurveWidget(QWidget):
     def set_sections(self, sections) -> None:
         self.sections = list(sections)
         self.update()
+
+    def set_bookmarks(self, bookmarks) -> None:
+        self.bookmarks = list(bookmarks)
+        self.update()
+
+    def _edge_hit(self, p: QPointF) -> tuple[int, str] | None:
+        """Start or end line of a tracking section under p: (index in self.sections, which)."""
+        r = self._plot()
+        if not (r.top() <= p.y() <= r.bottom()):
+            return None
+        best, best_d = None, 6.0
+        for k, s in enumerate(self.sections):
+            explicit_end = len(s) > 5 and bool(s[5])
+            for which, ms in (("start", s[0]), ("end", s[1])):
+                d = abs(self._x(ms) - p.x())
+                # an end that is just the next start: grab the start instead
+                if which == "end" and not explicit_end and any(
+                        abs(o[0] - ms) < 1 for o in self.sections):
+                    continue
+                if d < best_d:
+                    best, best_d = (k, which), d
+        return best
 
     def set_actions(self, actions: list[Action]):
         self.actions = actions
@@ -198,13 +224,18 @@ class CurveWidget(QWidget):
             t += step
         p.setClipRect(r)
         # tracking sections: light bands, calibration moments as labelled lines
-        for a, b, cin, cout in self.sections:
+        for s in self.sections:
+            a, b, cin, cout = s[:4]
             x0, x1 = self._x(a), self._x(b)
             if x1 < r.left() or x0 > r.right():
                 continue
             p.fillRect(QRectF(x0, r.top(), x1 - x0, r.height()), theme.qcolor(theme.ACCENT, 0.05))
-            p.setPen(QPen(theme.qcolor(theme.ACCENT, 0.35), 1))
+            p.setPen(QPen(theme.qcolor(theme.ACCENT, 0.55), 1.5))
             p.drawLine(QPointF(x0, r.top()), QPointF(x0, r.bottom()))
+            p.fillRect(QRectF(x0, r.top(), 5, 10), theme.qcolor(theme.ACCENT, 0.7))      # grip
+            if len(s) > 5 and s[5]:                                                  # set end
+                p.drawLine(QPointF(x1, r.top()), QPointF(x1, r.bottom()))
+                p.fillRect(QRectF(x1 - 5, r.top(), 5, 10), theme.qcolor(theme.ACCENT, 0.7))
             for ms, label, y in ((cin, "drin", r.bottom() - 4), (cout, "raus", r.top() + 12)):
                 if ms is None:
                     continue
@@ -213,6 +244,14 @@ class CurveWidget(QWidget):
                 p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
                 p.setPen(theme.qcolor(theme.TEXT_2))
                 p.drawText(QPointF(x + 4, y), label)
+        # bookmarks / chapters
+        for ms, name in self.bookmarks:
+            x = self._x(ms)
+            if r.left() - 200 <= x <= r.right():
+                p.setPen(QPen(QColor(170, 140, 230, 200), 1, Qt.DashLine))
+                p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+                p.setPen(QColor(190, 165, 240))
+                p.drawText(QPointF(x + 4, r.top() + 24), name)
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)
@@ -319,6 +358,12 @@ class CurveWidget(QWidget):
                     self.actionsEdited.emit()
                     self.update()
             return
+        if ev.button() == Qt.LeftButton and hit is None and self.editable and not mods:
+            edge = self._edge_hit(pos)
+            if edge is not None:                   # drag the start or end of a section
+                self._edge = edge
+                self.setCursor(Qt.SizeHorCursor)
+                return
         if ev.button() == Qt.LeftButton and hit is None and self.editable and mods & (Qt.ShiftModifier | Qt.ControlModifier):
             # Shift/Strg + drag on empty space: selection rectangle
             self._band = QRectF(pos, pos)
@@ -347,6 +392,16 @@ class CurveWidget(QWidget):
 
     def mouseMoveEvent(self, ev):
         pos = ev.position()
+        if self._edge is not None:
+            k, which = self._edge
+            ms = max(0.0, min(self._ms(pos.x()), self.duration_ms))
+            s = list(self.sections[k])
+            s[0 if which == "start" else 1] = ms
+            if which == "end" and len(s) > 5:
+                s[5] = True
+            self.sections[k] = tuple(s)
+            self.update()
+            return
         if self._band is not None:
             self._band.setBottomRight(pos)
             self.update()
@@ -364,7 +419,8 @@ class CurveWidget(QWidget):
             return
         if self._drag_from is None:
             over = self.editable and self._hit(pos) is not None
-            self.setCursor(Qt.PointingHandCursor if over else Qt.ArrowCursor)
+            edge = self.editable and not over and self._edge_hit(pos) is not None
+            self.setCursor(Qt.PointingHandCursor if over else Qt.SizeHorCursor if edge else Qt.ArrowCursor)
             return
         r = self._plot()
         dt = (pos.x() - self._drag_from.x()) / r.width() * self.view_ms
@@ -378,6 +434,14 @@ class CurveWidget(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, ev):
+        if self._edge is not None:
+            k, which = self._edge
+            self._edge = None
+            self.setCursor(Qt.ArrowCursor)
+            s = self.sections[k]
+            idx = s[4] if len(s) > 4 else k
+            self.sectionEdgeMoved.emit(int(idx), which, int(round(s[0] if which == "start" else s[1])))
+            return
         if self._band is not None:
             b = self._band.normalized()
             found = editing.in_rect(self.actions, self._ms(b.left()), self._ms(b.right()),

@@ -41,3 +41,21 @@ def test_batch_uses_prepared_tracking(tmp_path):
     assert prepared and all(x.at < 1500 for x in prepared)    # only inside the tracked section
     assert plain and max(x.at for x in plain) > 1500          # the other one: whole video
     assert any("vorbereitet" in m for m in logs)
+
+
+def test_bookmarks_share_the_file(tmp_path):
+    from vtf.prep import load_bookmarks, save_bookmarks
+
+    v = tmp_path / "b.mp4"
+    v.write_bytes(b"x")
+    assert load_bookmarks(v) == []
+    save_bookmarks(v, [(90_000, "Szene 2"), (1000, "Anfang")])
+    assert load_bookmarks(v) == [(1000, "Anfang"), (90_000, "Szene 2")]
+    assert not is_prepared(v)                          # bookmarks alone: no tracking preparation
+    secs = [TrackSection(0, ((0.1, 0.1, 0.2, 0.2),))]
+    save_prep(v, secs)
+    assert load_bookmarks(v) == [(1000, "Anfang"), (90_000, "Szene 2")] and load_prep(v) == secs
+    save_bookmarks(v, [])
+    assert load_prep(v) == secs                        # sections stay
+    save_prep(v, [])
+    assert not prep_path(v).exists()
