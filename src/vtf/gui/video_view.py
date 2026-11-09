@@ -5,7 +5,8 @@ Mode "track": drag up to three rectangles = areas to track (body parts,
               objects), right click removes the section. Marked areas can be
               moved (drag inside), resized (drag a corner) and turned (round
               handle or mouse wheel). After the analysis the tracked areas are
-              drawn where they are in the current frame.
+              drawn where they are in the current frame; grabbing one there
+              puts it right (a correction).
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ class VideoView(QWidget):
     boxDrawn = Signal(tuple)      # mode "track": a new area (x, y, w, h), normalized
     boxRotated = Signal(int, float)  # mode "track": marked area i turned to angle (degrees)
     boxEdited = Signal(int, tuple)   # mode "track": marked area i moved/resized to (x, y, w, h, angle)
+    boxCorrected = Signal(int, tuple)  # mode "track": area i grabbed elsewhere and put right
     tracksCleared = Signal()      # mode "track": right click
 
     def __init__(self, parent=None):
@@ -55,6 +57,8 @@ class VideoView(QWidget):
         self._rotating: int | None = None      # index of the marked area being turned
         self._edit: tuple | None = None        # ("move"|"resize", area, start data) while dragging
         self.editable = True                   # marked areas may be moved/resized/turned here
+        self._correcting: list | None = None   # [overlay] saved while an area is put right
+        self._countdown: int | None = None     # seconds until the script starts (player)
         self.setMouseTracking(True)
         self.set_mode("roi")
 
@@ -74,6 +78,12 @@ class VideoView(QWidget):
 
     def tracks(self) -> list:
         return list(self._tracks)
+
+    def set_countdown(self, seconds: int | None) -> None:
+        """Big countdown over the video: seconds until the script starts (None = off)."""
+        if seconds != self._countdown:
+            self._countdown = seconds
+            self.update()
 
     def set_editable(self, on: bool) -> None:
         """Whether the marked areas shown can be changed (at a section start or a correction)."""
@@ -130,6 +140,8 @@ class VideoView(QWidget):
         r = self._image_rect()
         p.setRenderHint(QPainter.SmoothPixmapTransform)
         p.drawImage(r, self._img)
+        if self._countdown is not None:
+            self._paint_countdown(p, r)
         if self.mode == "track":
             self._paint_tracks(p, r)
             return
@@ -153,6 +165,34 @@ class VideoView(QWidget):
             p.setPen(theme.qcolor(theme.TEXT_2))
             p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
                        "Analysebereich")
+
+    def _paint_countdown(self, p: QPainter, r: QRectF) -> None:
+        d = max(56.0, min(r.width(), r.height()) * 0.28)
+        c = QPointF(r.center().x(), r.center().y())
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 150))
+        p.drawEllipse(c, d / 2, d / 2)
+        p.setPen(QPen(theme.qcolor(theme.ACCENT), 3))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(c, d / 2 - 2, d / 2 - 2)
+        f = p.font()
+        f.setPixelSize(int(d * 0.45))
+        f.setBold(True)
+        p.setFont(f)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(QRectF(c.x() - d / 2, c.y() - d / 2, d, d), Qt.AlignCenter, str(self._countdown))
+        f.setPixelSize(max(12, int(d * 0.12)))
+        f.setBold(False)
+        p.setFont(f)
+        text = "Gleich geht's los"
+        tw = p.fontMetrics().horizontalAdvance(text) + 20
+        th = p.fontMetrics().height() + 8
+        box = QRectF(c.x() - tw / 2, c.y() + d / 2 + 8, tw, th)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(0, 0, 0, 150))
+        p.drawRoundedRect(box, th / 2, th / 2)
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(box, Qt.AlignCenter, text)
 
     def _norm_rect(self, r: QRectF, box) -> QRectF:
         x, y, w, h = box
@@ -200,6 +240,11 @@ class VideoView(QWidget):
             p.fillRect(tag, color)
             p.setPen(QColor(theme.ON_ACCENT))
             p.drawText(tag, Qt.AlignCenter, f"{i + 1}" + ("?" if lost else ""))
+            if analysed or not self.editable:                  # can be grabbed to put it right
+                p.setBrush(color)
+                for q in pts:
+                    p.drawRect(QRectF(q.x() - 2.5, q.y() - 2.5, 5, 5))
+                p.setBrush(Qt.NoBrush)
             if not analysed and self.editable:                 # turn handle and corners
                 h = self._handle(r, box)
                 p.setPen(QPen(color, 1))
@@ -240,27 +285,45 @@ class VideoView(QWidget):
         _keycaps(p, cx, cy + 48, ["Strg", "O"])
 
     # ------------------------------------------------------------ mouse
+    def _grab_boxes(self) -> list:
+        """The areas shown, which can be grabbed: marked ones or tracked ones."""
+        if self.mode != "track" or self._img is None:
+            return []
+        if self._overlay is not None:
+            return [tuple(b[:4]) + ((b[4] if len(b) > 4 else 0.0),) for b in self._overlay]
+        return list(self._tracks)
+
     def _hit(self, pos: QPointF) -> tuple[str, int, int] | None:
         """What a press at pos grabs: ("rotate"|"resize"|"move", area, corner)."""
-        if not self._can_edit():
+        boxes = self._grab_boxes()
+        if not boxes:
             return None
         r = self._image_rect()
 
         def near(q: QPointF) -> bool:
             return (q.x() - pos.x()) ** 2 + (q.y() - pos.y()) ** 2 <= GRAB * GRAB
 
-        for i, box in enumerate(self._tracks):
-            if near(self._handle(r, box)):
-                return ("rotate", i, -1)
-        for i, box in enumerate(self._tracks):
+        if self._can_edit():
+            for i, box in enumerate(boxes):
+                if near(self._handle(r, box)):
+                    return ("rotate", i, -1)
+        for i, box in enumerate(boxes):
             pts, _c, _a = self._poly(r, box)
             for k, q in enumerate(pts):
                 if near(q):
                     return ("resize", i, k)
-        for i in reversed(range(len(self._tracks))):
-            if self._contains(r, self._tracks[i], pos):
+        for i in reversed(range(len(boxes))):
+            if self._contains(r, boxes[i], pos):
                 return ("move", i, -1)
         return None
+
+    def _start_correction(self) -> None:
+        """Grabbing an area away from a section start: edit a copy of the shown areas."""
+        if self._can_edit():
+            return
+        self._correcting = [self._overlay]
+        self._tracks = self._grab_boxes()
+        self._overlay = None
 
     def mousePressEvent(self, ev):
         if self._img is None:
@@ -276,6 +339,7 @@ class VideoView(QWidget):
             hit = self._hit(ev.position())
             if hit is not None:
                 kind, i, corner = hit
+                self._start_correction()
                 if kind == "rotate":
                     self._rotating = i
                 elif kind == "resize":
@@ -357,9 +421,14 @@ class VideoView(QWidget):
         if self._edit is not None:
             kind, i, data = self._edit
             self._edit = None
+            correcting, self._correcting = self._correcting, None
             if kind == "move" and self._tracks[i] == tuple(data[1][:4]) + (self._angle(i),):
-                return                                           # just a click
-            self.boxEdited.emit(i, tuple(self._tracks[i]))
+                if correcting is not None:                       # just a click: as before
+                    self._overlay = correcting[0]
+                    self.update()
+                return
+            (self.boxEdited if correcting is None else self.boxCorrected).emit(
+                i, tuple(self._tracks[i]))
             return
         if self._drag_start is None or ev.button() != Qt.LeftButton:
             return
@@ -378,17 +447,22 @@ class VideoView(QWidget):
 
     def wheelEvent(self, ev):
         """Mouse wheel over a marked area turns it (5 degrees, with Shift 1 degree)."""
-        if self._can_edit() and self._tracks:
+        boxes = self._grab_boxes()
+        if boxes:
             r = self._image_rect()
-            for i, box in enumerate(self._tracks):
+            for i, box in enumerate(boxes):
                 if self._contains(r, box, ev.position()):
                     d = ev.angleDelta().y() or ev.angleDelta().x()
                     if not d:
                         return
                     step = 1 if ev.modifiers() & Qt.ShiftModifier else 5
                     cur = box[4] if len(box) > 4 else 0.0
-                    self._set_angle(i, cur + (step if d > 0 else -step))
-                    self.boxRotated.emit(i, float(self._tracks[i][4]))
+                    ang = (cur + (step if d > 0 else -step) + 180) % 360 - 180
+                    if self._can_edit():
+                        self._set_angle(i, ang)
+                        self.boxRotated.emit(i, float(self._tracks[i][4]))
+                    else:                                        # away from a start: a correction
+                        self.boxCorrected.emit(i, tuple(box[:4]) + (round(ang, 1),))
                     ev.accept()
                     return
         super().wheelEvent(ev)

@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.5.1. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 0.6.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
@@ -42,6 +42,14 @@ auf der anderen Bildseite.
 
 - [x] **Kästchen nachträglich ändern** (0.5.1): am Abschnitt-Start
       verschieben, Größe ändern, drehen; „Alle löschen“ zum Neuanfang.
+
+- [x] **Genauer verfolgen** (0.6): Der Vergleich mit dem Aussehen dreht und
+      skaliert mit dem Kästchen mit; jede Korrektur merkt sich ein weiteres
+      Aussehen (bis zu 6 Vorlagen); ab jeder Korrektur wird auch rückwärts
+      verfolgt und mit dem Vorwärts-Ergebnis überblendet. Verrutschte Kästchen
+      lassen sich an jeder Stelle direkt anpacken und hinschieben.
+- [x] **Player: Countdown und ruhigen Anfang überspringen** (0.6): Start 10 s
+      bevor das Script losgeht, die letzten 10 s zählt ein Countdown herunter.
 
 ### Stapel mit Tracking
 

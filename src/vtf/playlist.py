@@ -10,6 +10,28 @@ from pathlib import Path
 from .funscript import funscript_path_for
 
 
+#: how long before the script starts the player jumps in / counts down
+LEAD_MS = 10_000
+
+
+def script_start_ms(actions, min_change: int = 10) -> int | None:
+    """When the script really starts moving: the action a first stroke of at least
+    `min_change` positions starts from. None if it never moves."""
+    for a, b in zip(actions, actions[1:]):
+        if abs(b.pos - a.pos) >= min_change:
+            return int(a.at)
+    return None
+
+
+def intro_skip_ms(actions, lead_ms: int = LEAD_MS) -> int:
+    """Where to start playing to skip a quiet intro: `lead_ms` before the script
+    starts. 0 when the script starts early anyway (less than lead + 5 s in)."""
+    start = script_start_ms(actions)
+    if start is None or start < lead_ms + 5000:
+        return 0
+    return start - lead_ms
+
+
 def has_script(path: str | Path) -> bool:
     return funscript_path_for(path).is_file()
 

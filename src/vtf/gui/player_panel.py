@@ -148,7 +148,13 @@ class PlayerPanel(QWidget):
         self.repeat_cb.setChecked(self.playlist.repeat)
         self.shuffle_cb.setChecked(self.playlist.shuffle)
         self.skip_cb.setChecked(self.playlist.skip_without_script)
-        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb):
+        self.intro_cb = QCheckBox("Ruhigen Anfang überspringen")
+        self.intro_cb.setToolTip("Startet 10 s bevor das Script losgeht, statt am Anfang des Videos")
+        self.countdown_cb = QCheckBox("Countdown vor dem Start")
+        self.countdown_cb.setToolTip("Zählt die letzten 10 s herunter, bevor das Script losgeht")
+        self.intro_cb.setChecked(str(settings.value("player/intro", "true")).lower() == "true")
+        self.countdown_cb.setChecked(str(settings.value("player/countdown", "true")).lower() == "true")
+        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
         self.play_btn = QPushButton(theme.icon("play", theme.ON_ACCENT), "Playlist abspielen")
@@ -189,6 +195,8 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/repeat", "true" if pl.repeat else "false")
         self.qs.setValue("player/shuffle", "true" if pl.shuffle else "false")
         self.qs.setValue("player/skip", "true" if pl.skip_without_script else "false")
+        self.qs.setValue("player/intro", "true" if self.intro_cb.isChecked() else "false")
+        self.qs.setValue("player/countdown", "true" if self.countdown_cb.isChecked() else "false")
 
     def refresh(self) -> None:
         pl = self.playlist

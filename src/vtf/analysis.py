@@ -103,7 +103,15 @@ class AnalysisSettings:
             d.pop("roi")
             # calibration is applied when generating, it does not need a new analysis
             d["sections"] = tuple(s.analysis_key() for s in self.sections())
+            d["tracker"] = TRACKER_VERSION     # results change with the tracker
         return repr(sorted(d.items()))
+
+
+#: bumped when tracking results change (new cache entries for tracked videos)
+TRACKER_VERSION = 2
+#: frames kept (compressed) for following an area backwards from a correction,
+#: as image pixels: ~10 min at 320 px width
+BACK_BUDGET_PX = 18000 * 320 * 180
 
 
 @dataclass
@@ -238,30 +246,63 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
 
 def _spread_corrections(events, centers, owner, plan, dx, dy, k) -> None:
     """A correction moves an area at once; the drift that made it necessary built
-    up since the previous anchor (section start or earlier correction). Spread the
-    offset back linearly over that stretch, in the positions and in the motion."""
+    up since the previous anchor (section start or earlier correction). Without a
+    backward track the offset is spread back linearly over that stretch. With one
+    (the area followed backwards from the correction) both directions are blended:
+    near the anchor the forward track counts, near the correction the backward one."""
     last: dict[tuple[int, int], int] = {}
     starts = {sec: a for sec, a, _b in plan}
-    for i, sec, area, off in sorted(events, key=lambda e: e[0]):
+    for i, sec, area, off, back in sorted(events, key=lambda e: e[0]):
         j0 = last.get((sec, area), starts.get(sec, i))
         n = i - j0
         last[(sec, area)] = i
         if n <= 0:
             continue
+        if back is not None and len(back) != n + 1:
+            back = None
+        deltas = np.zeros((n + 1, 2))
+        deltas[n] = off
+        for j in range(j0 + 1, i):
+            t = (j - j0) / n
+            d = off * t
+            c = centers[j]
+            if back is not None and c is not None and owner[j] == sec:
+                b = back[j - j0]
+                if not (np.isnan(b[0]) or np.isnan(c[area][0])):
+                    d = t * (b - c[area])
+            deltas[j - j0] = d
         for j in range(j0 + 1, i):
             if centers[j] is not None and owner[j] == sec:
-                centers[j][area] = centers[j][area] + off * ((j - j0) / n)
+                centers[j][area] = centers[j][area] + deltas[j - j0]
         n_areas = sum(1 for c in (centers[i] if centers[i] is not None else [])
                       if not np.isnan(c[0]))
-        per = off / n
-        if n_areas <= 1:
-            contrib = per
-        elif area == 0:
-            contrib = per
-        else:
-            contrib = -per / (n_areas - 1)
-        dx[j0 + 1:i + 1] += contrib[0]
-        dy[j0 + 1:i + 1] += contrib[1]
+        weight = 1.0 if n_areas <= 1 or area == 0 else -1.0 / (n_areas - 1)
+        steps = np.diff(deltas, axis=0) * weight
+        dx[j0 + 1:i + 1] += steps[:, 0]
+        dy[j0 + 1:i + 1] += steps[:, 1]
+
+
+def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None) -> np.ndarray:
+    """Follow one area backwards from frame b (where the user put it) to frame a.
+    Returns its centre per frame a..b (NaN where it was lost)."""
+    from .tracking import AreaTracker
+
+    def dec(j):
+        return cv2.imdecode(frames[j], cv2.IMREAD_GRAYSCALE)
+
+    nxt = dec(b)
+    t = AreaTracker(box_px, shape, nxt)
+    out = np.full((b - a + 1, 2), np.nan)
+    out[-1] = t.center
+    for j in range(b - 1, a - 1, -1):
+        if cancel and j % 50 == 0 and cancel():
+            raise AnalysisCancelled()
+        cur = dec(j)
+        t.step(nxt, cur)
+        if not t.lost:
+            out[j - a] = t.center
+        nxt = cur
+    return out
 
 
 def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: ProgressCb | None = None,
@@ -298,7 +339,27 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             ki = to_i(ms)
             if a < ki < b:
                 key_at.setdefault(ki, []).append((int(area), bx))
-    events: list[tuple] = []                      # (frame, section, area, offset px)
+    # stretches followed backwards too: (section, area, correction frame) -> (anchor frame, box)
+    back_segs: dict[tuple[int, int, int], tuple[int, tuple]] = {}
+    for sec, a, b in plan:
+        last_at: dict[int, int] = {}
+        for ki in sorted(key_at):
+            if not a < ki < b:
+                continue
+            for area, bx in key_at[ki]:
+                j0 = last_at.get(area, a)
+                last_at[area] = ki
+                if area < len(sections[sec].boxes[:MAX_AREAS]) and (ki - j0) * w * h <= BACK_BUDGET_PX:
+                    back_segs[(sec, area, ki)] = (j0, bx)
+    keep_until: dict[int, int] = {}              # frame -> last correction frame that needs it
+    for (_s, _ar, ki), (j0, _bx) in back_segs.items():
+        for j in range(j0, ki + 1):
+            keep_until[j] = max(keep_until.get(j, -1), ki)
+    free_at: dict[int, list[int]] = {}
+    for j, ki in keep_until.items():
+        free_at.setdefault(ki, []).append(j)
+    frames: dict[int, np.ndarray] = {}            # kept frames, JPEG
+    events: list[tuple] = []                      # (frame, section, area, offset px, backward track)
     tracker = None
     active = -1
     prev = None
@@ -317,6 +378,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             owner.append(-1)
         else:
             cur = cv2.GaussianBlur(np.ascontiguousarray(frame), (3, 3), 0)
+            if i in keep_until:
+                frames[i] = cv2.imencode(".jpg", cur, [cv2.IMWRITE_JPEG_QUALITY, 95])[1]
             if sec != active:                         # section starts: areas marked on this frame
                 boxes = sections[sec].boxes[:MAX_AREAS]
                 boxes_px = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h, *b[4:5]) for b in boxes]
@@ -329,9 +392,13 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                 for area, bx in key_at.get(i, ()):
                     if area < len(tracker.areas):
                         before = tracker.areas[area].center.copy()
-                        tracker.reset_area(area, (bx[0] * w, bx[1] * h, bx[2] * w, bx[3] * h, *bx[4:5]),
-                                           cur)
-                        events.append((i, sec, area, tracker.areas[area].center - before))
+                        box_px = (bx[0] * w, bx[1] * h, bx[2] * w, bx[3] * h, *bx[4:5])
+                        tracker.reset_area(area, box_px, cur)
+                        back = None
+                        seg = back_segs.get((sec, area, i))
+                        if seg is not None and all(j in frames for j in range(seg[0], i + 1)):
+                            back = _track_back(frames, seg[0], i, box_px, cur.shape, cancel)
+                        events.append((i, sec, area, tracker.areas[area].center - before, back))
             dx.append(float(d[0]))
             dy.append(float(d[1]))
             c = np.full((k, 2), np.nan)
@@ -348,6 +415,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             losts.append(lo)
             owner.append(sec)
             prev = cur
+        for j in free_at.pop(i, ()):
+            frames.pop(j, None)
         if progress and i % 25 == 0:
             progress(min(1.0, i / total))
     if not dx:

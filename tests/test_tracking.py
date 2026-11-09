@@ -245,3 +245,69 @@ def test_area_is_found_again_after_a_loss():
         lost.append(a.lost)
     assert any(lost[:4])                             # noticed the loss
     assert abs(a.center[0] - 145) < 4 and abs(a.center[1] - 120) < 4   # and found it again
+
+
+def _scene(angle, shift=(0, 0), scale=1.0, seed=3):
+    """Textured 60x40 patch on noise, turned by `angle` around (200, 140) and moved."""
+    rng = np.random.default_rng(seed)
+    img = (rng.random((280, 400)) * 60).astype(np.uint8)
+    tex = cv2.GaussianBlur((rng.random((40, 60)) * 255).astype(np.uint8), (3, 3), 0)
+    big = np.zeros_like(img)
+    m = np.zeros_like(img)
+    big[120:160, 170:230] = tex
+    m[120:160, 170:230] = 255
+    rot = cv2.getRotationMatrix2D((200, 140), -angle, scale)
+    rot[:, 2] += shift
+    big = cv2.warpAffine(big, rot, (400, 280))
+    m = cv2.warpAffine(m, rot, (400, 280))
+    img[m > 128] = big[m > 128]
+    return img
+
+
+def test_drift_correction_turns_with_the_area():
+    """Marked upright; later turned by 35 deg and a bit off: the comparison still pulls it back."""
+    from vtf.tracking import AreaTracker
+
+    t = AreaTracker((170, 120, 60, 40, 0.0), (280, 400), _scene(0))
+    later = _scene(35, shift=(6, 4))
+    t.angle = 35.0
+    t.center = np.array([200.0, 140.0])                       # tracking lagged 6/4 px behind
+    for _ in range(4):
+        t._drift_correction(later)
+    assert np.hypot(*(t.center - [206, 144])) < 2.0, t.center
+
+
+def test_correction_keeps_earlier_appearances():
+    """After a correction the area knows both views and matches the better one."""
+    from vtf.tracking import MultiTracker
+
+    a = _scene(0)
+    mt = MultiTracker([(170, 120, 60, 40)], (280, 400), first=a)
+    b = _scene(0, seed=9)                                      # a different look, same place
+    mt.reset_area(0, (170, 120, 60, 40, 0.0), b)
+    area = mt.areas[0]
+    assert len(area.templates) == 2
+    # in a frame that looks like the first view, the inherited template is the one that fits
+    score_old = area._match(a, area.templates[1], 0.5)[0]
+    score_new = area._match(a, area.templates[0], 0.5)[0]
+    assert score_old > 0.9 > score_new
+
+
+def test_correction_blends_backward_track(tmp_path):
+    """Area 1 is marked beside the moving object (so the forward track stays put) and
+    corrected onto it at 1 s. Following it backwards from there catches its real
+    motion shortly before the correction - a linear spread would not."""
+    from vtf.analysis import TrackSection
+
+    path, a, b = _video(tmp_path / "bk.avi", seconds=1.5, pan=False)
+    wrong_a = (a[0] - 60 / W, a[1], a[2], a[3])
+    sec = TrackSection(0, (wrong_a, b), keys=((1000, 0, a),))
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(sec,), width=W, hwaccel="none"))
+    i = int(round(1.0 * m.fps))
+    j = int(round(0.8 * m.fps))
+    t = j / i
+    y_true = 110 + 38 * np.sin(2 * np.pi * 0.8) + 22            # centre of area A at 0.8 s
+    y_wrong = 110 + 22                                           # where the forward track stayed
+    expected = (1 - t) * y_wrong + t * y_true
+    assert abs(m.tracks[j, 0, 1] * H - expected) < 6, (m.tracks[j, 0, 1] * H, expected)
+    assert abs(m.tracks[i, 0, 1] * H - (110 + 22)) < 3

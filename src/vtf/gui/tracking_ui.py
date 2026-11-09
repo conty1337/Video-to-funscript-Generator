@@ -207,6 +207,20 @@ class TrackingBox(QWidget):
         self.analysisChanged.emit()
         return True
 
+    def correct_area(self, ms: float, area: int, box) -> str:
+        """An area was grabbed at ms (inside a section, not at its start) and put
+        where it really is: a correction there."""
+        cur = self.index_at(ms)
+        if cur is None:
+            return "Hier ist kein Abschnitt"
+        s = self.sections[cur]
+        if abs(s.start_ms - ms) <= self.frame_ms * 0.6:
+            return self.update_box(ms, area, box)
+        if area >= len(s.boxes):
+            return "Diesen Bereich gibt es in dem Abschnitt nicht"
+        box = tuple(round(float(v), 4) for v in box[:4]) + ((float(box[4]) if len(box) > 4 else 0.0),)
+        return self._add_key(cur, ms, area, box, box)
+
     def rotate_box(self, ms: float, area: int, angle: float) -> str:
         """Turn a marked area (at a section start or at a correction)."""
         if self._edit_marked(ms, area, lambda b: tuple(b[:4]) + (round(angle, 1),)):
@@ -309,7 +323,7 @@ class TrackingBox(QWidget):
         else:
             self.help.setText("Klick auf einen Abschnitt springt zu seinem Start, dort lassen sich die "
                               "Kästchen verschieben, vergrößern und drehen. Wandert ein Kästchen ab: "
-                              "an der Stelle ein neues Kästchen darüber ziehen (nachjustieren). Für echte "
+                              "an der Stelle einfach anpacken und richtig hinschieben (nachjustieren). Für echte "
                               "Tiefe: ganz drin → „Ganz drin“, ganz draußen → „Ganz draußen“.")
 
     def _clicked(self, item: QListWidgetItem) -> None:

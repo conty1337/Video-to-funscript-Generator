@@ -559,14 +559,82 @@ def test_video_view_move_resize(app):
     QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(280, 240))
     i, b = edits[-1]
     assert abs(b[0] - 0.35) < 0.01 and abs(b[2] - 0.35) < 0.01 and abs(b[3] - 0.45) < 0.01
-    # not editable (away from a section start): a drag draws a new area instead
+    # not editable (away from a section start): dragging an area is a correction,
+    # dragging on free space draws a new area
     v.set_editable(False)
-    drawn = []
+    drawn, fixed = [], []
     v.boxDrawn.connect(drawn.append)
+    v.boxCorrected.connect(lambda i, b: fixed.append(i))
     n = len(edits)
     QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(180, 150))
-    QTest.mouseMove(v, QPoint(230, 200))
-    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(230, 200))
-    assert len(edits) == n and drawn
+    QTest.mouseMove(v, QPoint(200, 160))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(200, 160))
+    assert len(edits) == n and fixed == [0] and not drawn
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(20, 20))
+    QTest.mouseMove(v, QPoint(70, 70))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(70, 70))
+    assert drawn
     v.close()
     v.deleteLater()
+
+
+def test_video_view_grab_tracked_area(app):
+    """Away from a section start (tracked overlay shown) grabbing an area and moving
+    it is a correction; a plain click changes nothing."""
+    import numpy as np
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from vtf.gui.tracking_ui import TrackingBox
+    from vtf.gui.video_view import VideoView
+
+    v = VideoView()
+    v.resize(400, 300)
+    v.set_frame(np.zeros((300, 400, 3), np.uint8))
+    v.set_mode("track")
+    v.set_editable(False)
+    v.set_track_overlay([(0.25, 0.25, 0.25, 0.25, 10.0, False)])
+    got = []
+    v.boxCorrected.connect(lambda i, b: got.append((i, b)))
+    v.show()
+    QTest.mouseClick(v, Qt.LeftButton, Qt.NoModifier, QPoint(125, 112))
+    assert not got and v._overlay                                # just a click
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(125, 112))
+    QTest.mouseMove(v, QPoint(165, 112))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(165, 112))
+    i, b = got[-1]
+    assert i == 0 and abs(b[0] - 0.35) < 0.01 and b[4] == 10.0
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    tb.add_box((0.25, 0.25, 0.25, 0.25), 0)
+    assert "nachjustiert" in tb.correct_area(4000, 0, b)
+    assert tb.sections[0].keys[0][:2] == (4000, 0) and tb.sections[0].keys[0][2][0] == b[0]
+    assert "angepasst" in tb.correct_area(0, 0, b)                # at the start: plain edit
+    v.close()
+    v.deleteLater()
+    tb.deleteLater()
+
+
+def test_player_countdown(app):
+    """Player: the countdown shows during the 10 s before the script starts."""
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(True)
+    w.player.countdown_cb.setChecked(True)
+    w.stroke_actions = lambda: [Action(0, 50), Action(30_000, 50), Action(30_400, 90)]
+    w._update_countdown(15_000)
+    assert w.view._countdown is None
+    w._update_countdown(22_500)
+    assert w.view._countdown == 8
+    w._update_countdown(31_000)
+    assert w.view._countdown is None
+    w.player.countdown_cb.setChecked(False)
+    w._update_countdown(25_000)
+    assert w.view._countdown is None
+    w.set_player_mode(False)
+    w.dirty = False
+    w.close()
+    w.deleteLater()
