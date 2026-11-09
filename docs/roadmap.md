@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.7.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 0.8.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
@@ -51,10 +51,15 @@ auf der anderen Bildseite.
 - [x] **Player: Countdown und ruhigen Anfang überspringen** (0.6): Start 10 s
       bevor das Script losgeht, die letzten 10 s zählt ein Countdown herunter.
 
-- [x] **Bearbeiten** (0.7): Geräte-Vorschau als Animation im Video,
+- [x] **Bearbeiten** (0.7): Tempo-Farbe in der Hub-Leiste neben dem Video,
       Abschnitt-Anfang/-Ende in der Kurve ziehen, Lesezeichen/Kapitel,
       Rhythmus-Vorlagen (gleichmäßig, schneller/langsamer, Doppelschlag,
       Wellen), Video schließen.
+
+- [x] **Layout wie ein Schnittprogramm** (0.8): links Analyse/Tracking bzw.
+      Playlist, Mitte Video, rechts Script, unten eine Zeitleiste über die
+      ganze Breite mit Spuren (Video, Tempo, Kurve). Leisten einklappbar
+      (Strg+1/Strg+2), Analyse-Optionen eingeklappt.
 
 ### Stapel mit Tracking
 

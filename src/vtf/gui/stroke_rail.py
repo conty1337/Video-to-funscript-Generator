@@ -20,12 +20,21 @@ class StrokeRail(QWidget):
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._pos: float | None = None
         self._device: float | None = None
+        self._speed = 0.0
         self.setToolTip("Script-Position an der aktuellen Stelle (0–100). "
                         "Umrandung: wo das Gerät gerade ist")
 
     def set_position(self, pos: float | None) -> None:
         if pos != self._pos:
             self._pos = pos
+            self.update()
+
+    def set_speed(self, speed: float) -> None:
+        """Speed of the script here (positions per second): colours the travel below
+        the slider like the heatmap, so fast passages show at a glance."""
+        speed = float(speed)
+        if abs(speed - self._speed) > 1:
+            self._speed = speed
             self.update()
 
     def set_device_position(self, pos: float | None) -> None:
@@ -58,7 +67,14 @@ class StrokeRail(QWidget):
             return
         y = bottom - self._pos / 100 * (bottom - top)
         p.setPen(Qt.NoPen)
-        p.setBrush(theme.qcolor(theme.ACCENT, 0.35))
+        if self._speed > 0:
+            from .heatbar import heat_color
+
+            fill = heat_color(self._speed)
+            fill.setAlphaF(0.85)
+        else:
+            fill = theme.qcolor(theme.ACCENT, 0.35)
+        p.setBrush(fill)
         p.drawRoundedRect(QRectF(cx - 2, y, 4, bottom - y), 2, 2)
         p.setBrush(theme.qcolor(theme.ACCENT))
         p.drawRoundedRect(QRectF(cx - 10, y - THUMB_H / 2, 20, THUMB_H), 4, 4)

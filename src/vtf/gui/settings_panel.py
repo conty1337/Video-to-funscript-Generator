@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QSlider,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -89,8 +90,13 @@ class SettingsPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("sidebar")
-        lay = QVBoxLayout(self)
+        # two pages, placed by the main window: analysis on the left (method,
+        # tracking, options), the script settings on the right
+        self.script_page = QWidget()
+        self.analysis_page = QWidget()
+        for page in (self.script_page, self.analysis_page):
+            page.setObjectName("sidebar")
+        lay = QVBoxLayout(self.script_page)
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(4)
 
@@ -150,8 +156,11 @@ class SettingsPanel(QWidget):
         self.full_stroke = QCheckBox("Immer voller Hub")
         lay.addWidget(self.invert)
         lay.addWidget(self.full_stroke)
+        lay.addStretch(1)
 
-        lay.addSpacing(24)
+        lay = QVBoxLayout(self.analysis_page)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(4)
         _section(lay, "Analyse", "Änderungen wirken nach erneuter Analyse")
         f = _form()
         self.method = QComboBox()
@@ -165,7 +174,25 @@ class SettingsPanel(QWidget):
         lay.addLayout(f)
         self.tracking = TrackingBox()
         lay.addWidget(self.tracking)
-        lay.addSpacing(4)
+        self.roi_label = QLabel()
+        self.roi_label.setObjectName("caption")
+        self.roi_label.setWordWrap(True)
+        lay.addSpacing(8)
+        lay.addWidget(self.roi_label)
+        lay.addSpacing(16)
+        # rarely changed options: folded away
+        self.options_btn = QToolButton()
+        self.options_btn.setObjectName("disclosure")
+        self.options_btn.setCheckable(True)
+        self.options_btn.setText("Optionen")
+        self.options_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.options_btn.setIcon(theme.icon("chevron-right", theme.TEXT_2, 16))
+        lay.addWidget(self.options_btn)
+        self.options = QWidget()
+        ol = QVBoxLayout(self.options)
+        ol.setContentsMargins(0, 8, 0, 0)
+        ol.setSpacing(4)
+        lay.addWidget(self.options)
         f = _form()
         self.width = QComboBox()
         for w in (160, 240, 320, 480, 640):
@@ -183,18 +210,15 @@ class SettingsPanel(QWidget):
         for label, val in HWACCEL:
             self.hwaccel.addItem(label, val)
         _row(f, "Dekodierung", self.hwaccel)
-        lay.addLayout(f)
-        lay.addSpacing(4)
+        ol.addLayout(f)
+        ol.addSpacing(4)
         self.cam = QCheckBox("Kamerabewegung ausgleichen")
         self.cam.setChecked(True)
         self.opencl = QCheckBox("GPU über OpenCL")
-        lay.addWidget(self.cam)
-        lay.addWidget(self.opencl)
-        lay.addSpacing(12)
-        self.roi_label = QLabel()
-        self.roi_label.setObjectName("caption")
-        self.roi_label.setWordWrap(True)
-        lay.addWidget(self.roi_label)
+        ol.addWidget(self.cam)
+        ol.addWidget(self.opencl)
+        self.options.setVisible(False)
+        self.options_btn.toggled.connect(self._options_toggled)
         lay.addStretch(1)
         self._roi = None
         self._update_roi_label()
@@ -212,6 +236,10 @@ class SettingsPanel(QWidget):
         self.step.valueChanged.connect(self.analysisChanged)
         self.cam.toggled.connect(self.analysisChanged)
         self.method.currentIndexChanged.connect(self._method_changed)
+
+    def _options_toggled(self, on: bool) -> None:
+        self.options.setVisible(on)
+        self.options_btn.setIcon(theme.icon("chevron-down" if on else "chevron-right", theme.TEXT_2, 16))
 
     @property
     def mode(self) -> str:

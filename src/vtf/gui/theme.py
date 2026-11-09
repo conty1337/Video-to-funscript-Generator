@@ -133,6 +133,10 @@ QToolButton:disabled {{ color: {MUTED}; }}
 
 QWidget#sidebar, QScrollArea#sidebarScroll, QWidget#sidebarFooter {{ background: {DEEP}; }}
 QScrollArea {{ border: none; }}
+QWidget#timelinePanel {{ background: {CARD}; }}
+QLabel#laneLabel {{ color: {MUTED}; font-size: 11px; }}
+QToolButton#disclosure {{ padding: 4px 4px 4px 0; color: {TEXT_2}; }}
+QToolButton#disclosure:checked {{ background: transparent; color: {TEXT}; }}
 QLabel {{ background: transparent; }}
 QLabel#section {{ color: {TEXT}; font-weight: 500; }}
 QLabel#caption, QLabel#meta {{ color: {MUTED}; }}
