@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         self.progress_label.setFont(theme.mono_font(12))
         self.progress_label.setVisible(False)
         self.status_label = QLabel()
-        self.curve_title = QLabel("Script")
+        self.curve_title = QLabel("Zeitleiste")
         self.curve_title.setObjectName("section")
         self.axis = "L0"                       # axis shown in the curve
         self.bookmarks: list[tuple[int, str]] = []   # (ms, name), saved next to the video
@@ -119,6 +119,7 @@ class MainWindow(QMainWindow):
         curve_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         curve_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
+        # ---- centre: video, stroke rail, transport
         controls = QHBoxLayout()
         controls.setContentsMargins(12, 8, 16, 8)
         controls.setSpacing(4)
@@ -127,17 +128,9 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.play_btn)
         controls.addWidget(self.fwd_btn)
         controls.addWidget(self.next_btn)
-        controls.addSpacing(8)
-        self.heat = HeatBar()
-        timeline = QVBoxLayout()
-        timeline.setContentsMargins(0, 6, 0, 0)
-        timeline.setSpacing(2)
-        timeline.addWidget(self.slider)
-        timeline.addWidget(self.heat)
-        controls.addLayout(timeline, 1)
-        controls.addSpacing(12)
+        controls.addStretch(1)
         controls.addWidget(self.time_label)
-        controls.addSpacing(12)
+        controls.addStretch(1)
         controls.addWidget(self.mute_btn)
         controls.addWidget(self.volume)
         controls.addSpacing(4)
@@ -147,24 +140,25 @@ class MainWindow(QMainWindow):
         stage.setSpacing(1)
         stage.addWidget(self.view, 1)
         stage.addWidget(self.rail)
-        left = QWidget()
-        ll = QVBoxLayout(left)
+        center = QWidget()
+        ll = QVBoxLayout(center)
         ll.setContentsMargins(0, 0, 0, 0)
         ll.setSpacing(0)
         ll.addLayout(stage, 1)
         ll.addLayout(controls)
 
-        right = QWidget()
-        right.setObjectName("sidebar")
-        rl = QVBoxLayout(right)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(0)
+        # ---- left: analysis (method, tracking, options) or, in the player, the playlist
+        analysis = QWidget()
+        analysis.setObjectName("sidebar")
+        al = QVBoxLayout(analysis)
+        al.setContentsMargins(0, 0, 0, 0)
+        al.setSpacing(0)
         scroll = self._side_scroll = QScrollArea()
         scroll.setObjectName("sidebarScroll")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setWidget(self.panel)
-        rl.addWidget(scroll, 1)
+        scroll.setWidget(self.panel.analysis_page)
+        al.addWidget(scroll, 1)
         footer = QWidget()
         footer.setObjectName("sidebarFooter")
         fl = QVBoxLayout(footer)
@@ -174,15 +168,28 @@ class MainWindow(QMainWindow):
         fl.addWidget(self.progress)
         fl.addWidget(self.analyze_btn)
         fl.addWidget(self.cancel_btn)
-        rl.addWidget(footer)
+        al.addWidget(footer)
         self.player = PlayerPanel(self.qsettings)
         self.player.setObjectName("sidebar")
         self.side = QStackedWidget()
-        self.side.addWidget(right)
+        self.side.addWidget(analysis)
         self.side.addWidget(self.player)
-        self.side.setFixedWidth(320)
+        self.side.setFixedWidth(300)
 
+        # ---- right: script settings
+        script_scroll = QScrollArea()
+        script_scroll.setObjectName("sidebarScroll")
+        script_scroll.setWidgetResizable(True)
+        script_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        script_scroll.setWidget(self.panel.script_page)
+        self.script_side = script_scroll
+        self.script_side.setFixedWidth(300)
+
+        # ---- bottom: the timeline across the whole width, one lane per row
+        self.heat = HeatBar()
+        self.heat.inset = 0
         curve_box = self.curve_box = QWidget()
+        curve_box.setObjectName("timelinePanel")
         cl = QVBoxLayout(curve_box)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
@@ -194,36 +201,57 @@ class MainWindow(QMainWindow):
         head.addWidget(self.curve_meta)
         head.addWidget(curve_hint, 1)
         cl.addLayout(head)
+        for label, widget in (("Video", self.slider), ("Tempo", self.heat)):
+            lane = QHBoxLayout()
+            # lanes line up with the plot of the curve below (its left/right margins)
+            lane.setContentsMargins(0, 0, 16, 0)
+            lane.setSpacing(0)
+            tag = QLabel(label)
+            tag.setObjectName("laneLabel")
+            tag.setFixedWidth(40 - 4)
+            tag.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            lane.addWidget(tag)
+            lane.addSpacing(4)
+            lane.addWidget(widget, 1)
+            cl.addLayout(lane)
+        cl.addSpacing(4)
         cl.addWidget(self.curve, 1)
 
+        top = QWidget()
+        tl = QHBoxLayout(top)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(0)
+        tl.addWidget(self.side)
+        sep = self._side_sep = QWidget()
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(f"background: {theme.HAIRLINE};")
+        tl.addWidget(sep)
+        tl.addWidget(center, 1)
+        sep2 = self._script_sep = QWidget()
+        sep2.setFixedWidth(1)
+        sep2.setStyleSheet(f"background: {theme.HAIRLINE};")
+        tl.addWidget(sep2)
+        tl.addWidget(self.script_side)
+
         main = QSplitter(Qt.Vertical)
-        main.addWidget(left)
+        main.addWidget(top)
         main.addWidget(curve_box)
         main.setStretchFactor(0, 3)
         main.setStretchFactor(1, 2)
         main.setChildrenCollapsible(False)
-        body = QWidget()
-        bl = QHBoxLayout(body)
-        bl.setContentsMargins(0, 0, 0, 0)
-        bl.setSpacing(0)
-        bl.addWidget(main, 1)
-        sep = self._side_sep = QWidget()
-        sep.setFixedWidth(1)
-        sep.setStyleSheet(f"background: {theme.HAIRLINE};")
-        bl.addWidget(sep)
-        bl.addWidget(self.side)
+        body = main
         self.setCentralWidget(body)
         self.statusBar().addWidget(self.status_label, 1)
         self.statusBar().setSizeGripEnabled(False)
         ocl = gpu.opencl_device_name()
-        ocl_label = QLabel(f"OpenCL · {ocl}" if ocl else "OpenCL · nicht verfügbar")
-        ocl_label.setFont(theme.mono_font(11))
-        self.statusBar().addPermanentWidget(ocl_label)
-        if not ocl:
+        if ocl:
+            ocl_label = QLabel(f"OpenCL · {ocl}")
+            ocl_label.setFont(theme.mono_font(11))
+            self.statusBar().addPermanentWidget(ocl_label)
+        else:                    # nothing to choose: keep the option out of sight
             self.panel.opencl.setEnabled(False)
-            hint = gpu.opencl_hint()
-            self.panel.opencl.setToolTip(hint)
-            ocl_label.setToolTip(hint)
+            self.panel.opencl.setVisible(False)
+            self.panel.opencl.setToolTip(gpu.opencl_hint())
 
         self.updates = UpdateController(self, self.qsettings)
         self.devices = DeviceController(self, self.qsettings)
@@ -328,9 +356,13 @@ class MainWindow(QMainWindow):
         self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
         self.player_action.setCheckable(True)
         self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
-        self.preview_action = self._act(m, "Geräte-Vorschau im Video", self._preview_toggled, "V")
-        self.preview_action.setCheckable(True)
-        self.preview_action.setChecked(str(self.qsettings.value("preview", "true")).lower() == "true")
+        m.addSeparator()
+        self.left_action = self._act(m, "Linke Leiste (Analyse, Playlist)", self._sides_toggled, "Ctrl+1")
+        self.right_action = self._act(m, "Rechte Leiste (Script)", self._sides_toggled, "Ctrl+2")
+        for a, key in ((self.left_action, "show_left"), (self.right_action, "show_right")):
+            a.setCheckable(True)
+            a.setChecked(str(self.qsettings.value(key, "true")).lower() == "true")
+        m.addSeparator()
         m = self.menuBar().addMenu("&Lesezeichen")
         self._act(m, "Lesezeichen setzen…", self.add_bookmark, "B")
         self._act(m, "Nächstes Lesezeichen", lambda: self.jump_bookmark(1), "Alt+Right")
@@ -508,7 +540,7 @@ class MainWindow(QMainWindow):
         self.panel.tracking.reset(0, 30)
         self.bookmarks = []
         self._show_bookmarks()
-        self.view.set_preview(None)
+        self.rail.set_speed(0.0)
         self.axis_actions = {}
         self.axis = "L0"
         self.axis_box.setCurrentIndex(0)
@@ -543,28 +575,24 @@ class MainWindow(QMainWindow):
 
     def _show_time(self, ms: float):
         self._update_countdown(ms)
-        self._update_preview(ms)
+        self._update_rail_speed(ms)
         self._update_track_overlay(ms)
         self.curve.set_playhead(ms)
         self.rail.set_position(position_at(self.stroke_actions(), ms))
         self.time_label.setText(f"{_fmt(ms)} / {_fmt(self.frame_count / self.fps * 1000)}")
 
-    def _update_preview(self, ms: float):
-        """The animated device in the video corner."""
+    def _update_rail_speed(self, ms: float):
+        """The stroke rail shows how fast the script moves here (heatmap colours)."""
         acts = self.stroke_actions()
-        if not self.preview_action.isChecked() or len(acts) < 2:
-            self.view.set_preview(None)
+        if len(acts) < 2:
+            self.rail.set_speed(0.0)
             return
         i = bisect.bisect_right([a.at for a in acts], ms)
         speed = 0.0
         if 0 < i < len(acts):
             a, b = acts[i - 1], acts[i]
             speed = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
-        self.view.set_preview(position_at(acts, ms), speed)
-
-    def _preview_toggled(self, on: bool):
-        self.qsettings.setValue("preview", "true" if on else "false")
-        self._update_preview(self._cur_ms())
+        self.rail.set_speed(speed)
 
     # ------------------------------------------------------------ bookmarks
     def _show_bookmarks(self):
@@ -872,6 +900,7 @@ class MainWindow(QMainWindow):
     def set_player_mode(self, on: bool):
         on = bool(on)
         self.side.setCurrentWidget(self.player if on else self.side.widget(0))
+        self._apply_sides()
         self.mode_player.setChecked(on)
         self.mode_edit.setChecked(not on)
         self.player_action.setChecked(on)
@@ -954,10 +983,27 @@ class MainWindow(QMainWindow):
         if self.player_mode and self.player.playlist.items:
             QTimer.singleShot(0, self.play_next)
 
+    def _apply_sides(self, full: bool | None = None):
+        """Which side panels show: folded away by the user, no script panel in the
+        player, nothing but the video in full screen."""
+        full = self.isFullScreen() if full is None else full
+        left = self.left_action.isChecked() and not full
+        right = self.right_action.isChecked() and not full and not self.player_mode
+        self.side.setVisible(left)
+        self._side_sep.setVisible(left)
+        self.script_side.setVisible(right)
+        self._script_sep.setVisible(right)
+
+    def _sides_toggled(self, _on: bool = False):
+        self.qsettings.setValue("show_left", "true" if self.left_action.isChecked() else "false")
+        self.qsettings.setValue("show_right", "true" if self.right_action.isChecked() else "false")
+        self._apply_sides()
+
     def toggle_fullscreen(self):
         full = not self.isFullScreen()
-        for w in (self.menuBar(), self._toolbar, self.statusBar(), self.side, self._side_sep, self.curve_box):
+        for w in (self.menuBar(), self._toolbar, self.statusBar(), self.curve_box):
             w.setVisible(not full)
+        self._apply_sides(full)
         if full:
             self._was_maximized = self.isMaximized()
             self.showFullScreen()
@@ -1383,7 +1429,6 @@ class MainWindow(QMainWindow):
             "   Tracking-Abschnitte: Anfang/Ende in der Kurve mit der Maus ziehen.\n"
             "5. Achse über der Kurve wählen (Hub, Roll, Twist …).\n"
             "   Lesezeichen: B = setzen, Alt+→/← = nächstes/voriges, Liste im Menü „Lesezeichen“.\n"
-            "   V = Geräte-Vorschau im Video an/aus.\n"
             "6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\n"
             "Player (Strg+P)\n"
             "Videos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\n"

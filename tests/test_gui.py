@@ -710,14 +710,9 @@ def test_bookmarks_rhythm_preview(app, tmp_path):
     w.undo()
     assert not w.curve.actions
     w.apply_rhythm(0, 4000, 60, 10, 90, "even")
-    # device preview follows the script
-    w.preview_action.setChecked(True)
-    w._update_preview(250)
-    pos, speed = w.view._preview
-    assert 10 <= pos <= 90 and speed > 100
-    w.preview_action.setChecked(False)
-    w._update_preview(250)
-    assert w.view._preview is None
+    # the stroke rail shows position and speed
+    w._show_time(250)
+    assert 10 <= w.rail._pos <= 90 and w.rail._speed > 100
     # reopening loads the bookmarks again
     w.dirty = False
     w.close_video()
@@ -769,3 +764,30 @@ def test_curve_drags_section_edge(app):
     assert moved and moved[-1][:2] == (0, "end") and abs(moved[-1][2] - 12_000) < 100
     c.close()
     c.deleteLater()
+
+
+def test_layout_sides(app):
+    """Analysis on the left, script on the right; the player hides the script side,
+    both sides can be folded away."""
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.show()
+    w.left_action.setChecked(True)
+    w.right_action.setChecked(True)
+    w.set_player_mode(False)
+    assert w.panel.analysis_page.window() is w and w.panel.script_page.window() is w
+    assert w.side.isVisible() and w.script_side.isVisible()
+    w.set_player_mode(True)
+    assert w.side.isVisible() and not w.script_side.isVisible()
+    w.set_player_mode(False)
+    w.right_action.setChecked(False)
+    w._sides_toggled()
+    assert not w.script_side.isVisible()
+    w.right_action.setChecked(True)
+    w._sides_toggled()
+    w.panel.options_btn.setChecked(True)
+    assert w.panel.options.isVisibleTo(w.panel.analysis_page)
+    w.dirty = False
+    w.close()
+    w.deleteLater()

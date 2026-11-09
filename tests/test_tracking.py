@@ -311,3 +311,40 @@ def test_correction_blends_backward_track(tmp_path):
     expected = (1 - t) * y_wrong + t * y_true
     assert abs(m.tracks[j, 0, 1] * H - expected) < 6, (m.tracks[j, 0, 1] * H, expected)
     assert abs(m.tracks[i, 0, 1] * H - (110 + 22)) < 3
+
+
+def _covering_frames():
+    """A still textured object; another texture slides over it, stays ~40 frames,
+    then slides away to the right and leaves the object visible again."""
+    rng = np.random.default_rng(5)
+    bg = (rng.random((H, W)) * 50).astype(np.uint8)
+    obj = (rng.random((40, 40)) * 255).astype(np.uint8)
+    cover = cv2.GaussianBlur((rng.random((70, 70)) * 255).astype(np.uint8), (5, 5), 0)
+    frames = []
+    for i in range(110):
+        f = bg.copy()
+        f[100:140, 200:240] = obj
+        if 10 <= i < 80:
+            if i < 20:
+                cx = 100 + (i - 10) * 8           # slides in from the left
+            elif i < 60:
+                cx = 185                          # covers the object
+            else:
+                cx = 185 + (i - 60) * 10          # slides away to the right
+            f[85:155, cx:cx + 70] = cover
+        frames.append(f)
+    return frames
+
+
+def test_area_comes_back_after_being_covered():
+    from vtf.tracking import AreaTracker
+
+    frames = _covering_frames()
+    t = AreaTracker((200, 100, 40, 40), (H, W), first=frames[0])
+    lost = []
+    for prev, cur in itertools.pairwise(frames):
+        t.step(prev, cur)
+        lost.append(t.lost)
+    assert any(lost[25:60]), "covering should show as lost"
+    assert not any(lost[-10:])
+    assert np.hypot(*(t.center - [220, 120])) < 4, t.center     # back on the object

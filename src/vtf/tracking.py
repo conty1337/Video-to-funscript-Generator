@@ -71,7 +71,9 @@ class AreaTracker:
     x/y/w/h describe the unrotated rectangle and the angle turns it around its centre."""
 
     TEMPLATE_EVERY = 5            # frames between drift corrections
-    TEMPLATE_MIN_SCORE = 0.7
+    TEMPLATE_MIN_SCORE = 0.65     # this sure: pull the area back to where it looks right
+    GOOD_SCORE = 0.6              # still looks like itself
+    COVERED_SCORE = 0.35          # looks like something else: covered (twice in a row)
     MAX_TEMPLATES = 6
 
     def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None):
@@ -89,6 +91,12 @@ class AreaTracker:
         # is cut out along the area (turned with it), 1 patch px = 1 image px at `scale then`.
         self.templates: list[tuple[np.ndarray, float, float]] = []
         self.recent = None              # same kind, seen lately while tracking was sure
+        # covering: when the area stops looking like itself (something moved over it),
+        # it goes back to where it last looked right and waits there until it shows again
+        self.covered = False
+        self.bad_checks = 0
+        self.last_score = 1.0
+        self.good = (self.center.copy(), self.scale, self.angle)
         if first is not None:
             t = self._capture(first)
             if t is not None:
@@ -185,28 +193,63 @@ class AreaTracker:
                 best = r
         return best
 
-    def _reacquire(self, gray: np.ndarray) -> bool:
+    def _reacquire(self, gray: np.ndarray, reach: float = 1.5) -> bool:
         """After a loss: look for a known appearance around the last position."""
         tpls = ([self.recent] if self.recent is not None else []) + self.templates
         if not tpls:
             return False
-        score, off = self._best(gray, tpls, 1.0)
-        if score < 0.6:
+        # it may have turned or changed size meanwhile: try a few turns and sizes
+        base = (self.angle, self.scale)
+        best = (-1.0, np.zeros(2), base)
+        for d_ang in (0.0, -8.0, 8.0, -16.0, 16.0):
+            for d_sc in (1.0, 1.1, 1 / 1.1):
+                self.angle, self.scale = base[0] + d_ang, base[1] * d_sc
+                score, off = self._best(gray, tpls, reach)
+                if score > best[0]:
+                    best = (score, off, (self.angle, self.scale))
+            if best[0] > 0.8:
+                break
+        self.angle, self.scale = base
+        score, off, (ang, sc) = best
+        if score < self.GOOD_SCORE:
             return False
+        self.angle, self.scale = ang, sc
         self.center = np.clip(self.center + off, [0, 0], [self.w - 1, self.h - 1])
         self.pts = None
         return True
 
-    def _drift_correction(self, gray: np.ndarray) -> None:
+    def _drift_correction(self, gray: np.ndarray) -> float | None:
         """Pull the area back to where it looks like it did when it was marked (or
-        corrected). The comparison turns and scales with the area."""
+        corrected). The comparison turns and scales with the area. Returns how well
+        it matched (None without a template)."""
         if not self.templates:
-            return
+            return None
         score, off = self._best(gray, self.templates, 0.5)
         if score < self.TEMPLATE_MIN_SCORE:
-            return
+            return score
         if 1.0 < np.hypot(*off) < 0.5 * float(np.max(self.size * self.scale)):
-            self.center = np.clip(self.center + 0.5 * off, [0, 0], [self.w - 1, self.h - 1])
+            pull = 1.0 if score > 0.85 else 0.5               # very sure: all the way
+            self.center = np.clip(self.center + pull * off, [0, 0], [self.w - 1, self.h - 1])
+        return score
+
+    def _check_covered(self, score: float | None) -> bool:
+        """After a comparison: True when the area has just been found covered."""
+        if score is None:
+            return False
+        self.last_score = score
+        if score >= self.GOOD_SCORE:
+            self.bad_checks = 0
+            self.good = (self.center.copy(), self.scale, self.angle)
+            return False
+        if score < self.COVERED_SCORE:
+            self.bad_checks += 1
+            if self.bad_checks >= 2:
+                # the points followed whatever moved over it: back to the last good place
+                self.center, self.scale, self.angle = self.good[0].copy(), self.good[1], self.good[2]
+                self.covered = True
+                self.pts = None
+                return True
+        return False
 
     # ------------------------------------------------------------ tracking
     def _refill(self, gray: np.ndarray) -> None:
@@ -231,7 +274,8 @@ class AreaTracker:
             self.lost_frames += 1
         else:
             self.lost_frames = 0
-            if self.frames % 15 == 0 and self.pts is not None and len(self.pts) >= MIN_POINTS * 1.5:
+            if (self.frames % 15 == 0 and self.pts is not None and len(self.pts) >= MIN_POINTS * 1.5
+                    and self.last_score >= self.GOOD_SCORE):
                 t = self._capture(cur)
                 if t is not None:
                     self.recent = t
@@ -239,6 +283,18 @@ class AreaTracker:
 
     def _step(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
         self.frames += 1
+        if self.covered:
+            # wait at the last good place and look for it a bit around, every other frame
+            if self.frames % 2 == 0 and self._reacquire(cur, 2.0):
+                self.covered = False
+                self.bad_checks = 0
+                self.lost = False
+                self.lost_frames = 0
+                self.good = (self.center.copy(), self.scale, self.angle)
+                self._refill(cur)
+            else:
+                self.lost = True
+            return np.zeros(2)
         if self.lost_frames >= 2 and self._reacquire(cur):
             # found again: position fixed, but no motion from this frame (unknown path)
             self.lost_frames = 0
@@ -287,7 +343,13 @@ class AreaTracker:
         self.lost = False
         if self.frames % self.TEMPLATE_EVERY == 0:
             before = self.center.copy()
-            self._drift_correction(cur)
+            score = self._drift_correction(cur)
+            if score is not None and score < self.GOOD_SCORE and self.recent is not None:
+                # the look may have changed slowly (light, pose): the recent look counts too
+                score = max(score, self._match(cur, self.recent, 0.5)[0])
+            if self._check_covered(score):
+                self.lost = True
+                return np.zeros(2)
             d = d + (self.center - before)
         # keep only points still inside the (slightly enlarged) area
         self.pts = p1[self.inside(p1)].reshape(-1, 1, 2).astype(np.float32)
