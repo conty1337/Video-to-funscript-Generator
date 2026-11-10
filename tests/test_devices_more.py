@@ -15,18 +15,19 @@ def test_tcode_command():
     assert command("L0", 150, -5) == "L09999I0"
 
 
-def _read_all(fd):
-    out = b""
-    while True:
-        try:
-            chunk = os.read(fd, 4096)
-        except (BlockingIOError, OSError):
-            break
-        if not chunk:
-            break
-        out += chunk
-        if len(chunk) < 4096:
-            break
+def _read_until(fd, needle, timeout=3.0):
+    """Read from a pty until `needle` arrived (the kernel hands lines over asynchronously)."""
+    import select
+    import time
+
+    out, end = b"", time.monotonic() + timeout
+    while needle.encode() not in out and time.monotonic() < end:
+        ready, _, _ = select.select([fd], [], [], 0.1)
+        if ready:
+            try:
+                out += os.read(fd, 4096)
+            except OSError:
+                break
     return out.decode()
 
 
@@ -41,7 +42,7 @@ def test_tcode_usb_and_axes():
     AxisProxy(dev, "R0").move(25, 300)
     dev.move_axis("X9", 50, 100)                      # unknown axis: ignored
     dev.stop()
-    text = _read_all(master)
+    text = _read_until(master, "DSTOP\n")
     assert "L09999I400\n" in text and "R02500I300\n" in text and "DSTOP\n" in text and "X9" not in text
     dev.disconnect()
     assert not dev.connected

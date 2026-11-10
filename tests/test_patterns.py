@@ -203,3 +203,55 @@ def test_random_step_and_moods():
     assert not calm & intense
     st = P.random_step(rng, "gemischt", bpm=(90, 90), depth=(70, 70), minutes=(2, 2), last="Welle")
     assert (st.bpm, st.depth, st.minutes) == (90, 70, 2) and st.pattern != "Welle"
+
+
+def test_gamepad_evdev_and_filter():
+    import os
+    import struct
+    import threading
+
+    from vtf import gamepad as G
+
+    pad = G.Pad(-1, "8BitDo Ultimate", "evdev", {0x00: (-32768, 32767), 0x04: (0, 255), 0x11: (-1, 1)})
+
+    def ev(t, c, v):
+        return G.EV_EVENT.pack(0, 0, t, c, v)
+
+    data = (ev(G.EV_KEY, 0x130, 1) + ev(G.EV_KEY, 0x131, 0) + ev(G.EV_KEY, 0x137, 1) +
+            ev(G.EV_ABS, 0x00, 32767) + ev(G.EV_ABS, 0x04, 0) + ev(G.EV_ABS, 0x11, -1) +
+            ev(G.EV_KEY, 0x220, 1) + ev(G.EV_KEY, 0x130, 2) + ev(0, 0, 0))
+    out = [(e.kind, e.number, round(e.value, 2)) for e in pad.events(data[:30]) + pad.events(data[30:])]
+    assert out == [("button", G.BTN_A, 1.0), ("button", G.BTN_B, 0.0), ("button", G.BTN_RB, 1.0),
+                   ("axis", G.AX_LX, 1.0), ("axis", G.AX_RY, -1.0), ("axis", G.AX_DY, -1.0),
+                   ("axis", G.AX_DY, -1.0)]               # key repeat (2) and sync are ignored
+    assert not G.looks_like_pad("Corsair CORSAIR K100 RGB Optical-Mechanical Gaming Keyboard")
+    assert G.looks_like_pad("8BitDo Ultimate Wireless / Pro 2 Wired Controller")
+
+    r, w = os.pipe()
+    got, states, done = [], [], threading.Event()
+
+    def state(name):
+        states.append(name)
+        if name is None:
+            done.set()
+
+    reader = G.GamepadReader(got.append, state, finder=lambda: [G.Pad(r, "8BitDo", "evdev")] if not states else [])
+    reader.start()
+    os.write(w, ev(G.EV_KEY, 0x130, 1))
+    os.close(w)                                            # unplugged
+    assert done.wait(3)
+    reader.stop()
+    assert states[0] == "8BitDo" and states[-1] is None
+    assert [(e.kind, e.number) for e in got] == [("button", G.BTN_A)]
+    assert struct.calcsize("llHHi") == G.EV_EVENT.size
+
+
+def test_phase_runs_over_all_shown_runs():
+    dev = SimulatedDevice()
+    dev.connect()
+    r = P.PatternRunner(ScriptSync(dev, SyncSettings(max_speed=0)))
+    r.configure(0, pattern=P.BUILTIN[0], bpm=60)         # one run = 1 s
+    r.start(0)
+    assert r.phase(500) == pytest.approx(0.5)
+    assert r.phase(1500, runs=2) == pytest.approx(0.75)  # second run of two: right half
+    assert r.phase(2500, runs=2) == pytest.approx(0.25)  # then back to the start

@@ -249,11 +249,11 @@ class PatternRunner:
     def position(self, now: float) -> float | None:
         return position_at(self.acts, now) if self.acts else None
 
-    def phase(self, now: float) -> float | None:
-        """Where in the run (0..1) the pattern is."""
+    def phase(self, now: float, runs: int = 1) -> float | None:
+        """Where the pattern is (0..1) within `runs` runs shown side by side."""
         if not self.running or self.pattern is None:
             return None
-        c = cycle_ms(self.pattern, self.bpm)
+        c = cycle_ms(self.pattern, self.bpm) * max(1, runs)
         return ((now - self.anchor) % c) / c if c > 0 else None
 
     def tick(self, now: float) -> None:
