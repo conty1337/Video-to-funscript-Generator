@@ -244,3 +244,14 @@ def test_gamepad_evdev_and_filter():
     assert states[0] == "8BitDo" and states[-1] is None
     assert [(e.kind, e.number) for e in got] == [("button", G.BTN_A)]
     assert struct.calcsize("llHHi") == G.EV_EVENT.size
+
+
+def test_phase_runs_over_all_shown_runs():
+    dev = SimulatedDevice()
+    dev.connect()
+    r = P.PatternRunner(ScriptSync(dev, SyncSettings(max_speed=0)))
+    r.configure(0, pattern=P.BUILTIN[0], bpm=60)         # one run = 1 s
+    r.start(0)
+    assert r.phase(500) == pytest.approx(0.5)
+    assert r.phase(1500, runs=2) == pytest.approx(0.75)  # second run of two: right half
+    assert r.phase(2500, runs=2) == pytest.approx(0.25)  # then back to the start

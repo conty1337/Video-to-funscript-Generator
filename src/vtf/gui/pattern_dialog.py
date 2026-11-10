@@ -1310,7 +1310,7 @@ class PatternDialog(QDialog):
             runner = self.prunner.runner
         else:
             self.runner.tick(now)
-            self.view.set_phase(self.runner.phase(now))
+            self.view.set_phase(self.runner.phase(now, self.view.cycles))
             runner = self.runner
         win = self.parent()
         if win is not None and hasattr(win, "rail"):

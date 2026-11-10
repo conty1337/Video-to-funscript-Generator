@@ -150,7 +150,7 @@ class PatternView(QWidget):
         p.drawText(QRectF(r.left(), r.bottom() + 4, r.width(), 16), Qt.AlignLeft | Qt.AlignVCenter,
                    f"{self.cycles} Durchläufe · je {one / 1000:.1f} s".replace(".", ","))
         if self.phase is not None:
-            x = r.left() + r.width() * self.phase / self.cycles
+            x = r.left() + r.width() * self.phase   # phase over all runs shown
             p.setPen(QPen(QColor(theme.TEXT), 1.5))
             p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
 
