@@ -389,8 +389,11 @@ class MultiTracker:
     """Tracks up to MAX_AREAS areas plus the background (camera)."""
 
     def __init__(self, boxes_px: list, shape: tuple[int, int], compensate_camera: bool = True,
-                 first: np.ndarray | None = None, turn: bool = True):
+                 first: np.ndarray | None = None, turn: bool = True, anchor: bool = False):
         self.turn = turn
+        # anchor: areas 2 and 3 are not followed, they stay where they were marked (moving
+        # only with the camera, if that is compensated) - nothing can drag them away
+        self.anchor = anchor
         if not boxes_px:
             raise ValueError("mindestens ein Tracking-Bereich nötig")
         self.shape = shape
@@ -443,7 +446,15 @@ class MultiTracker:
 
     def step(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
         """Returns the motion vector (dx, dy) for the script for this frame pair."""
-        moves = [a.step(prev, cur) for a in self.areas]
+        if self.anchor and len(self.areas) > 1:
+            cam = self._camera(prev, cur) if self.compensate else np.zeros(2)
+            moves = [self.areas[0].step(prev, cur)]
+            for a in self.areas[1:]:
+                a.center = np.clip(a.center + cam, [0, 0], [a.w - 1, a.h - 1])
+                a.lost = False
+                moves.append(cam)
+        else:
+            moves = [a.step(prev, cur) for a in self.areas]
         if any(a.lost for a in self.areas):
             return np.zeros(2)          # one area not followed: no reliable motion in this frame
         if len(moves) == 1:

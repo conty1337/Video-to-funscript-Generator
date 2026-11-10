@@ -397,3 +397,24 @@ def test_box_does_not_grow_from_a_small_cluster():
     for prev, cur in itertools.pairwise(frames):
         t.step(prev, cur)
     assert 0.9 < t.scale < 1.1 and abs(t.angle) < 5, (t.scale, t.angle)
+
+
+def test_anchored_areas_stay_put(tmp_path):
+    """Areas 2/3 anchored: they do not move (fixed camera), or move only with the
+    camera (pan, compensated); the strokes of area 1 are still found."""
+    path, a, b = _video(tmp_path / "anc.avi", pan=False)
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_boxes=(a, b), width=W, hwaccel="none",
+                                              track_anchor=True))
+    xs, ys = m.tracks[:, 1, 0] * W, m.tracks[:, 1, 1] * H
+    assert np.ptp(xs) < 1.5 and np.ptp(ys) < 1.5               # area 2 did not move at all
+    peaks = _peaks(m)
+    assert all(any(abs(p - e) <= 120 for p in peaks) for e in (750, 1750, 2750)), peaks
+    # with a panning camera the anchored area moves along with it
+    path, a, b = _video(tmp_path / "anc_pan.avi", pan=True)
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_boxes=(a, b), width=W, hwaccel="none",
+                                              track_anchor=True, compensate_camera=True))
+    assert np.ptp(m.tracks[:, 1, 0] * W) > 40                  # followed the pan (±45 px)
+    peaks = _peaks(m)
+    assert all(any(abs(p - e) <= 150 for p in peaks) for e in (750, 1750, 2750)), peaks
+    s = AnalysisSettings(mode="track", track_boxes=(a, b))
+    assert s.cache_key() != AnalysisSettings(mode="track", track_boxes=(a, b), track_anchor=True).cache_key()
