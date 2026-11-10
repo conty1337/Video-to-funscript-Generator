@@ -1215,14 +1215,8 @@ def test_multi_axis_tcode(app):
     for t in range(0, 1600, 20):
         ctl.tick(t, True)
     ctl.tick(0, False)
-    os.set_blocking(master, False)
-    text = b""
-    try:
-        while True:
-            text += os.read(master, 4096)
-    except (BlockingIOError, OSError):
-        pass
-    text = text.decode()
+    from test_devices_more import _read_until
+    text = _read_until(master, "DSTOP\n")
     assert "L0" in text and "R1" in text and "DSTOP" in text
     ctl.disconnect_device()
     assert ctl.axis_syncs == {}
