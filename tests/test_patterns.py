@@ -299,12 +299,14 @@ def test_plan_matches_what_is_played():
     for t in range(0, 10_000, 50):
         pr.tick(t)
     plan, marks = pr.plan(10_000, 40_000)
-    assert marks and marks[0][1] == 1 and abs(marks[0][0] - 15_000) <= 250
+    # the mark sits where the new pattern really begins: after the move under way at the step change
+    assert marks and marks[0][1] == 1 and 15_000 <= marks[0][0] <= 16_000
+    assert any(a.at == marks[0][0] for a in plan)
     played = []
     for t in range(10_000, 40_000, 50):
         pr.tick(t)
         played.append((t, pr.runner.position(t)))
-    for t, pos in played[::10]:
+    for t, pos in played:
         assert pos == pytest.approx(P.position_at(plan, t), abs=1)
 
 

@@ -734,13 +734,17 @@ class ProgramRunner:
         marks: list[tuple[float, int]] = []
         t, idx = now, sim.index
         while t < end and sim.running:
-            t += step_ms
+            # tick when the real runner would act: at the next step change, else on its apply rhythm
+            starts = sim.program.starts()
+            nb = sim.start_ms + (starts[idx + 1] if idx + 1 < len(starts) else sim.program.total_ms)
+            na = sim._applied_at + self.APPLY_EVERY_MS
+            t = min(nb if nb > t else t + step_ms, na if na > t else t + step_ms, t + step_ms)
             sim.tick(t)
-            if sim.index != idx and sim.running:
-                marks.append((t, sim.index))
-                idx = sim.index
-            # moves up to the next one under way can no longer change
             nxt = next((a.at for a in r.acts if a.at > t), None)
+            if sim.index != idx and sim.running:
+                marks.append((nxt if nxt is not None else t, sim.index))   # where the new pattern begins
+                idx = sim.index
+            # moves up to the one under way can no longer change
             fixed_to = nxt if nxt is not None else t
             last = out[-1].at if out else -1e18
             out += [a for a in r.acts if last < a.at <= fixed_to]
