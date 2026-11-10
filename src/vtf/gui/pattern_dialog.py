@@ -373,11 +373,10 @@ class PatternDialog(QDialog):
         row.addWidget(self.offset_label, 1)
         row.addWidget(self.reset_btn)
         pr.addLayout(row)
-        cap = QLabel("Ein Ablauf spielt seine Schritte nacheinander, jeder mit eigenem Muster, Dauer, Tempo und "
-                     "Tiefe. Beim Abspielen passen ↑/↓ und ←/→ (oder Controller) alles gemeinsam an, "
-                     "Bild↑/↓ bzw. LB/RB springt zum vorigen/nächsten Schritt.")
+        cap = QLabel()
         cap.setObjectName("caption")
         cap.setWordWrap(True)
+        self.pcap = cap
         pr.addWidget(cap)
         self.right_stack.addWidget(page)
 
@@ -414,6 +413,7 @@ class PatternDialog(QDialog):
         mr.addWidget(cap)
         self.right_stack.addWidget(page)
         self.m_depth.valueChanged.connect(self._music_settings)
+        self.m_depth_val.setText(f"{self.m_depth.value()} %")
         self.music = M.MusicDriver(self.sync)
         self.capture: M.AudioCapture | None = None
         self.tracker: M.BeatTracker | None = None
@@ -523,6 +523,17 @@ class PatternDialog(QDialog):
             b.setChecked(i == mode)
         self.left_stack.setCurrentIndex(mode)
         self.right_stack.setCurrentIndex({0: 0, 1: 1, 2: 1, 3: 2}[mode])
+        if mode == 2:
+            self.pcap.setText("Beim Abspielen verschieben ↑/↓ und ←/→ (oder Controller) Tiefe und Tempo aller "
+                              "Abschnitte, Bild↓ bzw. RB springt sofort zum nächsten.")
+            self.prev_btn.setText("Voriger Abschnitt")
+            self.next_btn.setText("Nächster Abschnitt")
+        else:
+            self.pcap.setText("Ein Ablauf spielt seine Schritte nacheinander, jeder mit eigenem Muster, Dauer, Tempo "
+                              "und Tiefe. Beim Abspielen passen ↑/↓ und ←/→ (oder Controller) alles gemeinsam an, "
+                              "Bild↑/↓ bzw. LB/RB springt zum vorigen/nächsten Schritt.")
+            self.prev_btn.setText("Schritt zurück")
+            self.next_btn.setText("Nächster Schritt")
         self.qs.setValue("pattern/mode", mode)
         if mode == 2:
             if self.random_prog is None:

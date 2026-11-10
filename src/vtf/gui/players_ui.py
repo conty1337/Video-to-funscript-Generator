@@ -6,8 +6,8 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLayout,
+                               QLineEdit, QPushButton, QSpinBox, QVBoxLayout)
 
 from .. import players as PL
 from ..device.sync import ScriptSync
@@ -178,6 +178,9 @@ class ExternalSync(QObject):
         self.disconnect_player()
 
 
+TEXT_W = 460
+
+
 class PlayersDialog(QDialog):
     def __init__(self, ext: ExternalSync, parent=None):
         super().__init__(parent)
@@ -186,56 +189,45 @@ class PlayersDialog(QDialog):
         self.setWindowTitle("Andere Player")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
+        lay.setSizeConstraint(QLayout.SetMinimumSize)     # never smaller than the content
         cap = QLabel("Spielt Scripts zu Videos ab, die du in einem anderen Player schaust. Das Script wird neben "
                      "dem Video gesucht (gleicher Name, .funscript) oder im Script-Ordner.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
-        cap.setMinimumWidth(460)
+        cap.setFixedWidth(TEXT_W)          # fixed width: wrapped text gets its real height
         lay.addWidget(cap)
         form = QFormLayout()
         form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(8)
+        form.setVerticalSpacing(12)
         self.kind = QComboBox()
         for code, label in PL.KINDS:
             self.kind.addItem(label, code)
         self.kind.setCurrentIndex(max(0, self.kind.findData(qs.value("players/kind", "mpv"))))
         form.addRow("Player", self.kind)
-        lay.addLayout(form)
-        self.pages = QStackedWidget()
-        # mpv
-        w = QWidget()
-        f = QFormLayout(w)
-        f.setContentsMargins(0, 0, 0, 0)
+        self.form = form
         self.mpv_socket = QLineEdit(str(qs.value("players/mpv", PL.DEFAULT_MPV_SOCKET)))
-        f.addRow("Socket", self.mpv_socket)
-        self.pages.addWidget(w)
-        # vlc
-        w = QWidget()
-        f = QFormLayout(w)
-        f.setContentsMargins(0, 0, 0, 0)
         self.vlc_addr = QLineEdit(str(qs.value("players/vlc", PL.DEFAULT_VLC)))
         self.vlc_pw = QLineEdit(str(qs.value("players/vlc_pw", "")))
         self.vlc_pw.setEchoMode(QLineEdit.Password)
-        f.addRow("Adresse", self.vlc_addr)
-        f.addRow("Passwort", self.vlc_pw)
-        self.pages.addWidget(w)
-        # deovr / heresphere
-        w = QWidget()
-        f = QFormLayout(w)
-        f.setContentsMargins(0, 0, 0, 0)
         self.host = QLineEdit(str(qs.value("players/host", "192.168.0.")))
         self.port = QSpinBox()
         self.port.setRange(1, 65535)
         self.port.setValue(int(qs.value("players/port", PL.DEOVR_PORT)))
-        f.addRow("Adresse", self.host)
-        f.addRow("Port", self.port)
-        self.pages.addWidget(w)
-        lay.addWidget(self.pages)
+        self.port.setMinimumWidth(120)
+        form.addRow("Socket", self.mpv_socket)
+        form.addRow("Adresse", self.vlc_addr)
+        form.addRow("Passwort", self.vlc_pw)
+        form.addRow("Adresse", self.host)
+        form.addRow("Port", self.port)
+        self._rows = {"mpv": (self.mpv_socket,), "vlc": (self.vlc_addr, self.vlc_pw),
+                      "deovr": (self.host, self.port), "heresphere": (self.host, self.port)}
+        lay.addLayout(form)
         self.hint = QLabel()
         self.hint.setObjectName("caption")
         self.hint.setWordWrap(True)
         self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.hint.setFixedWidth(TEXT_W)
         lay.addWidget(self.hint)
         row = QHBoxLayout()
         self.folder = QLineEdit(";".join(ext.folders()))
@@ -255,6 +247,7 @@ class PlayersDialog(QDialog):
         self.status = QLabel()
         self.status.setObjectName("meta")
         self.status.setWordWrap(True)
+        self.status.setFixedWidth(TEXT_W)
         lay.addWidget(self.status)
         self.kind.currentIndexChanged.connect(self._kind)
         self.connect_btn.clicked.connect(self._connect)
@@ -270,8 +263,11 @@ class PlayersDialog(QDialog):
 
     def _kind(self, *_):
         k = self.kind.currentData()
-        self.pages.setCurrentIndex({"mpv": 0, "vlc": 1}.get(k, 2))
+        shown = self._rows[k]
+        for w in (self.mpv_socket, self.vlc_addr, self.vlc_pw, self.host, self.port):
+            self.form.setRowVisible(w, w in shown)
         self.hint.setText(HINTS[k])
+        self.adjustSize()
         if k in ("deovr", "heresphere") and self.port.value() == 0:
             self.port.setValue(PL.DEOVR_PORT)
 

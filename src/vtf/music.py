@@ -179,7 +179,7 @@ class BeatTracker:
         return tempo(list(self.beats))
 
 
-SOURCES = (("system", "Systemton (was gerade läuft)"), ("mic", "Mikrofon"))
+SOURCES = (("system", "Systemton"), ("mic", "Mikrofon"))
 
 
 def capture_command(source: str = "system") -> list[str] | None:

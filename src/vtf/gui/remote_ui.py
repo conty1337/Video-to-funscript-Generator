@@ -6,8 +6,10 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -108,53 +110,65 @@ class RemoteDialog(QDialog):
         self.setWindowTitle("Handy-Fernbedienung")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
-        lay.setSpacing(10)
-        cap = QLabel("Steuere Muster, Abläufe und Zufall vom Handy aus. Handy und PC müssen im selben WLAN "
-                     "sein. Keine App nötig: die Adresse im Browser öffnen und die PIN eingeben.")
+        lay.setSpacing(12)
+        lay.setSizeConstraint(QLayout.SetMinimumSize)
+        cap = QLabel("Steuere Muster, Abläufe und Zufall vom Handy aus. Handy und PC im selben WLAN, "
+                     "keine App nötig: Adresse im Browser öffnen, PIN eingeben.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
-        cap.setMinimumWidth(440)
+        cap.setMinimumWidth(460)
         lay.addWidget(cap)
         self.on = QCheckBox("Fernbedienung an")
         self.on.setChecked(ctl.enabled)
+        self.on.setMinimumHeight(28)
         lay.addWidget(self.on)
+        form = QFormLayout()
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(12)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.addr = QLabel()
-        self.addr.setFont(theme.mono_font(16))
+        self.addr.setFont(theme.mono_font(14))
         self.addr.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        lay.addWidget(self.addr)
-        row = QHBoxLayout()
+        form.addRow(self._label("Adresse"), self.addr)
         self.pin = QLabel()
-        self.pin.setFont(theme.mono_font(16))
+        self.pin.setFont(theme.mono_font(14))
         self.pin.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        row.addWidget(self.pin, 1)
         self.pin_btn = QPushButton("Neue PIN")
-        row.addWidget(self.pin_btn)
-        lay.addLayout(row)
         row = QHBoxLayout()
-        lb = QLabel("Port")
-        lb.setObjectName("formLabel")
-        row.addWidget(lb)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.pin, 1)
+        row.addWidget(self.pin_btn)
+        form.addRow(self._label("PIN"), row)
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(ctl.port)
-        row.addWidget(self.port)
-        row.addStretch(1)
-        lay.addLayout(row)
+        self.port.setMinimumWidth(120)
+        prow = QHBoxLayout()
+        prow.setContentsMargins(0, 0, 0, 0)
+        prow.addWidget(self.port)
+        prow.addStretch(1)
+        form.addRow(self._label("Port"), prow)
+        lay.addLayout(form)
         self.err = QLabel()
         self.err.setObjectName("caption")
         self.err.setWordWrap(True)
         lay.addWidget(self.err)
-        hint = QLabel("Klappt es nicht? Die Firewall lässt den Port evtl. nicht durch. Einmalig im Terminal:\n"
-                      "sudo firewall-cmd --add-port=PORT/tcp --permanent && sudo firewall-cmd --reload")
-        hint.setObjectName("caption")
-        hint.setWordWrap(True)
-        hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.hint = hint
-        lay.addWidget(hint)
+        self.hint = QLabel()
+        self.hint.setObjectName("caption")
+        self.hint.setWordWrap(True)
+        self.hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lay.addWidget(self.hint)
         self.on.toggled.connect(self._toggled)
         self.pin_btn.clicked.connect(self._new_pin)
         self.port.editingFinished.connect(lambda: (ctl.set_port(self.port.value()), self.refresh()))
         self.refresh()
+
+    @staticmethod
+    def _label(text: str) -> QLabel:
+        lb = QLabel(text)
+        lb.setObjectName("formLabel")
+        lb.setMinimumWidth(72)
+        return lb
 
     def _toggled(self, on: bool):
         self.ctl.set_enabled(on)
@@ -167,10 +181,12 @@ class RemoteDialog(QDialog):
     def refresh(self):
         on = self.ctl.enabled
         self.addr.setText("\n".join(self.ctl.urls()) if on else "aus")
-        self.pin.setText(f"PIN  {self.ctl.pin}")
+        self.pin.setText(self.ctl.pin)
         self.err.setText(self.ctl.error)
-        self.hint.setText(self.hint.text().replace("PORT", str(self.ctl.port)) if "PORT" in self.hint.text()
-                          else self.hint.text())
+        self.err.setVisible(bool(self.ctl.error))
+        self.hint.setText("Klappt es nicht, lässt die Firewall den Port evtl. nicht durch. Einmalig im Terminal:\n"
+                          f"sudo firewall-cmd --add-port={self.ctl.port}/tcp --permanent && "
+                          "sudo firewall-cmd --reload")
         if self.ctl.error:
             self.on.blockSignals(True)
             self.on.setChecked(False)

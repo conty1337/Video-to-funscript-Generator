@@ -313,7 +313,7 @@ class DeviceDialog(QDialog):
         lay.addWidget(cap)
         f = QFormLayout()
         f.setHorizontalSpacing(12)
-        f.setVerticalSpacing(8)
+        f.setVerticalSpacing(12)
         self.kind = QComboBox()
         for label, val in KINDS:
             self.kind.addItem(label, val)
@@ -348,7 +348,7 @@ class DeviceDialog(QDialog):
         lay.addWidget(title)
         f = QFormLayout()
         f.setHorizontalSpacing(12)
-        f.setVerticalSpacing(8)
+        f.setVerticalSpacing(12)
         s = ctl.sync.settings
         self.offset = self._slider(-300, 600, s.offset_ms, " ms")
         self.offset[1].setToolTip("Positiv = Gerät bekommt Befehle früher (gleicht die Bluetooth-Verzögerung aus)")
@@ -395,7 +395,7 @@ class DeviceDialog(QDialog):
         lay.addWidget(self.safe_on)
         f = QFormLayout()
         f.setHorizontalSpacing(12)
-        f.setVerticalSpacing(8)
+        f.setVerticalSpacing(12)
         self.safe_max = self._minutes(g.max_minutes, 600)
         self.safe_idle = self._minutes(g.idle_minutes, 240)
         self.safe_every = self._minutes(g.break_every, 240)
@@ -407,6 +407,7 @@ class DeviceDialog(QDialog):
         f.addRow(self._label("Ohne Bedienung"), self._row(self.safe_idle, "dann Stopp"))
         f.addRow(self._label("Pause alle"), self._row(self.safe_every, "für", self.safe_secs))
         self.safe_form = QWidget()
+        f.setContentsMargins(0, 0, 0, 0)
         self.safe_form.setLayout(f)
         lay.addWidget(self.safe_form)
         cap = QLabel("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, "
@@ -450,9 +451,10 @@ class DeviceDialog(QDialog):
         for b in (self.connect_btn, self.scan_btn, self.disconnect_btn,
                   self.up_btn, self.down_btn, self.stop_btn):
             b.setFixedHeight(BUTTON_H)
-        self.invert.setMinimumHeight(24)
+        self.invert.setMinimumHeight(28)
+        self.safe_on.setMinimumHeight(28)
         for sl in (self.offset[0], self.speed[0]):
-            sl.setMinimumHeight(24)
+            sl.setFixedHeight(INPUT_H)
 
         self.connect_btn.clicked.connect(lambda: ctl.connect_device(self.kind.currentData(), self.url.text().strip()))
         self.disconnect_btn.clicked.connect(ctl.disconnect_device)
