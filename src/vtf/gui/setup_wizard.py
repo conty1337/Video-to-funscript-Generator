@@ -10,8 +10,19 @@ import wave
 
 from PySide6.QtCore import QElapsedTimer, QPointF, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                               QSlider, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSlider,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..device.buttplug import DEFAULT_URL, ButtplugDevice
 from ..device.sync import ScriptSync

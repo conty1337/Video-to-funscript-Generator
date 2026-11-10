@@ -422,8 +422,8 @@ def test_tracking_sections_box(app):
 
 def test_tracking_sections_in_main_window(app, tmp_path):
     from PySide6.QtCore import QEventLoop
-
     from test_tracking import _video
+
     from vtf.gui.main_window import MainWindow
 
     path, a, b = _video(tmp_path / "t.avi", seconds=3.0, pan=False)
@@ -488,6 +488,7 @@ def test_tracking_rotate_and_correct(app):
 
 def test_tracking_preparation_saved_and_restored(app, tmp_path):
     from test_tracking import _video
+
     from vtf.gui.main_window import MainWindow
     from vtf.prep import prep_path
 
@@ -661,6 +662,7 @@ def test_close_video(app, tmp_path):
     from pathlib import Path
 
     from videogen import make_video
+
     from vtf.gui.main_window import MainWindow
 
     vid = tmp_path / "c.avi"
@@ -683,6 +685,7 @@ def test_bookmarks_rhythm_preview(app, tmp_path):
     from pathlib import Path
 
     from videogen import make_video
+
     from vtf.gui.main_window import MainWindow
     from vtf.prep import load_bookmarks
 
@@ -996,7 +999,12 @@ def test_setup_wizard(app):
     import time
 
     from vtf.gui.main_window import MainWindow
-    from vtf.gui.setup_wizard import SPEED_LEVELS, SetupWizard, metronome_actions, speed_for
+    from vtf.gui.setup_wizard import (
+        SPEED_LEVELS,
+        SetupWizard,
+        metronome_actions,
+        speed_for,
+    )
 
     acts = metronome_actions(0, 3)
     assert [(a.at, a.pos) for a in acts[:3]] == [(0, 0), (500, 100), (1000, 0)]
@@ -1073,4 +1081,52 @@ def test_remote_commands(app, tmp_path, monkeypatch):
     assert not d.running and "Eine Stunde" in rc._state["programs"]
     d.reset_offsets()
     d.set_mode(0)
+    w.close()
+
+
+def test_music_mode_and_script(app, sine_video, tmp_path, monkeypatch):
+    import sys
+    import time
+
+    import numpy as np
+
+    from vtf import music
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    d = w.ensure_patterns()
+    d.set_mode(3)
+    assert d.right_stack.currentIndex() == 2
+    # fake recorder: a click track at 120 per minute
+    x = np.zeros(int(4 * music.RATE), np.float32)
+    n = int(0.03 * music.RATE)
+    hit = np.sin(2 * np.pi * 80 * np.arange(n) / music.RATE) * np.exp(-np.arange(n) / (0.008 * music.RATE))
+    for k in range(8):
+        i = int((0.2 + 0.5 * k) * music.RATE)
+        x[i:i + n] += 0.8 * hit
+    raw = tmp_path / "s.raw"
+    raw.write_bytes((x * 32767).astype(np.int16).tobytes())
+    script = (f"import sys,time; d=open({str(raw)!r},'rb').read()\n"
+              "for i in range(0,len(d),4410): sys.stdout.buffer.write(d[i:i+4410]); sys.stdout.flush(); time.sleep(0.05)")
+    d._start_music([sys.executable, "-c", script])
+    assert d.running and d.music.running
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 6 and not d._music_error:
+        app.processEvents()
+        d._tick()
+        time.sleep(0.02)
+    assert d.music.count >= 5
+    d._tick()                                            # recorder ended: stops with a message
+    assert not d.running and "Aufnahme beendet" in d.m_info.text()
+    assert w.remote is not None and d.remote_state()["mode"] == 3
+    d.set_mode(0)
+
+    # script from music (beats faked, the test video has no sound track)
+    w.open_video(str(sine_video))
+    monkeypatch.setattr(music, "beats_from_file", lambda *a, **k: [1.0, 1.5, 2.0, 2.5, 3.0])
+    w.curve.actions = []
+    w.apply_music_script(0, 4000, every=1, lo=10, hi=90)
+    assert [a.at for a in w.curve.actions if a.pos == 10] == [1000, 1500, 2000, 2500, 3000]
+    w.undo()
+    assert w.curve.actions == []
     w.close()

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from collections import deque
+
 from PySide6.QtCore import QElapsedTimer, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -29,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import gamepad as G
+from .. import music as M
 from .. import patterns as P
 from ..device.sync import ScriptSync
 from . import theme
@@ -130,7 +134,7 @@ class PatternDialog(QDialog):
         mode_row.setSpacing(4)
         self.mode_btns = []
         self._mode = 0
-        for i, text in enumerate(("Muster", "Abläufe", "Zufall")):
+        for i, text in enumerate(("Muster", "Abläufe", "Zufall", "Musik")):
             b = QPushButton(text)
             b.setObjectName("segment")
             b.setCheckable(True)
@@ -238,6 +242,43 @@ class PatternDialog(QDialog):
         rl.addWidget(self.reroll_btn)
         rl.addStretch(1)
         self.left_stack.addWidget(page)
+
+        page = QWidget()
+        ml = QVBoxLayout(page)
+        ml.setContentsMargins(0, 8, 0, 0)
+        ml.setSpacing(8)
+        cap = QLabel("Das Gerät folgt dem Takt der Musik, die gerade auf dem PC läuft (Spotify, YouTube, …) "
+                     "oder die das Mikrofon hört.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        ml.addWidget(cap)
+        mf = QFormLayout()
+        mf.setHorizontalSpacing(8)
+        mf.setVerticalSpacing(8)
+        self.m_source = QComboBox()
+        for code, label in M.SOURCES:
+            self.m_source.addItem(label, code)
+        self.m_source.setCurrentIndex(max(0, self.m_source.findData(str(self._setting("m_source", "system")))))
+        mf.addRow(self._label("Quelle"), self.m_source)
+        self.m_every = QComboBox()
+        for n, label in ((1, "Jeder Schlag"), (2, "Jeder 2. Schlag"), (4, "Jeder 4. Schlag")):
+            self.m_every.addItem(label, n)
+        self.m_every.setCurrentIndex(max(0, self.m_every.findData(int(self._setting("m_every", 1)))))
+        mf.addRow(self._label("Hub auf"), self.m_every)
+        self.m_sens = QSlider(Qt.Horizontal)
+        self.m_sens.setRange(0, 100)
+        self.m_sens.setValue(int(self._setting("m_sens", 50)))
+        mf.addRow(self._label("Empfindlich"), self.m_sens)
+        ml.addLayout(mf)
+        self.m_level = QCheckBox("Tiefe folgt der Lautstärke")
+        self.m_level.setChecked(str(self.qs.value("pattern/m_level", "true")).lower() == "true")
+        ml.addWidget(self.m_level)
+        ml.addStretch(1)
+        self.left_stack.addWidget(page)
+        for w in (self.m_source, self.m_every):
+            w.currentIndexChanged.connect(self._music_settings)
+        self.m_sens.valueChanged.connect(self._music_settings)
+        self.m_level.toggled.connect(self._music_settings)
         self.random_prog: P.Program | None = None
         r = self._random_settings()
         self.mood.setCurrentIndex(max(0, self.mood.findData(r["mood"])))
@@ -338,6 +379,48 @@ class PatternDialog(QDialog):
         cap.setWordWrap(True)
         pr.addWidget(cap)
         self.right_stack.addWidget(page)
+
+        page = QWidget()
+        mr = QVBoxLayout(page)
+        mr.setContentsMargins(0, 0, 0, 0)
+        mr.setSpacing(10)
+        t = QLabel("Musik")
+        t.setObjectName("section")
+        mr.addWidget(t)
+        from .setup_wizard import Flash
+        self.m_flash = Flash()
+        mr.addWidget(self.m_flash, 1)
+        self.m_info = QLabel("Start drücken und Musik abspielen.")
+        self.m_info.setObjectName("value")
+        self.m_info.setFont(theme.mono_font(13))
+        self.m_info.setAlignment(Qt.AlignCenter)
+        mr.addWidget(self.m_info)
+        mform = QFormLayout()
+        mform.setHorizontalSpacing(12)
+        self.m_depth = QSlider(Qt.Horizontal)
+        self.m_depth.setRange(10, 100)
+        self.m_depth.setValue(int(self._setting("m_depth", 100)))
+        self.m_depth_val = QLabel()
+        self.m_depth_val.setObjectName("value")
+        self.m_depth_val.setFont(theme.mono_font(12))
+        self.m_depth_val.setMinimumWidth(96)
+        mform.addRow(self._label("Tiefe"), _hrow(self.m_depth, self.m_depth_val))
+        mr.addLayout(mform)
+        cap = QLabel("Das Gerät ist auf den vorhergesagten Schlägen unten. Passt der Takt nicht genau, im Fenster "
+                     "„Gerät“ den Zeitversatz ändern. ↑/↓ ändert die Tiefe.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        mr.addWidget(cap)
+        self.right_stack.addWidget(page)
+        self.m_depth.valueChanged.connect(self._music_settings)
+        self.music = M.MusicDriver(self.sync)
+        self.capture: M.AudioCapture | None = None
+        self.tracker: M.BeatTracker | None = None
+        self._beats: deque = deque()
+        self._stream_base: float | None = None
+        self._stream_samples = 0
+        self._music_error = ""
+        self._last_flash = -1e9
         right = outer
 
         self.pad_label = QLabel()
@@ -431,14 +514,14 @@ class PatternDialog(QDialog):
         return self._mode
 
     def set_mode(self, mode: int):
-        mode = mode if mode in (0, 1, 2) else 0
+        mode = mode if mode in (0, 1, 2, 3) else 0
         if mode != self.mode and self.running:
             self.stop()
         self._mode = mode
         for i, b in enumerate(self.mode_btns):
             b.setChecked(i == mode)
         self.left_stack.setCurrentIndex(mode)
-        self.right_stack.setCurrentIndex(min(mode, 1))
+        self.right_stack.setCurrentIndex({0: 0, 1: 1, 2: 1, 3: 2}[mode])
         self.qs.setValue("pattern/mode", mode)
         if mode == 2:
             if self.random_prog is None:
@@ -584,6 +667,10 @@ class PatternDialog(QDialog):
         self.runner.configure(self._now(), bpm=self.bpm.value(), lo=lo, hi=hi)
 
     def nudge(self, depth: float = 0, tempo: float = 0):
+        if self.mode == 3:
+            if depth:
+                self.m_depth.setValue(int(round(self.m_depth.value() + depth)))
+            return
         if self.mode >= 1:
             self._offset_f[0] += tempo
             self._offset_f[1] += depth
@@ -595,6 +682,8 @@ class PatternDialog(QDialog):
             self.bpm.setValue(int(round(self.bpm.value() + tempo)))
 
     def step_pattern(self, d: int):
+        if self.mode == 3:
+            return
         if self.mode >= 1:
             if self.prunner.running:
                 self.prunner.skip(self._now(), d)
@@ -606,6 +695,90 @@ class PatternDialog(QDialog):
         cur = self.list.currentRow()
         pos = rows.index(cur) if cur in rows else -1
         self.list.setCurrentRow(rows[(pos + d) % len(rows)])
+
+    # ------------------------------------------------------------ music
+    def _music_settings(self, *_):
+        self.qs.setValue("pattern/m_source", self.m_source.currentData())
+        self.qs.setValue("pattern/m_every", self.m_every.currentData())
+        self.qs.setValue("pattern/m_sens", self.m_sens.value())
+        self.qs.setValue("pattern/m_level", "true" if self.m_level.isChecked() else "false")
+        self.qs.setValue("pattern/m_depth", self.m_depth.value())
+        self.m_depth_val.setText(f"{self.m_depth.value()} %")
+        self.music.every = self.m_every.currentData()
+        self.music.lo, self.music.hi = 100 - self.m_depth.value(), 100
+        self.music.follow_level = self.m_level.isChecked()
+        if self.tracker is not None:
+            self.tracker.sensitivity = self.m_sens.value() / 100
+
+    def _on_samples(self, samples, arrival_ms: float):
+        """Capture thread: find beats, remember them with their wall-clock time."""
+        tr = self.tracker
+        if tr is None:
+            return
+        self._stream_samples += len(samples)
+        base = arrival_ms - self._stream_samples / M.RATE * 1000
+        self._stream_base = base if self._stream_base is None else min(self._stream_base, base)
+        for b in tr.feed(samples):
+            self._beats.append((self._stream_base + b * 1000, tr.level))
+
+    def _on_capture_error(self, msg: str):
+        self._music_error = msg
+
+    def _start_music(self, command=None):
+        win = self.parent()
+        if win is not None and getattr(win, "timer", None) is not None and win.timer.isActive():
+            win.pause()
+        self.runner.stop()
+        self.prunner.stop()
+        self._music_settings()
+        self.tracker = M.BeatTracker(self.m_sens.value() / 100)
+        self._beats.clear()
+        self._stream_base, self._stream_samples, self._music_error = None, 0, ""
+        cmd = command if command is not None else M.capture_command(self.m_source.currentData())
+        self.capture = M.AudioCapture(self._on_samples, cmd, self._on_capture_error)
+        try:
+            self.capture.start()
+        except (RuntimeError, OSError) as e:
+            self.capture = None
+            self.m_info.setText(str(e))
+            return
+        self.music.start()
+        self.timer.start()
+        self.play_btn.setIcon(theme.icon("pause", theme.ON_ACCENT))
+        self.play_btn.setText("Stopp")
+        self.m_info.setText("Höre zu…")
+
+    def _stop_music(self):
+        if self.capture is not None:
+            self.capture.stop()
+            self.capture = None
+        self.tracker = None
+        self.music.stop()
+        if hasattr(self, "m_flash"):
+            self.m_flash.set_on(False)
+
+    def _music_tick(self):
+        now = time.monotonic() * 1000
+        while self._beats:
+            t, level = self._beats.popleft()
+            self.music.beat(t, level)
+            self._last_flash = t
+        self.music.tick(now)
+        self.m_flash.set_on(now - self._last_flash < 120)
+        if self._music_error and (self.capture is None or not self.capture.running):
+            msg = self._music_error
+            self.stop()
+            self.m_info.setText(f"Aufnahme beendet: {msg[:120]}")
+            return
+        bpm = self.music.bpm()
+        lvl = self.tracker.level if self.tracker is not None else 0.0
+        bar = "▮" * int(round(lvl * 10)) + "▯" * (10 - int(round(lvl * 10)))
+        self.m_info.setText(f"{bar}   " + (f"≈ {bpm:.0f} Schläge/min" if bpm else "suche den Takt…"))
+        win = self.parent()
+        if win is not None and hasattr(win, "rail"):
+            pos = self.ctl.device_position()
+            win.rail.set_device_position(pos if pos is not None else
+                                         (M.position_at(self.music.acts, now) if self.music.acts else None))
 
     # ------------------------------------------------------------ phone remote
     def remote_state(self) -> dict:
@@ -622,7 +795,12 @@ class PatternDialog(QDialog):
                 bpm, depth = cur
             else:
                 bpm, depth = self.bpm.value(), self.depth.value()
-        titles = {0: "Muster", 1: "Ablauf", 2: "Zufall"}
+        titles = {0: "Muster", 1: "Ablauf", 2: "Zufall", 3: "Musik"}
+        if self.mode == 3:
+            return {"running": self.running, "mode": 3, "name": "", "title": "Musik",
+                    "bpm": self.music.bpm() or 0, "depth": self.m_depth.value(), "now": self.m_info.text(),
+                    "patterns": [p.name for p in self.all_patterns()],
+                    "programs": [p.name for p in self.all_programs()]}
         return {"running": self.running, "mode": self.mode, "name": name,
                 "title": f"{titles[self.mode]}: {name}" if self.mode < 2 else "Zufall · " + self.mood.currentText(),
                 "bpm": bpm, "depth": depth, "now": self.pnow.text() if self.mode else "",
@@ -711,6 +889,11 @@ class PatternDialog(QDialog):
     def _pad_tick(self):
         dt = self.pad_timer.interval() / 1000
         ly, ry = self._stick(G.AX_LY), self._stick(G.AX_RY)
+        if self.mode == 3:
+            if ly:
+                self._pad_was_used = True
+                self.m_depth.setValue(int(round(self.m_depth.value() - ly * self.STICK_DEPTH * dt)))
+            return
         if self.mode >= 1 and (ly or ry):           # program: the sticks move the offsets
             self._pad_was_used = True
             self._offset_f[0] -= ry * self.STICK_TEMPO * dt
@@ -918,7 +1101,7 @@ class PatternDialog(QDialog):
 
     @property
     def running(self) -> bool:
-        return self.runner.running or self.prunner.running
+        return self.runner.running or self.prunner.running or self.music.running
 
     # safety timer source
     def safety_active(self) -> bool:
@@ -949,6 +1132,9 @@ class PatternDialog(QDialog):
             self.start()
 
     def start(self, reroll: bool = True):
+        if self.mode == 3:
+            self._start_music()
+            return
         if self.mode == 2 and reroll:
             self.reroll()
         if self.mode >= 1:
@@ -978,6 +1164,7 @@ class PatternDialog(QDialog):
     def stop(self):
         self.runner.stop()
         self.prunner.stop()
+        self._stop_music()
         self.timer.stop()
         self.view.set_phase(None)
         self.pview.set_elapsed(None)
@@ -987,6 +1174,9 @@ class PatternDialog(QDialog):
 
     def _tick(self):
         now = self._now()
+        if self.music.running:
+            self._music_tick()
+            return
         if self.prunner.running or self.prunner.finished:
             self.prunner.tick(now)
             if self.prunner.finished:

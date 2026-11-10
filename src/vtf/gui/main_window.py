@@ -11,32 +11,53 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
-                               QSplitter, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .. import __version__, gpu
-from .. import editing
+from .. import __version__, editing, gpu
 from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
-from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
+from ..editing import rhythm
+from ..funscript import (
+    AXES,
+    Action,
+    Funscript,
+    funscript_path_for,
+    load_axes,
+    position_at,
+)
 from ..generator import generate, generate_axes
 from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
-from ..editing import rhythm
 from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .curve_widget import CurveWidget
+from .device_ui import DeviceController
 from .heatbar import HeatBar
 from .player_panel import PlayerPanel
-from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
 from .timeline import TimelineSlider
-from .video_view import VideoView
-from .device_ui import DeviceController
 from .update_ui import UpdateController
+from .video_view import VideoView
 from .workers import AnalysisWorker
 
 
@@ -347,6 +368,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
         self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
         self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
+        self._act(m, "Script aus Musik…", self.music_script)
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -738,6 +760,45 @@ class MainWindow(QMainWindow):
         dlg = RhythmDialog(a, b, self.curve.duration_ms, self)
         if dlg.exec():
             self.apply_rhythm(**dlg.values())
+
+    def music_script(self):
+        if not self.cap or not self.curve.editable or not self.video_path:
+            self._status("Script aus Musik geht im Modus „Bearbeiten“ mit geladenem Video")
+            return
+        from .music_dialog import MusicScriptDialog
+
+        sel = sorted(self.curve.selection)
+        acts = self.curve.actions
+        a, b = (acts[sel[0]].at, acts[sel[-1]].at) if len(sel) >= 2 else (0, self.curve.duration_ms)
+        dlg = MusicScriptDialog(a, b, self.curve.duration_ms, self)
+        if dlg.exec():
+            self.apply_music_script(**dlg.values())
+
+    def apply_music_script(self, start_ms, end_ms, every=1, sensitivity=0.5, lo=0, hi=100, offset_ms=0):
+        from .. import music
+
+        start_ms, end_ms = sorted((start_ms, end_ms))
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            beats = music.beats_from_file(self.video_path, sensitivity, start_ms / 1000,
+                                          (end_ms - start_ms) / 1000)
+        except (RuntimeError, OSError) as e:
+            self._status(f"Tonspur nicht lesbar: {e}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        new = [x for x in music.script_from_beats(beats, every, lo, hi, offset_ms) if start_ms <= x.at <= end_ms]
+        if not new:
+            self._status("Keine Schläge gefunden (keine Tonspur oder zu leise). Empfindlicher stellen?")
+            return
+        self.curve.editStarted.emit()
+        keep = [x for x in self.curve.actions if not start_ms <= x.at <= end_ms]
+        self.curve.actions = sorted(keep + new, key=lambda x: x.at)
+        ids = {id(x) for x in new}
+        self.curve.actionsEdited.emit()
+        self.curve.set_selection({i for i, x in enumerate(self.curve.actions) if id(x) in ids})
+        bpm = music.tempo(beats)
+        self._status(f"Script aus Musik: {len(beats)} Schläge" + (f", ≈ {bpm:.0f} pro Minute" if bpm else ""))
 
     def apply_rhythm(self, start_ms, end_ms, bpm, lo, hi, pattern):
         self.curve.editStarted.emit()
