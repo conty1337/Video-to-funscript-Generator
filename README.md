@@ -3,17 +3,19 @@
 Kostenlose, quelloffene Software zur **lokalen** Videoanalyse und automatischen
 Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 
-![Bearbeiten: analysierte Kurve, Heatmap und Einstellungen](docs/screenshot.png)
+**→ [Anleitung: in 8 Schritten vom Video zum Script](docs/anleitung.md)**
+
+![Bearbeiten: links Analyse und Tracking, Mitte Video, rechts Script, unten die Zeitleiste](docs/screenshot.png)
 
 | Tracking | Player | Gerät |
 |---|---|---|
-| [![Tracking mit zwei Bereichen, Abschnitt und Tiefen-Kalibrierung](docs/tracking.png)](docs/tracking.png) | [![Player-Modus mit Playlist](docs/player.png)](docs/player.png) | [![Geräte-Dialog mit Simulation](docs/device.png)](docs/device.png) |
-| Bereiche verfolgen, Abschnitte, Kalibrierung „drin/raus“ | Playlist, Videos mit Script nacheinander | Fredorch F21S über Intiface oder Simulation |
+| [![Kästchen markieren, gezoomt, mit Optionen](docs/tracking.png)](docs/tracking.png) | [![Player-Modus mit Playlist und Countdown](docs/player.png)](docs/player.png) | [![Geräte-Dialog mit Simulation](docs/device.png)](docs/device.png) |
+| Kästchen markieren und zoomen, verankern, Optionen | Playlist, Countdown vor dem Start | Fredorch F21S über Intiface oder Simulation |
 
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.5)
+## Funktionen (Stand 0.8)
 
 | | Funktion | Status |
 |---|---|---|
@@ -35,6 +37,12 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 16 | Robusteres Tracking: drehbare Kästchen, Drift-Korrektur, Nachjustieren | ✅ |
 | 17 | Stapel mit Tracking (Videos vorbereiten, dann durchlaufen lassen) | ✅ |
 | 18 | Heatmap und Tempo-Grenze | ✅ |
+| 19 | Layout wie ein Schnittprogramm: links Analyse, Mitte Video, rechts Script, unten Zeitleiste | ✅ |
+| 20 | Verdeckung erkennen (auch durch eine Hand) und Bereich danach wiederfinden | ✅ |
+| 21 | Video-Zoom zum Markieren kleiner Stellen, Kästchen direkt anpacken und korrigieren | ✅ |
+| 22 | Bereiche 2/3 fest verankern, Kästchen nur verschieben (für Maschinen) | ✅ |
+| 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
+| 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -98,6 +106,15 @@ Auflösungen lohnt sich OpenCL eher.
 
 ## Bedienung
 
+Eine kurze Schritt-für-Schritt-Anleitung steht in
+[docs/anleitung.md](docs/anleitung.md). Hier alle Funktionen im Einzelnen.
+
+**Aufbau**: links die Analyse (Methode, Tracking, Optionen, „Analysieren“),
+in der Mitte das Video mit der Hub-Leiste, rechts die Script-Einstellungen,
+unten die Zeitleiste mit den Spuren Video, Tempo und Kurve. Ansicht →
+Strg+1 / Strg+2 klappt die linke bzw. rechte Leiste ein. Strg+W schließt das
+Video.
+
 1. Video öffnen (Strg+O oder per Drag & Drop).
 2. Optional: im Vorschaubild ein Rechteck um den relevanten Bereich ziehen
    (ROI). Rechtsklick entfernt die ROI. Das verbessert die Erkennung deutlich.
@@ -156,17 +173,31 @@ Kalibrierung wirkt sofort, ohne neue Analyse.
 
 Beim Abspielen zeigt die Vorschau, wo die Bereiche gerade sind.
 
-*Drehen*: Kästchen am runden Griff über der Oberkante drehen oder mit dem
-Mausrad über dem Kästchen (Umschalt = feinere Schritte). Beim Verfolgen drehen
-und skalieren sich die Bereiche mit.
+*Kästchen anpassen*: Am Start eines Abschnitts (Klick in der Liste) innen
+ziehen = verschieben, an einer Ecke = Größe, am runden Griff oder mit dem
+Mausrad = drehen (Umschalt = feinere Schritte). Kleine Stellen: **Strg+Mausrad**
+zoomt ins Video, die mittlere Maustaste verschiebt den Ausschnitt, Strg+0
+setzt zurück. Bei sehr kleinen Kästchen erinnert die Statuszeile an eine
+höhere Analyse-Auflösung (Standard 640 px).
 
-*Wandernde Kästchen*: Das Tracking prüft auf unmögliche Sprünge, gleicht
-regelmäßig mit dem Aussehen beim Markieren ab und sucht verlorene Bereiche
-wieder. Stellen, an denen ein Bereich verloren war, sind rot in der Kurve
-markiert. Wandert ein Kästchen trotzdem ab: an der Stelle einfach ein neues
-Kästchen **über** das abgewanderte ziehen (*nachjustieren*). Nach der nächsten
-Analyse folgt der Bereich von dort aus, die Abweichung davor wird ausgeglichen.
-Ein Kästchen an einer freien Stelle beginnt dagegen einen neuen Abschnitt.
+*Optionen* (links, eingeklappt): Auflösung, Frame-Schritt, Dekodierung,
+Kamerabewegung ausgleichen, **Kästchen drehen und skalieren mit** (aus für
+Maschinen und starre Teile: die Kästchen verschieben sich dann nur) und
+**Bereich 2 und 3 fest verankern** (sie bleiben, wo sie markiert sind, und
+gehen nur mit der Kamera mit, nichts kann sie wegziehen; bei Kamerafahrten
+aus).
+
+*Wandernde Kästchen und Verdeckung*: Das Tracking prüft auf unmögliche
+Sprünge und gleicht alle paar Bilder mit dem Aussehen beim Markieren (und bei
+jeder Korrektur) ab, auch gedreht und skaliert. Schiebt sich etwas davor,
+auch nur teilweise wie eine Hand, springt der Bereich an die letzte sichere
+Stelle zurück, wird rot und wartet, bis er wieder zu sehen ist. Rote Stellen
+in der Kurve: dort war ein Bereich verdeckt oder verloren, dort entstehen
+keine Hübe. Liegt ein Kästchen trotzdem daneben: an der Stelle **anpacken und
+richtig hinschieben** (*nachjustieren*). Nach der nächsten Analyse folgt der
+Bereich von dort aus, und die Strecke davor wird rückwärts verfolgt und
+ausgeglichen. Anfang und Ende eines Abschnitts lassen sich in der Kurve mit
+der Maus verschieben.
 
 *Vorbereitung*: Bereiche, Abschnitte und Kalibrierung werden sofort als
 `<Video>.vtf.json` neben dem Video gespeichert und beim nächsten Öffnen
@@ -190,10 +221,18 @@ Video, auf dem verbundenen Gerät, eins nach dem anderen. Optionen:
 wiederholen, zufällige Reihenfolge, Videos ohne Script überspringen. Bild ↑/↓
 springt zum vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es,
 zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
-speichern, die letzte merkt sich die App.
+speichern, die letzte merkt sich die App. Ein ruhiger Anfang wird übersprungen
+(Start 10 s vor dem ersten Hub), und in den letzten 10 s vor dem Start zählt
+ein Countdown herunter. Beides ist abschaltbar.
 
-**Heatmap und Tempo-Grenze**: Die farbige Leiste unter der Zeitleiste zeigt das
-Tempo des Scripts (dunkel = langsam, grün, gelb, rot = schnell). Mit
+**Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
+springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen
+in Kurve und Zeitleiste und werden in `<Video>.vtf.json` gespeichert.
+Strg+T („Rhythmus einfügen“) füllt einen Bereich mit einem Takt: gleichmäßig,
+schneller oder langsamer werdend, Doppelschlag oder Wellen, mit Tempo und Tiefe.
+
+**Heatmap und Tempo-Grenze**: Die Tempo-Spur in der Zeitleiste und die Farbe der
+Hub-Leiste neben dem Video zeigen das Tempo des Scripts (dunkel = langsam, grün, gelb, rot = schnell). Mit
 **Tempo-Grenze** (Script-Einstellungen) werden zu schnelle Hübe schon beim
 Erzeugen gekürzt. Für den F21S passt etwa 500 /s (voller Hub in ca. 200 ms).
 
