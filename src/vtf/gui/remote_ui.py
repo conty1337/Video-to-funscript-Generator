@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import bisect
+from pathlib import Path
+
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..funscript import position_at
 from ..remote import DEFAULT_PORT, RemoteServer, new_pin
 from . import theme
 
@@ -92,12 +96,73 @@ class RemoteController(QObject):
         dev = self.win.devices.device
         st["device"] = f"Gerät: {dev.name}" if dev is not None and dev.connected else "Kein Gerät verbunden"
         st["safety"] = self.win.devices.safety_label.text()
+        st["video"] = self._video_state()
         self._state = st
+
+    VIDEO_BEFORE_MS = 3000          # script window on the phone around the playhead
+    VIDEO_AFTER_MS = 12000
+    MAX_ITEMS = 500
+
+    def _video_state(self) -> dict:
+        """Video player for the phone: what plays, where, how long still, the playlist."""
+        w = self.win
+        pl = w.player.playlist
+        loaded = bool(getattr(w, "cap", None))
+        dur = w.frame_count / w.fps * 1000 if loaded and w.fps else 0.0
+        playing = loaded and w.timer.isActive()
+        pos = (w._media_ms() if playing else w._cur_ms()) if loaded else 0.0
+        pos = max(0.0, min(dur, pos))
+        acts = w.stroke_actions() if loaded else []
+        curve = []
+        if acts:
+            t0, t1 = pos - self.VIDEO_BEFORE_MS, pos + self.VIDEO_AFTER_MS
+            span = t1 - t0
+            times = [a.at for a in acts]
+            i, j = bisect.bisect_left(times, t0), bisect.bisect_right(times, t1)
+            pts = [(t0, position_at(acts, t0))] + [(a.at, a.pos) for a in acts[i:j]] + [(t1, position_at(acts, t1))]
+            curve = [[round((t - t0) / span, 4), round(v / 100, 3)] for t, v in pts if v is not None]
+        return {
+            "title": Path(w.video_path).stem if loaded and w.video_path else "",
+            "playing": playing, "pos": round(pos), "dur": round(dur), "script": bool(acts),
+            "items": [Path(x).stem for x in pl.items[:self.MAX_ITEMS]], "current": pl.current,
+            "player": w.player_mode, "curve": curve,
+            "now": self.VIDEO_BEFORE_MS / (self.VIDEO_BEFORE_MS + self.VIDEO_AFTER_MS),
+        }
+
+    def _video_command(self, c: dict) -> None:
+        w = self.win
+        cmd = c.get("cmd")
+        pl = w.player.playlist
+        if cmd == "vplay":
+            try:
+                w.play_index(int(c.get("index", -1)))
+            except (TypeError, ValueError):
+                pass
+        elif cmd == "vtoggle":
+            if getattr(w, "cap", None):
+                w.toggle_play()
+            elif pl.items:
+                w.play_index(pl.current if 0 <= pl.current < len(pl.items) else 0)
+        elif cmd == "vnext":
+            w.play_next()
+        elif cmd == "vprev":
+            w.play_prev()
+        elif cmd in ("vseek", "vskip") and getattr(w, "cap", None):
+            try:
+                ms = float(c.get("ms", 0))
+            except (TypeError, ValueError):
+                return
+            if cmd == "vskip":
+                ms += w._media_ms() if w.timer.isActive() else w._cur_ms()
+            dur = w.frame_count / w.fps * 1000
+            w.seek_ms(int(max(0.0, min(dur - 1, ms))))
 
     def _handle(self, c: dict) -> None:
         self.win.devices.touch()
         if c.get("cmd") == "estop":
             self.win.emergency_stop()
+        elif str(c.get("cmd", "")).startswith("v"):
+            self._video_command(c)
         else:
             self.win.ensure_patterns().remote_command(c)
         self._snapshot()
