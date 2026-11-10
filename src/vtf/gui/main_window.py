@@ -280,6 +280,8 @@ class MainWindow(QMainWindow):
         self.pattern_dialog = None
         from .remote_ui import RemoteController
         self.remote = RemoteController(self, self.qsettings)
+        from .players_ui import ExternalSync
+        self.external = ExternalSync(self, self.devices, self.qsettings)
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
@@ -419,6 +421,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
         self._act(m, "Handy-Fernbedienung…", self.open_remote)
+        self._act(m, "Andere Player (mpv, VLC, VR)…", self.open_players)
         m.addSeparator()
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
@@ -713,6 +716,14 @@ class MainWindow(QMainWindow):
             self.pattern_dialog = PatternDialog(self.devices, self)
         return self.pattern_dialog
 
+    def open_players(self):
+        from .players_ui import PlayersDialog
+
+        if getattr(self, "_players_dialog", None) is None:
+            self._players_dialog = PlayersDialog(self.external, self)
+        self._players_dialog.show()
+        self._players_dialog.raise_()
+
     def open_remote(self):
         from .remote_ui import RemoteDialog
 
@@ -877,6 +888,8 @@ class MainWindow(QMainWindow):
         else:
             self.curve.follow = True
             self._stop_patterns()
+            if self.external.running:
+                self.external.disconnect_player()
             if self._cur_idx >= self.frame_count - 1:
                 self.seek_frame(0)
             self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
@@ -1167,6 +1180,7 @@ class MainWindow(QMainWindow):
     def emergency_stop(self):
         """Esc: stop the device immediately and pause playback."""
         self._stop_patterns()
+        self.external.emergency_stop()
         self.devices.emergency_stop()
         if self.timer.isActive():
             self.pause()
@@ -1633,6 +1647,7 @@ class MainWindow(QMainWindow):
         self.updates.shutdown()
         self._stop_patterns()
         self.remote.shutdown()
+        self.external.shutdown()
         self.devices.shutdown()
         self.audio.shutdown()
         self.player.save()

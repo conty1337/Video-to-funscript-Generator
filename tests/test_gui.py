@@ -1130,3 +1130,46 @@ def test_music_mode_and_script(app, sine_video, tmp_path, monkeypatch):
     w.undo()
     assert w.curve.actions == []
     w.close()
+
+
+def test_external_player_sync(app, tmp_path):
+    import time
+
+    from test_players import _fake_mpv
+
+    from vtf.funscript import Action, Funscript
+    from vtf.gui.main_window import MainWindow
+
+    video = tmp_path / "film.mp4"
+    video.write_bytes(b"")
+    Funscript([Action(0, 0), Action(500, 100), Action(1000, 0), Action(60_000, 100)]).save(
+        tmp_path / "film.funscript")
+    sock = str(tmp_path / "mpv.sock")
+    state = {"time-pos": 0.2, "pause": False, "path": str(video), "duration": 60.0}
+    srv = _fake_mpv(sock, state)
+    w = MainWindow()
+    w.devices.connect_device("sim", "")
+    for _ in range(50):
+        app.processEvents()
+        if w.devices.device is not None:
+            break
+        time.sleep(0.02)
+    ext = w.external
+    ext.connect_player("mpv", mpv_socket=sock)
+    assert ext.running
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 2 and not ext.script:
+        app.processEvents()
+        ext._tick()
+        time.sleep(0.02)
+    assert ext.points == 4 and "Script gefunden" in ext.status
+    assert ext.safety_active()
+    for _ in range(20):
+        ext._tick()
+        time.sleep(0.02)
+    assert w.devices.device.commands                   # the device got moves
+    w.emergency_stop()                                 # Esc disconnects from the player
+    assert not ext.running and "Not-Aus" in ext.status
+    srv.close()
+    w.devices.disconnect_device()
+    w.close()
