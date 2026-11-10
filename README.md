@@ -323,12 +323,15 @@ Gerät → **Handy-Fernbedienung** → „Fernbedienung an“. Am Handy (gleiche
 öffnest du die angezeigte Adresse im Browser, zum Beispiel
 `http://192.168.0.20:8765`, und gibst die PIN ein. Eine App ist nicht nötig. Das
 Handy kann Start/Stopp, **Not-Aus**, Muster/Ablauf/Zufall wählen, Tiefe und
-Tempo einstellen und Schritte springen. Die PIN lässt sich jederzeit neu
+Tempo einstellen und Schritte springen. Im Reiter **Video** ist es die
+Fernbedienung für den Player: Abspielen/Pause, ±10 s, voriges/nächstes Video,
+mit dem Regler an jede Stelle springen, Restzeit sehen und ein Video aus der
+Playlist antippen; dazu die Script-Kurve um die aktuelle Stelle. Die PIN lässt sich jederzeit neu
 erzeugen, falsche PINs sperren das Handy kurz. Klappt die Verbindung nicht,
 blockiert die Firewall den Port:
 `sudo firewall-cmd --add-port=8765/tcp --permanent && sudo firewall-cmd --reload`.
 
-<img src="docs/remote.png" alt="Handy-Fernbedienung" width="300">
+<img src="docs/remote.png" alt="Handy-Fernbedienung" width="300"> <img src="docs/remote-video.png" alt="Handy als Video-Fernbedienung" width="300">
 
 ### Muster-Steuerung (ohne Video)
 

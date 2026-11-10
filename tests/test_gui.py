@@ -1330,3 +1330,35 @@ def test_random_single_depth(app, tmp_path, monkeypatch):
     assert d.qs.value("pattern/r_depth") in (50, "50")
     d.set_mode(0)
     w.close()
+
+
+def test_remote_video_player(app, sine_video, tmp_path, monkeypatch):
+    """Phone as remote for the video player: playlist, play/pause, skip, seek, remaining time."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    rc = w.remote
+    w.player.add_paths([str(sine_video)])
+    rc._snapshot()
+    v = rc._state["video"]
+    assert v["items"] == [sine_video.stem] and v["title"] == ""
+    rc._handle({"cmd": "vplay", "index": 0})
+    assert w.player_mode and w.timer.isActive()
+    v = rc._state["video"]
+    assert v["title"] == sine_video.stem and v["playing"] and v["current"] == 0 and v["dur"] > 5000
+    rc._handle({"cmd": "vtoggle"})                     # pause
+    assert not w.timer.isActive() and not rc._state["video"]["playing"]
+    rc._handle({"cmd": "vseek", "ms": 3000})
+    assert abs(rc._state["video"]["pos"] - 3000) <= 50
+    rc._handle({"cmd": "vskip", "ms": -10000})         # not before the start
+    assert rc._state["video"]["pos"] == 0
+    rc._handle({"cmd": "vskip", "ms": 10**9})          # not past the end
+    assert rc._state["video"]["pos"] <= rc._state["video"]["dur"]
+    rc._handle({"cmd": "vnext"})                       # only one video: end of the playlist
+    rc._handle({"cmd": "vplay", "index": "x"})         # junk is ignored
+    rc._handle({"cmd": "estop"})
+    assert not w.timer.isActive()
+    w.dirty = False
+    w.close()

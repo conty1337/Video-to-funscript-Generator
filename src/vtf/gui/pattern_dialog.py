@@ -800,13 +800,25 @@ class PatternDialog(QDialog):
             future, marks, hint = self._planned(now, after)
             runner = self.prunner.runner if self.prunner.running else self.runner
             runner_pos = runner.position(now) if self.running else None
-        if self.running and runner_pos is not None:
-            self._hist.append((now, runner_pos))
-        while self._hist and self._hist[0][0] < now - before - 1000:
-            self._hist.popleft()
         if not self.running:
             self._hist.clear()
-        self.live.set_data(now, list(self._hist), future, marks, hint)
+        elif runner_pos is not None:
+            # the exact turning points that were played (not samples per frame, which cut off
+            # peaks when a frame comes late), then where it is right now
+            acts = self.music.acts if self.mode == 3 else runner.acts
+            last = self._hist[-1][0] if self._hist else -1e18
+            if not self._hist:
+                self._hist.append((now, runner_pos))
+                last = now
+            for a in acts:
+                if last < a.at <= now:
+                    self._hist.append((a.at, a.pos))
+        while len(self._hist) > 1 and self._hist[1][0] < now - before - 1000:
+            self._hist.popleft()
+        past = list(self._hist)
+        if self.running and runner_pos is not None:
+            past.append((now, runner_pos))
+        self.live.set_data(now, past, future, marks, hint)
 
     def _planned(self, now: float, after: float):
         """Coming moves (ms, pos) from now on, and step changes as marks."""

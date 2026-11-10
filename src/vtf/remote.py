@@ -206,6 +206,25 @@ input[type=range]::-webkit-slider-thumb{appearance:none;width:24px;height:24px;m
 background:var(--text);border:0}
 input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:12px;background:var(--text);border:0}
 #hint{margin-top:8px}
+
+/* video: transport, seek, playlist */
+.trans{display:flex;gap:8px;margin-top:4px}
+.trans button{flex:1;min-height:52px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px;
+background:var(--raised);color:var(--text);transition:background-color .15s var(--ease),transform .12s var(--ease)}
+.trans button:active{transform:scale(.97)}
+.trans button.main{flex:1.4;background:var(--accent);color:var(--on-accent);border:0}
+.trans svg.i{width:20px;height:20px}
+.trans small{font-size:11px;line-height:12px;color:var(--t2);margin-top:-2px}
+.trans .lbl{display:flex;flex-direction:column;align-items:center;gap:2px}
+#vlist{list-style:none;margin:8px 0 0;padding:4px;background:var(--card);border-radius:16px}
+#vlist li{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;border-radius:10px;
+color:var(--t2);cursor:pointer}
+#vlist li.on{background:var(--raised);color:var(--text)}
+#vlist li .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#vlist li .k{font-family:var(--mono);font-size:12px;color:var(--muted);width:24px;text-align:right}
+#vlist li.on .k{color:var(--accent)}
+#vempty{margin-top:8px}
+#vseek{display:block;width:100%}
 #safety{margin:24px 0 0;text-align:center}
 
 /* thumb bar: emergency stop and start always within reach */
@@ -234,6 +253,10 @@ color:var(--on-accent);font-weight:500}
 <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 20 9 12l10-8z"/><path d="M5 19V5"/></symbol>
 <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></symbol>
+<symbol id="i-prev" viewBox="0 0 24 24"><path d="M17 18 9 12l8-6z"/><path d="M6 6v12"/></symbol>
+<symbol id="i-next" viewBox="0 0 24 24"><path d="m7 6 8 6-8 6z"/><path d="M18 6v12"/></symbol>
+<symbol id="i-rew" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-ff" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
 <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
 <symbol id="i-stop" viewBox="0 0 24 24"><path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
@@ -259,8 +282,9 @@ placeholder="······">
 </div>
 
 <section>
-<div class="seg" id="modes"><button data-m="0">Muster</button><button data-m="1">Ablauf</button>
+<div class="seg" id="modes"><button data-m="v">Video</button><button data-m="0">Muster</button><button data-m="1">Ablauf</button>
 <button data-m="2">Zufall</button></div>
+<div id="psel">
 <div class="pickrow">
 <button class="icon" aria-label="Zurück" onclick="cmd({cmd:'step',d:-1})"><svg class="i"><use href="#i-back"/></svg></button>
 <select id="pick" aria-label="Auswahl"></select>
@@ -268,9 +292,24 @@ placeholder="······">
 </div>
 <div class="seg moods hidden" id="moods"></div>
 <button class="wide hidden" id="next" onclick="cmd({cmd:'step',d:1})"><svg class="i"><use href="#i-fwd"/></svg>Nächster Abschnitt</button>
+</div>
+<div id="vsec" class="hidden">
+<div class="ctl" style="margin-top:8px">
+<div class="head"><span id="vpos" class="mono"></span><span id="vleft" class="mono"></span></div>
+<input id="vseek" type="range" min="0" max="1000" step="1" aria-label="Stelle im Video">
+<div class="trans">
+<button aria-label="Voriges Video" onclick="cmd({cmd:'vprev'})"><svg class="i"><use href="#i-prev"/></svg></button>
+<button aria-label="10 Sekunden zurück" onclick="cmd({cmd:'vskip',ms:-10000})"><span class="lbl"><svg class="i"><use href="#i-rew"/></svg><small>10 s</small></span></button>
+<button class="main" id="vplay" aria-label="Abspielen" onclick="cmd({cmd:'vtoggle'})"><svg class="i"><use href="#i-play"/></svg></button>
+<button aria-label="10 Sekunden vor" onclick="cmd({cmd:'vskip',ms:10000})"><span class="lbl"><svg class="i"><use href="#i-ff"/></svg><small>10 s</small></span></button>
+<button aria-label="Nächstes Video" onclick="cmd({cmd:'vnext'})"><svg class="i"><use href="#i-next"/></svg></button>
+</div></div>
+<ul id="vlist"></ul>
+<p class="muted hidden" id="vempty">Keine Playlist. Videos in der App im Player-Modus (Strg+P) in die Liste ziehen.</p>
+</div>
 </section>
 
-<section>
+<section id="psec">
 <div class="ctl">
 <div class="head"><span>Tiefe</span><span class="val mono" id="dv"></span></div>
 <div class="row">
@@ -292,11 +331,12 @@ placeholder="······">
 
 <nav class="bar hidden" id="bar"><div>
 <button id="estop" onclick="cmd({cmd:'estop'})"><svg class="i"><use href="#i-stop"/></svg>Not-Aus</button>
-<button id="play" onclick="cmd({cmd:'toggle'})"><svg class="i"><use href="#i-play"/></svg><span>Start</span></button>
+<button id="play"><svg class="i"><use href="#i-play"/></svg><span>Start</span></button>
 </div></nav>
 
 <script>
-let pin=localStorage.getItem('vtf-pin')||'',st=null,drag=0,listKey='',curveKey='';
+let pin=localStorage.getItem('vtf-pin')||'',st=null,drag=0,listKey='',curveKey='',vlistKey='',vdrag=0;
+let tab=localStorage.getItem('vtf-tab');
 const $=id=>document.getElementById(id);
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function show(ok){$('login').classList.toggle('hidden',ok);$('app').classList.toggle('hidden',!ok);
@@ -309,24 +349,33 @@ async function poll(){if(!pin){show(false);return}
 try{const r=await fetch('/api/state?pin='+encodeURIComponent(pin));
 if(r.status==401||r.status==429){const j=await r.json();$('err').textContent=j.error;show(false);return}
 st=await r.json();show(true);render()}catch(e){$('dev').textContent='Keine Verbindung zur App'}}
-function drawCurve(pts){const W=300,H=136,p=6;const y=v=>H-p-(H-2*p)*v;
+function fmt(ms){ms=Math.max(0,Math.round(ms/1000));const h=Math.floor(ms/3600),m=Math.floor(ms/60)%60,s=ms%60;
+return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0')}
+function drawCurve(pts,nowx){const W=300,H=136,p=6;const y=v=>H-p-(H-2*p)*v;
 if(!pts||pts.length<2){$('curve').innerHTML='<text x="150" y="72" text-anchor="middle" fill="#85858b" '+
-'font-size="12" font-family="system-ui">'+(st.mode==3?'Musik: Gerät folgt dem Takt':'Nichts ausgewählt')+'</text>';return}
+'font-size="12" font-family="system-ui">'+(tab=='v'?(st.video.title?'Kein Script zu diesem Video':'Kein Video offen'):
+st.mode==3?'Musik: Gerät folgt dem Takt':'Nichts ausgewählt')+'</text>';return}
 const d=pts.map((q,i)=>(i?'L':'M')+(q[0]*W).toFixed(1)+' '+y(q[1]).toFixed(1)).join(' ');
 const lo=Math.min(...pts.map(q=>q[1]));
 let g='';for(const v of [0,.5,1])g+='<line x1="0" x2="300" y1="'+y(v)+'" y2="'+y(v)+'" stroke="rgba(237,237,237,.06)"/>';
 $('curve').innerHTML=g+'<rect x="0" y="'+y(1)+'" width="300" height="'+(y(lo)-y(1))+'" fill="rgba(237,237,237,.025)"/>'+
 '<path d="'+d+' L300 '+y(0)+' L0 '+y(0)+'Z" fill="rgba(229,160,67,.12)"/>'+
-'<path d="'+d+'" stroke="#e5a043" stroke-width="2" fill="none" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'}
-function render(){$('title').textContent=st.title;$('dev').textContent=st.device;
-$('tally').classList.toggle('on',st.running);
-const play=$('play');play.classList.toggle('running',st.running);
-play.querySelector('use').setAttribute('href',st.running?'#i-pause':'#i-play');
-play.querySelector('span').textContent=st.running?'Stopp':'Start';
+'<path d="'+d+'" stroke="#e5a043" stroke-width="2" fill="none" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'+
+(nowx!=null?'<line x1="'+nowx*W+'" x2="'+nowx*W+'" y1="0" y2="'+H+'" stroke="#ededed" stroke-width="1.5" vector-effect="non-scaling-stroke"/>':'')}
+function setTab(t){tab=t;localStorage.setItem('vtf-tab',t);curveKey='';render()}
+function render(){const v=st.video||{items:[]};if(tab===null)tab=v.title||v.items.length?'v':String(st.mode);
+const vid=tab=='v';$('vsec').classList.toggle('hidden',!vid);$('psec').classList.toggle('hidden',vid);
+$('psel').classList.toggle('hidden',vid);$('dev').textContent=st.device;
+const running=vid?v.playing:st.running;$('tally').classList.toggle('on',running);
+const play=$('play');play.classList.toggle('running',running);
+play.querySelector('use').setAttribute('href',running?'#i-pause':'#i-play');
+play.querySelector('span').textContent=vid?(running?'Pause':'Abspielen'):(running?'Stopp':'Start');
+document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.m==(vid?'v':String(st.mode))));
+if(vid){renderVideo(v);return}
+$('title').textContent=st.title;
 $('sub').textContent=st.sub||'';$('step').textContent=st.step||'';$('time').textContent=st.time||'';$('safety').textContent=st.safety||'';
 $('hint').textContent=st.mode==1?'Verschiebt den ganzen Ablauf':st.mode==2?'Gilt für alle Abschnitte, auch die nächsten':'';
-const ck=JSON.stringify(st.curve||[]);if(ck!==curveKey){curveKey=ck;drawCurve(st.curve)}
-document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',+b.dataset.m==st.mode));
+const ck='p'+JSON.stringify(st.curve||[]);if(ck!==curveKey){curveKey=ck;drawCurve(st.curve)}
 const items=st.mode==0?st.patterns:st.mode==1?st.programs:[];const key=st.mode+'|'+items.join('|');
 $('pick').parentElement.classList.toggle('hidden',st.mode>=2);$('next').classList.toggle('hidden',st.mode!=2);
 $('moods').classList.toggle('hidden',st.mode!=2);
@@ -338,8 +387,28 @@ if(key!=listKey){listKey=key;$('pick').innerHTML=items.map(n=>'<option>'+esc(n)+
 if(document.activeElement!==$('pick'))$('pick').value=st.name;
 if(Date.now()-drag>1500){$('depth').value=st.depth;$('bpm').value=st.bpm}
 val('dv',Math.round(st.depth),'%');val('bv',Math.round(st.bpm),'Hübe/min')}
+function renderVideo(v){$('title').textContent=v.title||'Video';
+const n=v.items.length,i=v.current;
+$('sub').textContent=v.title?((n&&i>=0?'Video '+(i+1)+' von '+n+' · ':'')+(v.script?'mit Script':'ohne Script')):
+(n?'Ein Video aus der Liste antippen':'');
+$('step').textContent=v.dur?'noch '+fmt(v.dur-v.pos):'';$('time').textContent=v.dur?fmt(v.pos)+' / '+fmt(v.dur):'';
+$('safety').textContent=st.safety||'';$('vpos').textContent=v.dur?fmt(v.pos):'–';
+$('vleft').textContent=v.dur?'-'+fmt(v.dur-v.pos):'';
+if(Date.now()-vdrag>1500)$('vseek').value=v.dur?Math.round(1000*v.pos/v.dur):0;
+const vp=$('vplay');vp.querySelector('use').setAttribute('href',v.playing?'#i-pause':'#i-play');
+vp.setAttribute('aria-label',v.playing?'Pause':'Abspielen');
+const ck='v'+JSON.stringify(v.curve);if(ck!==curveKey){curveKey=ck;drawCurve(v.curve,v.curve.length?v.now:null)}
+const lk=v.items.join('|');if(lk!==vlistKey){vlistKey=lk;$('vlist').innerHTML=v.items.map((t,k)=>
+'<li data-i="'+k+'"><span class="k">'+(k+1)+'</span><span class="n">'+esc(t)+'</span></li>').join('');
+$('vlist').querySelectorAll('li').forEach(li=>li.onclick=()=>cmd({cmd:'vplay',index:+li.dataset.i}))}
+$('vlist').querySelectorAll('li').forEach(li=>li.classList.toggle('on',+li.dataset.i==i));
+$('vlist').classList.toggle('hidden',!n);$('vempty').classList.toggle('hidden',!!n)}
 function val(id,v,u){$(id).innerHTML=v+' <span class="unit">'+u+'</span>'}
-document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>cmd({cmd:'mode',mode:+b.dataset.m}));
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{if(b.dataset.m=='v'){setTab('v');return}
+setTab(b.dataset.m);cmd({cmd:'mode',mode:+b.dataset.m})});
+$('play').onclick=()=>cmd({cmd:tab=='v'?'vtoggle':'toggle'});
+$('vseek').oninput=()=>{vdrag=Date.now();const v=st&&st.video;if(v&&v.dur){$('vpos').textContent=fmt(v.dur*$('vseek').value/1000)}};
+$('vseek').onchange=()=>{vdrag=Date.now();const v=st&&st.video;if(v&&v.dur)cmd({cmd:'vseek',ms:v.dur*$('vseek').value/1000})};
 $('pick').onchange=e=>cmd({cmd:'select',name:e.target.value});
 let tm=null;for(const id of ['depth','bpm'])$(id).oninput=e=>{drag=Date.now();
 val(id=='depth'?'dv':'bv',e.target.value,id=='depth'?'%':'Hübe/min');clearTimeout(tm);

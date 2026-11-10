@@ -98,6 +98,7 @@ Muster-Steuerung für einen Bereich ein.
   die am PC läuft.
 - **Handy** (Gerät → Handy-Fernbedienung): Adresse am Handy im Browser öffnen,
   PIN eingeben.
+  Im Reiter „Video“ steuerst du den Player: Pause, Spulen, nächstes Video, Restzeit.
 - **Andere Player** (Gerät → Andere Player): mpv, VLC, DeoVR oder HereSphere,
   das Script liegt neben dem Video.
 - **Sicherheits-Timer** (im Fenster „Gerät“, abschaltbar): Stopp nach X Minuten,
