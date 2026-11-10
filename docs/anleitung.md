@@ -116,6 +116,7 @@ Muster-Steuerung für einen Bereich ein.
 | Hübe zu flach | kalibrieren (D/A) oder Normalisierung nutzen |
 | Kurve läuft nicht mit | nach dem Scrollen 3 s warten, sie folgt wieder |
 | Analyse langsam | Grafikkarte prüfen: Hilfe → „Dekodierung testen…“ |
+| Zu viel verstellt | „Standard“ rechts neben der Überschrift setzt den Bereich zurück, Doppelklick auf einen Regler nur diesen |
 
 ## Tastenkürzel
 

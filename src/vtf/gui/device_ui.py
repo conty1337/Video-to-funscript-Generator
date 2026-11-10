@@ -351,9 +351,8 @@ class DeviceDialog(QDialog):
         lay.addWidget(self.wizard_btn)
 
         lay.addSpacing(16)
-        title = QLabel("Wiedergabe")
-        title.setObjectName("section")
-        lay.addWidget(title)
+        lay.addWidget(theme.section_title("Wiedergabe", self.reset_playback,
+                                          "Zeitversatz, Tempo, Hubbereich, Richtung und Vibration auf Standard"))
         f = QFormLayout()
         f.setHorizontalSpacing(12)
         f.setVerticalSpacing(12)
@@ -394,9 +393,7 @@ class DeviceDialog(QDialog):
         lay.addLayout(f)
 
         lay.addSpacing(16)
-        title = QLabel("Sicherheit")
-        title.setObjectName("section")
-        lay.addWidget(title)
+        lay.addWidget(theme.section_title("Sicherheit", self.reset_safety, "Sicherheits-Timer auf Standard"))
         g = ctl.safety.settings
         self.safe_on = QCheckBox("Sicherheits-Timer an")
         self.safe_on.setChecked(g.enabled)
@@ -475,6 +472,8 @@ class DeviceDialog(QDialog):
         self.stop_btn.clicked.connect(ctl.emergency_stop)
         for w in (self.offset[1], self.speed[1]):
             w.valueChanged.connect(self._apply)
+        theme.double_click_reset(self.offset[1], SyncSettings().offset_ms)
+        theme.double_click_reset(self.speed[1], int(SyncSettings().max_speed))
         for w in (self.pmin, self.pmax):
             w.valueChanged.connect(self._apply)
         self.invert.toggled.connect(self._apply)
@@ -533,6 +532,25 @@ class DeviceDialog(QDialog):
                 lay.addWidget(x)
         lay.addStretch(1)
         return w
+
+    def reset_playback(self):
+        d = SyncSettings()
+        for w, v in ((self.offset[1], d.offset_ms), (self.speed[1], int(d.max_speed)), (self.pmin, d.pos_min),
+                     (self.pmax, d.pos_max)):
+            w.setValue(v)
+        self.invert.setChecked(d.invert)
+        self.vibe.setCurrentIndex(max(0, self.vibe.findData(VIBE_MODES[0][0])))
+        self._apply()
+
+    def reset_safety(self):
+        d = SafetySettings()
+        for w, v in ((self.safe_max, d.max_minutes), (self.safe_idle, d.idle_minutes),
+                     (self.safe_every, d.break_every), (self.safe_secs, d.break_seconds)):
+            w.blockSignals(True)
+            w.setValue(v)
+            w.blockSignals(False)
+        self.safe_on.setChecked(d.enabled)
+        self._apply_safety()
 
     def _apply_safety(self):
         g = self.ctl.safety.settings

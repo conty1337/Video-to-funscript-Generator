@@ -39,6 +39,7 @@ from . import theme
 from .pattern_view import LiveStrip, PatternView, ProgramView, _fmt_min, block_icon, pattern_icon
 
 ROLE = Qt.UserRole + 1
+DEFAULT_BPM, DEFAULT_DEPTH = 60, 100
 VARY_MIN = 70            # % of the set depth a random step may go down to with "Tiefe leicht variieren"
 
 
@@ -248,6 +249,13 @@ class PatternDialog(QDialog):
         self.reroll_btn = QPushButton(theme.icon("shuffle"), "Neu würfeln")
         self.reroll_btn.clicked.connect(lambda: self.reroll(restart=True))
         rl.addWidget(self.reroll_btn)
+        self.r_reset = theme.reset_button(self.reset_random, "Tempo-Bereich der Stimmung, Tiefe 100 %, Variieren an, "
+                                          "Wechsel 1–3 min, ohne eigene Muster")
+        _r = QHBoxLayout()
+        _r.setContentsMargins(0, 0, 0, 0)
+        _r.addStretch(1)
+        _r.addWidget(self.r_reset)
+        rl.addLayout(_r)
         rl.addStretch(1)
         self.left_stack.addWidget(page)
 
@@ -281,6 +289,13 @@ class PatternDialog(QDialog):
         self.m_level = QCheckBox("Tiefe folgt der Lautstärke")
         self.m_level.setChecked(str(self.qs.value("pattern/m_level", "true")).lower() == "true")
         ml.addWidget(self.m_level)
+        self.m_reset = theme.reset_button(self.reset_music, "Quelle, Schläge, Empfindlichkeit, Lautstärke und Tiefe "
+                                          "auf Standard")
+        _r = QHBoxLayout()
+        _r.setContentsMargins(0, 0, 0, 0)
+        _r.addStretch(1)
+        _r.addWidget(self.m_reset)
+        ml.addLayout(_r)
         ml.addStretch(1)
         self.left_stack.addWidget(page)
         for w in (self.m_source, self.m_every):
@@ -328,7 +343,7 @@ class PatternDialog(QDialog):
         form = QFormLayout()
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(8)
-        bpm = int(self._setting("bpm", 60))
+        bpm = int(self._setting("bpm", DEFAULT_BPM))
         self.bpm = QSlider(Qt.Horizontal)
         self.bpm.setRange(10, 240)
         self.bpm.setValue(bpm)
@@ -339,7 +354,7 @@ class PatternDialog(QDialog):
         form.addRow(self._label("Tempo"), _hrow(self.bpm, self.bpm_val))
         self.depth = QSlider(Qt.Horizontal)
         self.depth.setRange(10, 100)
-        self.depth.setValue(int(self._setting("depth", 100)))
+        self.depth.setValue(int(self._setting("depth", DEFAULT_DEPTH)))
         self.depth_val = QLabel()
         self.depth_val.setObjectName("value")
         self.depth_val.setFont(theme.mono_font(12))
@@ -351,7 +366,13 @@ class PatternDialog(QDialog):
                      "Hubbereich und Tempo-Limit aus „Gerät“ gelten zusätzlich.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
-        right.addWidget(cap)
+        self.s_reset = theme.reset_button(self.reset_sliders, f"Tempo {DEFAULT_BPM} Hübe/min, Tiefe {DEFAULT_DEPTH} %")
+        _r = QHBoxLayout()
+        _r.setContentsMargins(0, 0, 0, 0)
+        _r.setSpacing(12)
+        _r.addWidget(cap, 1)
+        _r.addWidget(self.s_reset, 0, Qt.AlignTop)
+        right.addLayout(_r)
 
         # program page
         page = QWidget()
@@ -468,6 +489,9 @@ class PatternDialog(QDialog):
         self._apply_timer.timeout.connect(self._apply_live)
         self.bpm.valueChanged.connect(self._params_changed)
         self.depth.valueChanged.connect(self._params_changed)
+        for w, v in ((self.bpm, DEFAULT_BPM), (self.depth, DEFAULT_DEPTH), (self.m_depth, DEFAULT_DEPTH),
+                     (self.m_sens, 50), (self.r_depth, DEFAULT_DEPTH)):
+            theme.double_click_reset(w, v)
         for keys, fn in ((Qt.Key_Up, lambda: self.nudge(depth=self.STEP_DEPTH)),
                          (Qt.Key_Down, lambda: self.nudge(depth=-self.STEP_DEPTH)),
                          (Qt.Key_Right, lambda: self.nudge(tempo=self.STEP_TEMPO)),
@@ -612,6 +636,33 @@ class PatternDialog(QDialog):
     def _depth_text(self) -> str:
         d0, d1 = self.random_depth()
         return f"{d1} %" if d0 == d1 else f"{d0}–{d1} %"
+
+    # ------------------------------------------------------------ back to defaults
+    def reset_sliders(self):
+        self.bpm.setValue(DEFAULT_BPM)
+        self.depth.setValue(DEFAULT_DEPTH)
+
+    def reset_random(self):
+        """Random settings back to the defaults; the mood stays (its tempo range is taken)."""
+        _l, _c, (b0, b1), _d = P.MOODS[self.mood.currentData()]
+        ws = (self.r_bpm0, self.r_bpm1, self.r_depth, self.r_m0, self.r_m1, self.r_vary, self.r_own)
+        for w in ws:
+            w.blockSignals(True)
+        for w, v in ((self.r_bpm0, b0), (self.r_bpm1, b1), (self.r_depth, DEFAULT_DEPTH), (self.r_m0, 1.0),
+                     (self.r_m1, 3.0)):
+            w.setValue(v)
+        self.r_vary.setChecked(True)
+        self.r_own.setChecked(False)
+        for w in ws:
+            w.blockSignals(False)
+        self._random_changed()                     # once: the running step follows, the next is rolled anew
+
+    def reset_music(self):
+        self.m_source.setCurrentIndex(max(0, self.m_source.findData("system")))
+        self.m_every.setCurrentIndex(max(0, self.m_every.findData(1)))
+        self.m_sens.setValue(50)
+        self.m_level.setChecked(True)
+        self.m_depth.setValue(DEFAULT_DEPTH)
 
     def random_depth(self) -> tuple[int, int]:
         """The depth a random step may get: exactly the set one, or (when varied) a bit less."""

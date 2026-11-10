@@ -63,10 +63,8 @@ def _row(form: QFormLayout, text: str, widget: QWidget) -> None:
     form.addRow(lbl, widget)
 
 
-def _section(lay: QVBoxLayout, title: str, caption: str | None = None) -> None:
-    t = QLabel(title)
-    t.setObjectName("section")
-    lay.addWidget(t)
+def _section(lay: QVBoxLayout, title: str, caption: str | None = None, on_reset=None) -> None:
+    lay.addWidget(theme.section_title(title, on_reset))
     if caption:
         c = QLabel(caption)
         c.setObjectName("caption")
@@ -75,6 +73,7 @@ def _section(lay: QVBoxLayout, title: str, caption: str | None = None) -> None:
     lay.addSpacing(4)
 
 
+DEFAULT_WIDTH = 640          # analysis width in the app: fine detail; slower, but worth it
 METHODS = [("Bewegung im Bild", "flow"), ("Tracking", "track")]
 
 
@@ -100,7 +99,7 @@ class SettingsPanel(QWidget):
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(4)
 
-        _section(lay, "Script", "Wirkt sofort auf die Kurve")
+        _section(lay, "Script", "Wirkt sofort auf die Kurve", self.reset_script)
         f = _form()
         self.axis = QComboBox()
         for label, val in AXES:
@@ -197,7 +196,7 @@ class SettingsPanel(QWidget):
         self.width = QComboBox()
         for w in (160, 240, 320, 480, 640):
             self.width.addItem(f"{w} px", w)
-        self.width.setCurrentIndex(self.width.findData(640))     # fine detail; slower, but worth it
+        self.width.setCurrentIndex(self.width.findData(DEFAULT_WIDTH))
         _row(f, "Auflösung", self.width)
         self.step = QSpinBox()
         self.step.setRange(1, 6)
@@ -230,6 +229,12 @@ class SettingsPanel(QWidget):
         ol.addWidget(self.opencl)
         self.options.setVisible(False)
         self.options_btn.toggled.connect(self._options_toggled)
+        self.options_reset = theme.reset_button(self.reset_options, "Optionen auf Standard zurücksetzen")
+        orow = QHBoxLayout()
+        orow.setContentsMargins(0, 0, 0, 0)
+        orow.addStretch(1)
+        orow.addWidget(self.options_reset)
+        ol.insertLayout(0, orow)
         lay.addStretch(1)
         self._roi = None
         self._update_roi_label()
@@ -238,6 +243,8 @@ class SettingsPanel(QWidget):
 
         for w in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm, self.max_speed):
             w.valueChanged.connect(self.generatorChanged)
+        for w, v in self._slider_defaults():
+            theme.double_click_reset(w, v)
         for w in (self.pos_min, self.pos_max):
             w.valueChanged.connect(self.generatorChanged)
         self.axis.currentIndexChanged.connect(self.generatorChanged)
@@ -249,6 +256,27 @@ class SettingsPanel(QWidget):
         self.turn.toggled.connect(self.analysisChanged)
         self.anchor.toggled.connect(self.analysisChanged)
         self.method.currentIndexChanged.connect(self._method_changed)
+
+    def _slider_defaults(self):
+        d = GeneratorSettings()
+        return ((self.sensitivity, d.sensitivity), (self.smoothing, d.smoothing_ms),
+                (self.min_interval, d.min_interval_ms), (self.drift, d.drift_window_ms),
+                (self.norm, d.normalize_window_ms), (self.max_speed, d.max_speed))
+
+    def reset_script(self) -> None:
+        """Script settings back to the defaults (one regeneration, not one per control)."""
+        d = GeneratorSettings()
+        a = asdict(self.analysis_settings())
+        self.load_dict({"generator": asdict(d), "analysis": a})
+        self.generatorChanged.emit()
+
+    def reset_options(self) -> None:
+        d = AnalysisSettings()
+        a = asdict(self.analysis_settings())
+        a.update(width=DEFAULT_WIDTH, frame_step=d.frame_step, hwaccel=d.hwaccel, compensate_camera=d.compensate_camera,
+                 use_opencl=d.use_opencl, track_turn=d.track_turn, track_anchor=d.track_anchor)
+        self.load_dict({"generator": asdict(self.generator_settings()), "analysis": a})
+        self.analysisChanged.emit()
 
     def _options_toggled(self, on: bool) -> None:
         self.options.setVisible(on)
