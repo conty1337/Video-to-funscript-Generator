@@ -17,7 +17,16 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QApplication, QDialog, QLayout
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QSlider,
+    QToolButton,
+    QWidget,
+)
 
 # ------------------------------------------------------------ tokens
 DEEP = "#0f0f10"       # toolbar, sidebar
@@ -70,6 +79,7 @@ _ICONS = {
     "arrow-up": '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
     "arrow-down": '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
     "check": '<path d="M20 6 9 17l-5-5"/>',
+    "rotate-ccw": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
     "chevron-down": '<path d="m6 9 6 6 6-6"/>',
     "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     "list-video": '<path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/><path d="m16 12 5 3-5 3v-6Z"/>',
@@ -143,6 +153,8 @@ QWidget#sidebar, QScrollArea#sidebarScroll, QWidget#sidebarFooter {{ background:
 QScrollArea {{ border: none; }}
 QWidget#timelinePanel {{ background: {CARD}; }}
 QLabel#laneLabel {{ color: {MUTED}; font-size: 11px; }}
+QToolButton#reset {{ padding: 2px 6px; color: {MUTED}; }}
+QToolButton#reset:hover {{ color: {TEXT}; }}
 QToolButton#disclosure {{ padding: 4px 4px 4px 0; color: {TEXT_2}; }}
 QToolButton#disclosure:checked {{ background: transparent; color: {TEXT}; }}
 QLabel {{ background: transparent; }}
@@ -255,6 +267,56 @@ def apply(app: QApplication) -> None:
     if not hasattr(app, "_vtf_fit"):
         app._vtf_fit = DialogFitter(app)
         app.installEventFilter(app._vtf_fit)
+
+
+# ------------------------------------------------------------ reset to defaults
+def reset_button(on_click, tip: str = "Alles in diesem Bereich auf Standard zurücksetzen") -> QToolButton:
+    b = QToolButton()
+    b.setObjectName("reset")
+    b.setText("Standard")
+    b.setIcon(icon("rotate-ccw", MUTED, 14))
+    b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+    b.setToolTip(tip)
+    b.setCursor(Qt.PointingHandCursor)
+    b.clicked.connect(lambda *_: on_click())
+    return b
+
+
+def section_title(text: str, on_reset=None, tip: str | None = None) -> QWidget:
+    """A section heading, with a "Standard" button on the right when on_reset is given."""
+    w = QWidget()
+    lay = QHBoxLayout(w)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(8)
+    t = QLabel(text)
+    t.setObjectName("section")
+    lay.addWidget(t)
+    lay.addStretch(1)
+    if on_reset is not None:
+        w.reset_btn = reset_button(on_reset, tip) if tip else reset_button(on_reset)
+        lay.addWidget(w.reset_btn)
+    return w
+
+
+class _SliderReset(QObject):
+    def __init__(self, slider: QSlider, default: int):
+        super().__init__(slider)
+        self.default = default
+
+    def eventFilter(self, obj, ev):
+        if ev.type() == QEvent.MouseButtonDblClick:
+            obj.setValue(self.default)
+            return True
+        return False
+
+
+def double_click_reset(slider: QSlider, default: int) -> None:
+    """Double-click on the slider sets it back to its default."""
+    f = _SliderReset(slider, int(default))
+    slider.installEventFilter(f)
+    slider._reset_filter = f
+    tip = slider.toolTip()
+    slider.setToolTip((tip + "\n" if tip else "") + "Doppelklick = Standard")
 
 
 class DialogFitter(QObject):

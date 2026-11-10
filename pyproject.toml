@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "video-to-funscript"
-version = "0.10.4"
+version = "0.10.5"
 description = "Lokale, kostenlose Videoanalyse und Funscript-Erstellung"
 readme = "README.md"
 license = { text = "MIT" }

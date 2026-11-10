@@ -23,6 +23,7 @@ def test_open_analyze_export(app, sine_video, tmp_path, monkeypatch):
     from vtf.gui.main_window import MainWindow
 
     w = MainWindow()
+    w.set_player_mode(False)                  # editing; the mode is remembered between runs
     w.open_video(str(sine_video))
     assert w.frame_count >= 179
     w.panel.hwaccel.setCurrentIndex(w.panel.hwaccel.findData("none"))
@@ -1360,5 +1361,68 @@ def test_remote_video_player(app, sine_video, tmp_path, monkeypatch):
     rc._handle({"cmd": "vplay", "index": "x"})         # junk is ignored
     rc._handle({"cmd": "estop"})
     assert not w.timer.isActive()
+    w.set_player_mode(False)                  # do not leave the shared settings in player mode
+    w.dirty = False
+    w.close()
+
+
+def test_reset_to_defaults(app, tmp_path, monkeypatch):
+    """Every adjustable area has a "Standard" button; a double-click resets a single slider."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    from vtf.device.sync import SyncSettings
+    from vtf.generator import GeneratorSettings
+    from vtf.gui.device_ui import DeviceDialog
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.pattern_dialog import DEFAULT_BPM, DEFAULT_DEPTH
+    from vtf.safety import SafetySettings
+
+    w = MainWindow()
+    p = w.panel
+    p.sensitivity.setValue(10)
+    p.invert.setChecked(True)
+    p.width.setCurrentIndex(0)
+    p.reset_script()
+    assert p.generator_settings() == GeneratorSettings()
+    p.reset_options()
+    assert p.width.currentData() == 640
+    p.smoothing.setValue(400)
+    ev = QMouseEvent(QEvent.MouseButtonDblClick, QPointF(5, 5), QPointF(5, 5), Qt.LeftButton, Qt.LeftButton,
+                     Qt.NoModifier)
+    app.sendEvent(p.smoothing, ev)
+    assert p.smoothing.value() == GeneratorSettings().smoothing_ms
+
+    dd = DeviceDialog(w.devices, w)
+    dd.offset[1].setValue(250)
+    dd.pmax.setValue(70)
+    dd.invert.setChecked(True)
+    dd.reset_playback()
+    s = w.devices.sync.settings
+    assert (s.offset_ms, s.pos_max, s.invert) == (SyncSettings().offset_ms, 100, False)
+    dd.safe_on.setChecked(True)
+    dd.safe_max.setValue(90)
+    dd.reset_safety()
+    assert w.devices.safety.settings == SafetySettings()
+    dd.close()
+
+    d = w.ensure_patterns()
+    d.bpm.setValue(150)
+    d.depth.setValue(30)
+    d.reset_sliders()
+    assert (d.bpm.value(), d.depth.value()) == (DEFAULT_BPM, DEFAULT_DEPTH)
+    d.set_mode(2)
+    d.r_depth.setValue(40)
+    d.r_vary.setChecked(False)
+    d.r_m1.setValue(10)
+    d.reset_random()
+    assert d.r_depth.value() == 100 and d.r_vary.isChecked() and d.r_m1.value() == 3.0
+    assert all(st.depth >= 70 for st in d.random_prog.steps)
+    d.m_sens.setValue(5)
+    d.m_level.setChecked(False)
+    d.reset_music()
+    assert d.m_sens.value() == 50 and d.m_level.isChecked()
+    d.set_mode(0)
     w.dirty = False
     w.close()

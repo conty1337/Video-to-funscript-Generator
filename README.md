@@ -333,6 +333,13 @@ blockiert die Firewall den Port:
 
 <img src="docs/remote.png" alt="Handy-Fernbedienung" width="300"> <img src="docs/remote-video.png" alt="Handy als Video-Fernbedienung" width="300">
 
+### Zurücksetzen
+
+Wo man etwas verstellen kann, steht rechts neben der Überschrift **„Standard“**:
+Script und Analyse-Optionen, Gerät (Wiedergabe, Sicherheit) sowie in der
+Muster-Steuerung Tempo/Tiefe, Zufall und Musik. Ein **Doppelklick auf einen
+Regler** setzt nur diesen zurück.
+
 ### Muster-Steuerung (ohne Video)
 
 **Muster** in der Toolbar oder **Strg+M** öffnet die Muster-Steuerung. Damit
