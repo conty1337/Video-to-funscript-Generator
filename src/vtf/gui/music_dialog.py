@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QSlider,
     QSpinBox,
     QVBoxLayout,
@@ -23,6 +24,7 @@ class MusicScriptDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Script aus Musik")
         lay = QVBoxLayout(self)
+        lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
         info = QLabel("Sucht die Schläge in der Tonspur und setzt auf jeden Schlag einen Hub nach unten. "
                       "Gut für Videos, bei denen die Musik den Takt vorgibt.")
         info.setObjectName("caption")

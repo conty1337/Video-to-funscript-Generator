@@ -1,4 +1,6 @@
 """Stroke patterns: library, rendering, saving, live playback."""
+from itertools import pairwise
+
 import pytest
 
 from vtf import patterns as P
@@ -73,7 +75,8 @@ def test_runner_plays_and_changes_live():
     r.configure(4250, bpm=120, lo=40, hi=60)           # no jump: continues from where it is
     assert r.position(4250) == pytest.approx(before, abs=1)
     assert P.cycle_ms(r.pattern, r.bpm) == pytest.approx(500)
-    assert all(a.pos <= 60 for a in r.acts[1:])
+    cur = next(a for a in r.acts if a.at > 4250)          # the movement under way is finished first
+    assert all(40 <= a.pos <= 60 for a in r.acts if a.at > cur.at)
     # keeps going beyond the first look-ahead
     for t in range(4250, 4250 + 2 * P.PatternRunner.AHEAD_MS, 100):
         r.tick(t)
@@ -255,3 +258,30 @@ def test_phase_runs_over_all_shown_runs():
     assert r.phase(500) == pytest.approx(0.5)
     assert r.phase(1500, runs=2) == pytest.approx(0.75)  # second run of two: right half
     assert r.phase(2500, runs=2) == pytest.approx(0.25)  # then back to the start
+
+
+def test_runner_keeps_full_strokes_while_tempo_glides():
+    """Changing tempo/depth every 250 ms (smooth step change) must not stall the device."""
+    r = P.PatternRunner(ScriptSync(SimulatedDevice(), SyncSettings()))
+    r.configure(0, pattern=next(p for p in P.BUILTIN if p.name == "Gleichmäßig"), bpm=60, lo=0, hi=100)
+    r.start(0)
+    pos = []
+    for t in range(0, 10_000, 50):
+        if t % 250 == 0:
+            r.configure(t, bpm=60 + t / 200, lo=t / 1000, hi=100)
+        r.tick(t)
+        pos.append(r.position(t))
+    tail = pos[-80:]                      # last 4 s: still whole strokes, not a flat line
+    assert max(tail) - min(tail) > 80
+
+
+def test_runner_extension_keeps_the_rhythm():
+    r = P.PatternRunner(ScriptSync(SimulatedDevice(), SyncSettings()))
+    r.configure(0, pattern=next(p for p in P.BUILTIN if p.name == "Gleichmäßig"), bpm=90, lo=0, hi=100)
+    r.start(0)
+    for t in range(0, 90_000, 100):
+        r.tick(t)
+    a = r.acts
+    assert all(x.pos != y.pos for x, y in pairwise(a))            # always up/down, never a flat move
+    gaps = {y.at - x.at for x, y in pairwise(a)}
+    assert max(gaps) - min(gaps) <= 2
