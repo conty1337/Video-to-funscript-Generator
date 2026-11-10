@@ -15,7 +15,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtCore import QSize
+
+from .. import patterns as P
 from ..editing import PATTERNS
+from .pattern_view import pattern_icon
 
 
 def _secs(v: float, maximum: float) -> QDoubleSpinBox:
@@ -33,7 +37,7 @@ class RhythmDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Rhythmus einfügen")
         lay = QVBoxLayout(self)
-        info = QLabel("Ersetzt die Punkte im Bereich durch einen gleichmäßigen Rhythmus.")
+        info = QLabel("Ersetzt die Punkte im Bereich durch einen Rhythmus oder ein Muster aus der Muster-Steuerung.")
         info.setObjectName("caption")
         info.setWordWrap(True)
         lay.addWidget(info)
@@ -54,8 +58,15 @@ class RhythmDialog(QDialog):
         self.bpm.setSuffix(" Hübe/min")
         form.addRow("Tempo", self.bpm)
         self.pattern = QComboBox()
+        self.pattern.setIconSize(QSize(72, 24))
         for code, label in PATTERNS:
             self.pattern.addItem(label, code)
+        # all patterns of the Muster-Steuerung, own ones first
+        lib = P.load_user() + P.BUILTIN
+        if lib:
+            self.pattern.insertSeparator(self.pattern.count())
+        for p in lib:
+            self.pattern.addItem(pattern_icon(p, 72, 24), f"{p.name}  ·  {p.category}", p)
         form.addRow("Muster", self.pattern)
         depth = QWidget()
         dl = QHBoxLayout(depth)

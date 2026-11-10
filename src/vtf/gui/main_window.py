@@ -255,6 +255,7 @@ class MainWindow(QMainWindow):
 
         self.updates = UpdateController(self, self.qsettings)
         self.devices = DeviceController(self, self.qsettings)
+        self.pattern_dialog = None
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
@@ -390,6 +391,8 @@ class MainWindow(QMainWindow):
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
         m.addSeparator()
+        self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
+        m.addSeparator()
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
         self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
@@ -408,6 +411,8 @@ class MainWindow(QMainWindow):
         self.save_action = tb.addAction(theme.icon("save"), "Speichern", self.export)
         tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
         tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
+        tb.addAction(theme.icon("activity"), "Muster", self.open_patterns).setToolTip(
+            "Muster-Steuerung: fertige und eigene Muster auf dem Gerät abspielen (Strg+M)")
         tb.addSeparator()
         self.mode_edit = tb.addAction(theme.icon("pencil"), "Bearbeiten", lambda: self.set_player_mode(False))
         self.mode_player = tb.addAction(theme.icon("list-video"), "Player", lambda: self.set_player_mode(True))
@@ -672,6 +677,20 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _c=False, t=ms: self.seek_ms(t))
             self._bookmark_items.append(a)
 
+    # ------------------------------------------------------------ patterns
+    def open_patterns(self):
+        from .pattern_dialog import PatternDialog
+
+        if self.pattern_dialog is None:
+            self.pattern_dialog = PatternDialog(self.devices, self)
+        self.pattern_dialog.show()
+        self.pattern_dialog.raise_()
+        self.pattern_dialog.activateWindow()
+
+    def _stop_patterns(self):
+        if self.pattern_dialog is not None and self.pattern_dialog.running:
+            self.pattern_dialog.stop()
+
     # ------------------------------------------------------------ rhythm
     def insert_rhythm(self):
         if not self.cap or not self.curve.editable:
@@ -766,6 +785,7 @@ class MainWindow(QMainWindow):
             self.pause()
         else:
             self.curve.follow = True
+            self._stop_patterns()
             if self._cur_idx >= self.frame_count - 1:
                 self.seek_frame(0)
             self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
@@ -1055,6 +1075,7 @@ class MainWindow(QMainWindow):
 
     def emergency_stop(self):
         """Esc: stop the device immediately and pause playback."""
+        self._stop_patterns()
         self.devices.emergency_stop()
         if self.timer.isActive():
             self.pause()
@@ -1453,6 +1474,12 @@ class MainWindow(QMainWindow):
             "Video, F11 = Vollbild. Ein ruhiger Anfang wird übersprungen (Start 10 s vor dem Script),\n"
             "die letzten 10 s vor dem Start zählt ein Countdown herunter (beides abschaltbar).\n\n"
             "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\n"
+            "Muster-Steuerung (Strg+M)\n"
+            "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
+            "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
+            "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
+            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"
+            "Eigene Muster gibt es auch bei Strg+T.\n\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 
     # ------------------------------------------------------------ misc
@@ -1513,6 +1540,7 @@ class MainWindow(QMainWindow):
             return
         self.cancel_analysis()
         self.updates.shutdown()
+        self._stop_patterns()
         self.devices.shutdown()
         self.audio.shutdown()
         self.player.save()

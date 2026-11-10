@@ -855,3 +855,121 @@ def test_default_resolution_is_640(app):
     p = SettingsPanel()
     assert p.width.currentData() == 640 and p.analysis_settings().width == 640
     p.deleteLater()
+
+
+def test_pattern_control(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf import patterns as P
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.pattern_dialog import PatternEditor
+
+    w = MainWindow()
+    w.open_patterns()
+    d = w.pattern_dialog
+    d.set_mode(0)
+    assert d.list.count() > len(P.BUILTIN)              # with category headers
+    assert d._select_name("Welle") and d.current().name == "Welle"
+    d.bpm.setValue(90)
+    d.depth.setValue(80)
+    assert w.qsettings.value("pattern/bpm") in (90, "90") and w.qsettings.value("pattern/last") == "Welle"
+    assert w.qsettings.value("pattern/depth") in (80, "80") and d.stroke_range() == (20, 100)
+    d.start()                                            # without a device: only the preview runs
+    d._tick()
+    assert d.running and d.view.phase is not None
+    assert (d.runner.lo, d.runner.hi, d.runner.bpm) == (20, 100, 90)
+
+    # on the fly: keys and controller, applied to the running pattern (bundled)
+    d.nudge(depth=-5, tempo=10)
+    assert (d.depth.value(), d.bpm.value()) == (75, 100)
+    assert d._apply_timer.isActive()
+    d._apply_live()
+    assert (d.runner.lo, d.runner.bpm) == (25, 100)
+    from vtf.gamepad import Event
+    d.pad_state("Testpad")
+    assert "Testpad" in d.pad_label.text() and d.pad_timer.isActive()
+    d.pad_event(Event("axis", 7, -1.0))                  # D-pad up: deeper
+    d.pad_event(Event("axis", 7, 0.0))
+    d.pad_event(Event("axis", 6, -1.0))                  # D-pad left: slower
+    assert (d.depth.value(), d.bpm.value()) == (80, 95)
+    d.pad_event(Event("axis", 1, -1.0))                  # left stick up, held
+    for _ in range(5):
+        d._pad_tick()
+    assert d.depth.value() == 95
+    d.pad_event(Event("axis", 1, 0.1))                   # inside the dead zone
+    d._pad_tick()
+    assert d.depth.value() == 95
+    name = d.current().name
+    d.pad_event(Event("button", 5, 1.0))                 # RB: next pattern, keeps playing
+    assert d.current().name != name and d.running
+    d.pad_event(Event("button", 1, 1.0))                 # B: stop
+    assert not d.running
+    d.pad_event(Event("button", 0, 1.0))                 # A: start
+    assert d.running
+    d.pad_state(None)                                    # controller gone while in charge: stop
+    assert not d.running and not d.pad_timer.isActive()
+    d.start()
+    w.emergency_stop()                                   # Esc stops the pattern too
+    assert not d.running and d.view.phase is None
+
+    # build an own pattern from blocks
+    e = PatternEditor(P.Pattern("Neu", []), 60, 0, 100, d)
+    assert not e.save_btn.isEnabled()
+    e.add_block(P.PALETTE[0][1])
+    e.add_block(P.PALETTE[-2][1])                        # pause at the top
+    e.blocks.setCurrentRow(0)
+    e.repeat.setValue(3)
+    e.ramp.setChecked(True)
+    e.speed_to.setValue(2.5)
+    e.move_block(1)
+    res = e.result_pattern()
+    assert [b.kind for b in res.blocks] == ["hold", "stroke"]
+    assert res.blocks[1].repeat == 3 and res.blocks[1].speed_to == 2.5
+    d.user.append(res)
+    d.save_user()
+    assert [p.name for p in P.load_user()] == ["Neu"]
+    d.filter.setCurrentIndex(d.filter.findData("Eigene"))
+    assert d._select_name("Neu") and not d.del_btn.isHidden()
+
+    # own and preset patterns are offered when inserting a rhythm
+    from vtf.gui.rhythm_dialog import RhythmDialog
+    r = RhythmDialog(0, 5000, 60_000, w)
+    names = [r.pattern.itemData(i).name for i in range(r.pattern.count())
+             if isinstance(r.pattern.itemData(i), P.Pattern)]
+    assert names[0] == "Neu" and "Welle" in names
+
+    # programs (Abläufe): steps with a part of a pattern, offsets, step skipping
+    from vtf.gui.pattern_dialog import ProgramEditor
+    d.set_mode(1)
+    assert d.left_stack.currentIndex() == 1 and d._select_program("Eine Stunde")
+    pe = ProgramEditor(P.Program("Abend", [P.Step("Gleichmäßig", 2, 50, 70)]), d.all_patterns(),
+                       d.find_pattern, d)
+    pe.add_step()
+    pe.pattern.setCurrentIndex(pe.pattern.findData("Kurz vor Schluss"))
+    assert pe.last.maximum() == 3 and pe.last.value() == 3
+    pe.last.setValue(1)                                  # only the fast start of it
+    pe.minutes.setValue(3)
+    pe.depth.setValue(90)
+    assert pe.part_view.highlight == (0, 0)
+    res = pe.result_program()
+    assert res.steps[1].pattern == "Kurz vor Schluss" and (res.steps[1].first, res.steps[1].last) == (1, 1)
+    assert res.total_ms == 5 * 60_000
+    d.programs.append(res)
+    d.save_programs()
+    assert [p.name for p in P.load_programs()] == ["Abend"]
+    d._fill_programs()
+    assert d._select_program("Abend")
+    d.start()
+    assert d.prunner.running and not d.runner.running
+    d._tick()
+    assert "Schritt 1/2" in d.pnow.text()
+    d.nudge(depth=-10, tempo=5)                          # keys move the whole program
+    assert (d.prunner.offset_bpm, d.prunner.offset_depth) == (5, -10)
+    d.step_pattern(1)                                    # next step
+    assert d.prunner.index == 1 and "Schritt 2/2" in d.pnow.text()
+    assert len(d.prunner.runner.pattern.blocks) == 1
+    d.reset_offsets()
+    assert d.prunner.offset_depth == 0
+    d.set_mode(0)                                        # switching mode stops
+    assert not d.running
+    d.close()
+    w.close()
