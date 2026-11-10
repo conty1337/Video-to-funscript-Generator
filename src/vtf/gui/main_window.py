@@ -895,6 +895,7 @@ class MainWindow(QMainWindow):
             self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
             self._clock.start()
             self.devices.set_actions(self.stroke_actions())
+            self.devices.set_axes(self.all_axes())
             self.timer.start(10)
             self.audio.play(self._play_origin_ms)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
@@ -1413,6 +1414,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_position(self):
         self.devices.set_actions(self.stroke_actions())
+        self.devices.set_axes(self.all_axes())
         self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))
         self._update_heat()
         self._update_meta()

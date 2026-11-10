@@ -1173,3 +1173,41 @@ def test_external_player_sync(app, tmp_path):
     srv.close()
     w.devices.disconnect_device()
     w.close()
+
+
+def test_multi_axis_tcode(app):
+    import os
+    import time
+
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    master, slave = os.openpty()
+    w = MainWindow()
+    ctl = w.devices
+    ctl.connect_device("tcode", os.ttyname(slave))
+    for _ in range(50):
+        app.processEvents()
+        if ctl.device is not None:
+            break
+        time.sleep(0.02)
+    assert set(ctl.axis_syncs) == {"L1", "L2", "R0", "R1", "R2"}
+    ctl.set_actions([Action(0, 0), Action(1000, 100), Action(2000, 0)])
+    ctl.set_axes({"L0": [], "R1": [Action(0, 50), Action(1000, 90), Action(2000, 10)]})
+    for t in range(0, 1600, 20):
+        ctl.tick(t, True)
+    ctl.tick(0, False)
+    os.set_blocking(master, False)
+    text = b""
+    try:
+        while True:
+            text += os.read(master, 4096)
+    except (BlockingIOError, OSError):
+        pass
+    text = text.decode()
+    assert "L0" in text and "R1" in text and "DSTOP" in text
+    ctl.disconnect_device()
+    assert ctl.axis_syncs == {}
+    os.close(master)
+    os.close(slave)
+    w.close()

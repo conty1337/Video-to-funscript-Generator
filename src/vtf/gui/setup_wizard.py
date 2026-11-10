@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..device.buttplug import DEFAULT_URL, ButtplugDevice
+from ..device.buttplug import ButtplugDevice
 from ..device.sync import ScriptSync
 from ..funscript import Action
 from . import theme
@@ -279,7 +279,9 @@ class SetupWizard(QDialog):
         for label, val in KINDS:
             self.kind.addItem(label, val)
         self.kind.setCurrentIndex(max(0, self.kind.findData(self.ctl.qs.value("device/kind", "intiface"))))
-        self.url = QLineEdit(str(self.ctl.qs.value("device/url", DEFAULT_URL) or DEFAULT_URL))
+        self.url = QLineEdit()
+        self.kind.currentIndexChanged.connect(self._kind_changed)
+        self._kind_changed()
         self.connect_btn = QPushButton(theme.icon("bluetooth", theme.ON_ACCENT), "Verbinden")
         self.connect_btn.setObjectName("primary")
         self.connect_btn.clicked.connect(
@@ -293,6 +295,14 @@ class SetupWizard(QDialog):
         self.found = QLabel()
         v.addWidget(self.found)
         v.addStretch(1)
+
+    def _kind_changed(self, *_):
+        from .device_ui import default_address
+
+        kind = self.kind.currentData()
+        key = "device/tcode" if kind == "tcode" else "device/url"
+        self.url.setText(str(self.ctl.qs.value(key, "") or "") or default_address(kind))
+        self.url.setEnabled(kind != "sim")
 
     def _select_device(self, i: int):
         dev = self.device
