@@ -15,7 +15,7 @@ Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.8)
+## Funktionen (Stand 0.9)
 
 | | Funktion | Status |
 |---|---|---|
@@ -43,6 +43,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 22 | Bereiche 2/3 fest verankern, Kästchen nur verschieben (für Maschinen) | ✅ |
 | 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
 | 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
+| 25 | Muster-Steuerung: über 30 fertige Muster, eigene aus Bausteinen bauen und speichern | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -272,6 +273,43 @@ Einstellungen im Geräte-Dialog:
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen
 Script-Position und folgt erst dann.
+
+### Muster-Steuerung (ohne Video)
+
+**Muster** in der Toolbar oder **Strg+M** öffnet die Muster-Steuerung. Damit
+spielst du Muster direkt auf dem Gerät ab, ohne Video und ohne Script.
+
+![Muster-Steuerung](docs/patterns.png)
+
+- **Links** die Bibliothek mit Vorschaubildern: über 30 fertige Muster in den
+  Gruppen Grundlagen, Rhythmus, Steigerung und Necken, darunter deine eigenen.
+  Doppelklick startet.
+- **Tempo** (Hübe pro Minute) und **Hub** (von–bis) gelten für alle Muster und
+  bleiben gespeichert. Beides lässt sich auch während des Abspielens ändern, das
+  Gerät macht dabei keinen Sprung. Hubbereich, Richtung und Tempo-Limit aus dem
+  Geräte-Dialog gelten zusätzlich.
+- **Start/Stopp**. Esc, Schließen des Fensters oder Abspielen eines Videos
+  stoppt das Muster sofort.
+
+**Eigene Muster (Baukasten):** **Neu** oder bei einer Vorlage **Als Kopie
+ändern**. Bausteine wie Voller Hub, Kurz oben, Zittern, Schneller werdend oder
+Pause oben anklicken, sie werden hinten angehängt. Jeder Baustein hat:
+
+| Feld | Bedeutung |
+|---|---|
+| Art | *Hub* (runter und rauf), *Fahren* (eine Bewegung zu einer Position), *Halten* (dort bleiben) |
+| Wiederholen | wie oft der Hub kommt |
+| Tempo | 1× = ein Hub im eingestellten Tempo, 2× doppelt so schnell |
+| Tiefe | von–bis in Prozent vom eingestellten Hub (0 = unten, 100 = oben) |
+| Verlauf | Tempo und Tiefe ändern sich gleichmäßig über die Wiederholungen |
+
+Die Reihenfolge änderst du mit den Pfeilen oder per Ziehen. Unten zeigt das
+Bild das Ergebnis, der gewählte Baustein ist hervorgehoben. Eigene Muster
+liegen in `~/.config/video-to-funscript/patterns.json`. Alle Muster gibt es
+auch beim **Rhythmus einfügen** (Strg+T) im Editor, so kommt ein Muster
+direkt ins Script.
+
+![Baukasten](docs/pattern-editor.png)
 
 ## Kommandozeile
 

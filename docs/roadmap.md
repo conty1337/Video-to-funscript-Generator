@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.8.4. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 0.9.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
@@ -82,5 +82,9 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
 - [x] **Tempo-Grenze beim Erzeugen**: Hübe, die das Gerät nicht schafft (F21S:
       voller Hub unter ca. 200 ms), schon im Script begrenzen, nicht erst
       beim Abspielen.
+- [x] **Muster-Steuerung** (0.9): über 30 fertige Muster mit Vorschaubild,
+      eigene Muster aus Bausteinen (Hub, Fahren, Halten, mit Verlauf),
+      Tempo und Hub dauerhaft gespeichert und live änderbar. Muster auch beim
+      Rhythmus-Einfügen im Editor.
 - [ ] **Andere Player**: Scripts auch zu Videos aus anderen Playern (Browser,
       VLC) auf dem Gerät abspielen.

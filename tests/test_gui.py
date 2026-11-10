@@ -855,3 +855,52 @@ def test_default_resolution_is_640(app):
     p = SettingsPanel()
     assert p.width.currentData() == 640 and p.analysis_settings().width == 640
     p.deleteLater()
+
+
+def test_pattern_control(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf import patterns as P
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.pattern_dialog import PatternEditor
+
+    w = MainWindow()
+    w.open_patterns()
+    d = w.pattern_dialog
+    assert d.list.count() > len(P.BUILTIN)              # with category headers
+    assert d._select_name("Welle") and d.current().name == "Welle"
+    d.bpm.setValue(90)
+    d.lo.setValue(20)
+    assert w.qsettings.value("pattern/bpm") in (90, "90") and w.qsettings.value("pattern/last") == "Welle"
+    d.start()                                            # without a device: only the preview runs
+    d._tick()
+    assert d.running and d.view.phase is not None
+    w.emergency_stop()                                   # Esc stops the pattern too
+    assert not d.running and d.view.phase is None
+
+    # build an own pattern from blocks
+    e = PatternEditor(P.Pattern("Neu", []), 60, 0, 100, d)
+    assert not e.save_btn.isEnabled()
+    e.add_block(P.PALETTE[0][1])
+    e.add_block(P.PALETTE[-2][1])                        # pause at the top
+    e.blocks.setCurrentRow(0)
+    e.repeat.setValue(3)
+    e.ramp.setChecked(True)
+    e.speed_to.setValue(2.5)
+    e.move_block(1)
+    res = e.result_pattern()
+    assert [b.kind for b in res.blocks] == ["hold", "stroke"]
+    assert res.blocks[1].repeat == 3 and res.blocks[1].speed_to == 2.5
+    d.user.append(res)
+    d.save_user()
+    assert [p.name for p in P.load_user()] == ["Neu"]
+    d.filter.setCurrentIndex(d.filter.findData("Eigene"))
+    assert d._select_name("Neu") and not d.del_btn.isHidden()
+
+    # own and preset patterns are offered when inserting a rhythm
+    from vtf.gui.rhythm_dialog import RhythmDialog
+    r = RhythmDialog(0, 5000, 60_000, w)
+    names = [r.pattern.itemData(i).name for i in range(r.pattern.count())
+             if isinstance(r.pattern.itemData(i), P.Pattern)]
+    assert names[0] == "Neu" and "Welle" in names
+    d.close()
+    w.close()

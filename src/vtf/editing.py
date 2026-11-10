@@ -148,15 +148,20 @@ def _rhythm_points(start: int, end: int, bpm: float, lo: int, hi: int, pattern: 
 
 
 def rhythm(actions: list[Action], start_ms: float, end_ms: float, bpm: float, lo: int = 0,
-           hi: int = 100, pattern: str = "even") -> tuple[list[Action], set[int]]:
+           hi: int = 100, pattern="even") -> tuple[list[Action], set[int]]:
     """Replace the points between start and end with a regular rhythm.
+    pattern: a code from PATTERNS or a patterns.Pattern (Muster-Steuerung).
     bpm = strokes per minute (one stroke = down and up). Returns the new list and
     the indices of the inserted points."""
     start, end = int(round(min(start_ms, end_ms))), int(round(max(start_ms, end_ms)))
     lo, hi = sorted((int(lo), int(hi)))
     if end - start < 50:
         return list(actions), set()
-    new = _rhythm_points(start, end, bpm, lo, hi, pattern)
+    if isinstance(pattern, str):
+        new = _rhythm_points(start, end, bpm, lo, hi, pattern)
+    else:                                         # a stroke pattern from the library (patterns.Pattern)
+        from .patterns import actions as pattern_actions
+        new = pattern_actions(pattern, bpm, lo, hi, start, end, start_pos=hi)
     keep = [a for a in actions if not start <= a.at <= end]
     out = sorted(keep + new, key=lambda a: a.at)
     ids = {id(a) for a in new}

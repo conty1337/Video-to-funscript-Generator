@@ -72,8 +72,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
 | Hubbereich | kleinster und größter Wert, z.B. 10 bis 90 |
 
 Von Hand nachbessern: Punkte in der Kurve ziehen, Doppelklick fügt hinzu,
-Rechtsklick löscht. **Strg+T** fügt einen gleichmäßigen Rhythmus für einen
-Bereich ein.
+Rechtsklick löscht. **Strg+T** fügt einen Rhythmus oder ein Muster aus der
+Muster-Steuerung für einen Bereich ein.
 
 ## Abspielen
 
@@ -81,6 +81,10 @@ Bereich ein.
   **Gerät** (Strg+D) → Verbinden. Ohne Gerät: „Simulation“.
 - **Player** (Strg+P): Videos in die Playlist ziehen, „Playlist abspielen“.
   Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown.
+- **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
+  abspielen. Tempo und Hub einstellen, sie bleiben gespeichert. Eigene Muster
+  baust du aus Bausteinen (Neu bzw. „Als Kopie ändern“), das Bild zeigt sofort,
+  wie es aussieht.
 - **Esc** stoppt das Gerät sofort.
 
 ## Wenn etwas nicht passt
@@ -108,6 +112,7 @@ Bereich ein.
 | Strg+S | Script speichern |
 | Strg+W | Video schließen |
 | Strg+P | Player |
+| Strg+M | Muster-Steuerung |
 | Strg+1 / Strg+2 | linke/rechte Leiste ein/aus |
 | F11 | Vollbild |
 | Esc | Not-Aus (Gerät stoppen) |
