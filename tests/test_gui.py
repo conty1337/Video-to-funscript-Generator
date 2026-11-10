@@ -1044,3 +1044,33 @@ def test_setup_wizard(app):
     w.devices.save_sync()
     w.devices.disconnect_device()
     w.close()
+
+
+def test_remote_commands(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    rc = w.remote
+    rc.set_enabled(False)
+    rc._handle({"cmd": "mode", "mode": 0})
+    d = w.pattern_dialog
+    rc._handle({"cmd": "select", "name": "Welle"})
+    rc._handle({"cmd": "set", "bpm": 77, "depth": 66})
+    assert d.current().name == "Welle" and (d.bpm.value(), d.depth.value()) == (77, 66)
+    rc._handle({"cmd": "toggle"})
+    assert d.running and rc._state["running"] and rc._state["name"] == "Welle"
+    rc._handle({"cmd": "estop"})
+    assert not d.running
+    rc._handle({"cmd": "mode", "mode": 1})
+    rc._handle({"cmd": "select", "name": "Eine Stunde"})
+    rc._handle({"cmd": "start"})
+    rc._handle({"cmd": "set", "bpm": rc._state["bpm"] + 10})
+    assert d.prunner.offset_bpm == 10
+    rc._handle({"cmd": "step", "d": 1})
+    assert d.prunner.index == 1
+    rc._handle({"cmd": "stop"})
+    assert not d.running and "Eine Stunde" in rc._state["programs"]
+    d.reset_offsets()
+    d.set_mode(0)
+    w.close()

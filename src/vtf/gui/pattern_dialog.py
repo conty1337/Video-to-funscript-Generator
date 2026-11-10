@@ -607,6 +607,63 @@ class PatternDialog(QDialog):
         pos = rows.index(cur) if cur in rows else -1
         self.list.setCurrentRow(rows[(pos + d) % len(rows)])
 
+    # ------------------------------------------------------------ phone remote
+    def remote_state(self) -> dict:
+        now = self._now()
+        cur = self.prunner.current(now) if self.prunner.running else None
+        if self.mode == 0:
+            p = self.current()
+            name = p.name if p else ""
+            bpm, depth = self.bpm.value(), self.depth.value()
+        else:
+            pr = self.active_program()
+            name = pr.name if pr else ""
+            if cur is not None:
+                bpm, depth = cur
+            else:
+                bpm, depth = self.bpm.value(), self.depth.value()
+        titles = {0: "Muster", 1: "Ablauf", 2: "Zufall"}
+        return {"running": self.running, "mode": self.mode, "name": name,
+                "title": f"{titles[self.mode]}: {name}" if self.mode < 2 else "Zufall · " + self.mood.currentText(),
+                "bpm": bpm, "depth": depth, "now": self.pnow.text() if self.mode else "",
+                "patterns": [p.name for p in self.all_patterns()],
+                "programs": [p.name for p in self.all_programs()]}
+
+    def remote_command(self, c: dict) -> None:
+        cmd = c.get("cmd")
+        try:
+            if cmd == "toggle":
+                self.toggle()
+            elif cmd == "start" and not self.running:
+                self.start()
+            elif cmd == "stop":
+                self.stop()
+            elif cmd == "nudge":
+                self.nudge(depth=float(c.get("depth", 0)), tempo=float(c.get("tempo", 0)))
+            elif cmd == "set":
+                if self.mode == 0:
+                    if "bpm" in c:
+                        self.bpm.setValue(int(c["bpm"]))
+                    if "depth" in c:
+                        self.depth.setValue(int(c["depth"]))
+                elif self.prunner.running:          # programs: move the plan by the difference
+                    bpm, depth = self.prunner.current(self._now())
+                    self.nudge(tempo=float(c.get("bpm", bpm)) - bpm, depth=float(c.get("depth", depth)) - depth)
+            elif cmd == "mode":
+                self.set_mode(int(c.get("mode", 0)))
+            elif cmd == "select":
+                name = str(c.get("name", ""))
+                if self.mode == 0:
+                    if not self._select_name(name):
+                        self.filter.setCurrentIndex(0)
+                        self._select_name(name)
+                elif self.mode == 1:
+                    self._select_program(name)
+            elif cmd == "step":
+                self.step_pattern(int(c.get("d", 1)))
+        except (TypeError, ValueError):
+            pass
+
     # ------------------------------------------------------------ controller
     def pad_state(self, name):
         if name:

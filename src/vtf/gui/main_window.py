@@ -257,6 +257,8 @@ class MainWindow(QMainWindow):
         self.devices = DeviceController(self, self.qsettings)
         self.devices.register_source(self)
         self.pattern_dialog = None
+        from .remote_ui import RemoteController
+        self.remote = RemoteController(self, self.qsettings)
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
@@ -394,6 +396,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
         m.addSeparator()
         self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
+        self._act(m, "Handy-Fernbedienung…", self.open_remote)
         m.addSeparator()
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
@@ -680,11 +683,21 @@ class MainWindow(QMainWindow):
             self._bookmark_items.append(a)
 
     # ------------------------------------------------------------ patterns
-    def open_patterns(self):
+    def ensure_patterns(self):
+        """The pattern control (created on first use, also for the phone remote)."""
         from .pattern_dialog import PatternDialog
 
         if self.pattern_dialog is None:
             self.pattern_dialog = PatternDialog(self.devices, self)
+        return self.pattern_dialog
+
+    def open_remote(self):
+        from .remote_ui import RemoteDialog
+
+        RemoteDialog(self.remote, self).exec()
+
+    def open_patterns(self):
+        self.ensure_patterns()
         self.pattern_dialog.show()
         self.pattern_dialog.raise_()
         self.pattern_dialog.activateWindow()
@@ -1558,6 +1571,7 @@ class MainWindow(QMainWindow):
         self.cancel_analysis()
         self.updates.shutdown()
         self._stop_patterns()
+        self.remote.shutdown()
         self.devices.shutdown()
         self.audio.shutdown()
         self.player.save()
