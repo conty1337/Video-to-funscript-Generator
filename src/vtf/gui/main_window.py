@@ -390,6 +390,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
+        self._act(m, "Einrichtungs-Assistent…", lambda: self.devices.open_wizard())
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
         m.addSeparator()
         self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")

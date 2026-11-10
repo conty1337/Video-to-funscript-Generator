@@ -990,3 +990,57 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     d.set_mode(0)
     d.close()
     w.close()
+
+
+def test_setup_wizard(app):
+    import time
+
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.setup_wizard import SPEED_LEVELS, SetupWizard, metronome_actions, speed_for
+
+    acts = metronome_actions(0, 3)
+    assert [(a.at, a.pos) for a in acts[:3]] == [(0, 0), (500, 100), (1000, 0)]
+    assert speed_for(200) == 500
+    w = MainWindow()
+    s = w.devices.sync.settings
+    old = (s.invert, s.pos_min, s.pos_max, s.max_speed, s.offset_ms)
+    wz = SetupWizard(w.devices, w)
+    assert not wz.next_btn.isEnabled()                   # first connect
+    w.devices.connect_device("sim", "")
+    for _ in range(50):
+        app.processEvents()
+        if w.devices.device is not None:
+            break
+        time.sleep(0.02)
+    wz._refresh()
+    assert wz.next_btn.isEnabled()
+    wz.go(1)
+    wz.invert.setChecked(not old[0])
+    assert s.invert != old[0]
+    wz.go(2)
+    wz.r_lo.setValue(10)
+    wz.r_hi.setValue(90)
+    assert (s.pos_min, s.pos_max) == (10, 90)
+    wz.go(3)
+    wz.level = SPEED_LEVELS.index(250)
+    wz.try_speed()
+    assert len(wz._strokes) == 9 and wz.timer.isActive()
+    wz.take_speed()
+    assert s.max_speed == 400
+    wz.go(4)
+    assert wz._strokes == []                             # leaving a page stops the motion
+    wz.toggle_metro()
+    assert wz._metro is not None
+    wz.offset.setValue(120)
+    assert s.offset_ms == 120
+    wz._metro_start -= 2000
+    wz._tick()
+    wz.toggle_metro()
+    assert wz._metro is None
+    wz.go(5)
+    assert "400 /s" in wz.summary.text()
+    wz.reject()
+    s.invert, s.pos_min, s.pos_max, s.max_speed, s.offset_ms = old
+    w.devices.save_sync()
+    w.devices.disconnect_device()
+    w.close()

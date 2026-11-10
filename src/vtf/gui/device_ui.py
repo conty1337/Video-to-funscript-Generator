@@ -207,6 +207,14 @@ class DeviceController(QObject):
             self.dialog.log(msg)
             self.dialog.refresh()
 
+    def open_wizard(self) -> None:
+        from .setup_wizard import SetupWizard
+
+        SetupWizard(self, self.win).exec()
+        if self.dialog is not None:
+            self.dialog.close()
+            self.dialog = None             # rebuilt with the new values next time
+
     def open_dialog(self) -> None:
         if self.dialog is None:
             self.dialog = DeviceDialog(self, self.win)
@@ -272,6 +280,10 @@ class DeviceDialog(QDialog):
         row.addWidget(self.scan_btn)
         row.addWidget(self.disconnect_btn)
         lay.addLayout(row)
+        self.wizard_btn = QPushButton("Einrichtungs-Assistent…")
+        self.wizard_btn.setToolTip("Schritt für Schritt: Verbindung, Richtung, Hubbereich, Höchsttempo, Verzögerung")
+        self.wizard_btn.clicked.connect(ctl.open_wizard)
+        lay.addWidget(self.wizard_btn)
 
         lay.addSpacing(16)
         title = QLabel("Wiedergabe")
