@@ -236,6 +236,13 @@ class PatternDialog(QDialog):
             sp.setSuffix(" min")
         rf.addRow(self._label("Wechsel"), _hrow(self.r_m0, "bis", self.r_m1))
         rl.addLayout(rf)
+        tip = "Hubtiefe je Abschnitt, zufällig dazwischen: 100 % = ganzer Hub, 30 % = nur das obere Drittel."
+        for sp in (self.r_d0, self.r_d1):
+            sp.setToolTip(tip)
+        self.r_dhint = QLabel(tip + " Für große Hübe den unteren Wert erhöhen.")
+        self.r_dhint.setObjectName("caption")
+        self.r_dhint.setWordWrap(True)
+        rl.addWidget(self.r_dhint)
         self.r_own = QCheckBox("Eigene Muster mit einbeziehen")
         rl.addWidget(self.r_own)
         self.reroll_btn = QPushButton(theme.icon("shuffle"), "Neu würfeln")
@@ -800,27 +807,10 @@ class PatternDialog(QDialog):
         pr = self.active_program()
         if pr is None or not pr.steps:
             return [], [], "Kein Ablauf gewählt"
-        if self.prunner.running:
-            i = self.prunner.index
-            starts = pr.starts()
-            base = self.prunner.start_ms
-            boundary = base + starts[i] + pr.steps[i].minutes * 60_000
-            pts = [(a.at, a.pos) for a in self.prunner.runner.acts if a.at < boundary]
-            marks = []
-            t, k = boundary, i + 1
-            last = pts[-1][1] if pts else 100
-            while t < end and k < len(pr.steps):      # the next steps as they will start
-                st = pr.steps[k]
-                pat = self.find_pattern(st.pattern)
-                if pat is None or not pat.blocks:
-                    break
-                bpm, depth = self.prunner.effective(st.bpm, st.depth)
-                nxt = P.actions(st.part(pat), bpm, 100 - depth, 100, t, min(end, t + st.minutes * 60_000), last)
-                pts += [(a.at, a.pos) for a in nxt]
-                marks.append((t, st.pattern))
-                last = nxt[-1].pos if nxt else last
-                t += st.minutes * 60_000
-                k += 1
+        if self.prunner.running:                       # exactly as it will be played, glides included
+            acts, changes = self.prunner.plan(now, end)
+            pts = [(x.at, x.pos) for x in acts]
+            marks = [(t, pr.steps[k].pattern) for t, k in changes if k < len(pr.steps)]
             return pts, marks, ""
         st = pr.steps[0]                                 # not playing: how it would start
         pat = self.find_pattern(st.pattern)
