@@ -971,5 +971,22 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     assert d.prunner.offset_depth == 0
     d.set_mode(0)                                        # switching mode stops
     assert not d.running
+
+    # random: rolls a new plan on every start, offsets and skipping work as in programs
+    d.set_mode(2)
+    assert d.right_stack.currentIndex() == 1 and d.ptitle.text().startswith("Zufall")
+    d.mood.setCurrentIndex(d.mood.findData("intensiv"))
+    assert (d.r_bpm0.value(), d.r_bpm1.value()) == (70, 150)
+    d.start()
+    first = d.random_prog
+    d._tick()
+    assert d.prunner.running and "nächster Wechsel" in d.pnow.text()
+    d.step_pattern(1)
+    assert d.prunner.index == 1
+    d.stop()
+    d.start()
+    assert d.random_prog is not first
+    d.stop()
+    d.set_mode(0)
     d.close()
     w.close()

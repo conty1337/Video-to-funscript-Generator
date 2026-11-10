@@ -469,6 +469,47 @@ BUILTIN_PROGRAMS: list[Program] = [
 ]
 
 
+#: moods for the random generator: label, pattern groups (None = all but "Intensiv"),
+#: tempo range, depth range
+MOODS = {
+    "ruhig": ("Ruhig", ("Grundlagen", "Necken", "Steigerung"), (30, 60), (40, 80)),
+    "gemischt": ("Gemischt", None, (40, 100), (50, 100)),
+    "intensiv": ("Intensiv", ("Intensiv", "Rhythmus", "Mehr Rhythmus", "Steigerung", "Mehr Steigerung"),
+                 (70, 150), (80, 100)),
+}
+
+
+def random_program(mood: str = "gemischt", bpm: tuple[int, int] | None = None,
+                   depth: tuple[int, int] | None = None, minutes: tuple[float, float] = (1.0, 3.0),
+                   total_minutes: float = 240, seed: int | None = None,
+                   extra: list[Pattern] | None = None) -> Program:
+    """An endless-feeling program: random patterns (sometimes only a part of one),
+    tempo and depth within the ranges, each for a random time. Loops at the end."""
+    import random
+
+    rng = random.Random(seed)
+    _label, cats, mood_bpm, mood_depth = MOODS.get(mood, MOODS["gemischt"])
+    b0, b1 = sorted(bpm or mood_bpm)
+    d0, d1 = sorted(depth or mood_depth)
+    m0, m1 = sorted(minutes)
+    pool = [p for p in BUILTIN if (p.category in cats if cats else p.category != "Intensiv")]
+    pool += list(extra or [])
+    steps: list[Step] = []
+    t, last = 0.0, None
+    while t < total_minutes and pool:
+        p = rng.choice([x for x in pool if x.name != last] or pool)
+        last = p.name
+        mins = round(rng.uniform(max(0.25, m0), max(0.25, m1)) * 4) / 4
+        first, end = 1, 0
+        n = len(p.blocks)
+        if n > 2 and rng.random() < 0.3:          # now and then only a part of the pattern
+            first = rng.randint(1, n - 1)
+            end = rng.randint(first, n)
+        steps.append(Step(p.name, mins, rng.randint(b0, b1), rng.randint(d0, max(d0, d1)), first, end))
+        t += mins
+    return Program("Zufall", steps, loop=True, smooth=True)
+
+
 class ProgramRunner:
     """Plays a program: switches pattern, tempo and depth by the clock, optionally
     gliding into each step. Offsets from keys or controller apply on top."""
