@@ -6,10 +6,18 @@ quiet, the stroke curve is the one element that carries colour.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPalette, QPixmap
+from PySide6.QtCore import QByteArray, QEvent, QObject, QRectF, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontDatabase,
+    QIcon,
+    QPainter,
+    QPalette,
+    QPixmap,
+)
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDialog, QLayout
 
 # ------------------------------------------------------------ tokens
 DEEP = "#0f0f10"       # toolbar, sidebar
@@ -244,6 +252,53 @@ def apply(app: QApplication) -> None:
     app.setPalette(pal)
     app.setStyleSheet(QSS.replace("%CHECK%", _icon_file("check", ON_ACCENT))
                          .replace("%CHEVRON%", _icon_file("chevron-down", TEXT_2)))
+    if not hasattr(app, "_vtf_fit"):
+        app._vtf_fit = DialogFitter(app)
+        app.installEventFilter(app._vtf_fit)
+
+
+class DialogFitter(QObject):
+    """Keeps every dialog at least as tall as its content really needs.
+
+    Qt's minimum size ignores wrapped text (height-for-width), so with larger fonts or another window
+    manager a dialog could be shown or shrunk too small and squeeze its rows. After each show, resize
+    or layout change the minimum height is set to what the layout needs at the current width.
+    Applies to dialogs whose layout uses SetMinimumSize (the form-like dialogs); big resizable
+    windows like the pattern control keep their own sizing.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._pending: set[int] = set()
+
+    def eventFilter(self, obj, ev):
+        if (ev.type() in (QEvent.Show, QEvent.Resize, QEvent.LayoutRequest) and isinstance(obj, QDialog)
+                and id(obj) not in self._pending):
+            key = id(obj)
+            self._pending.add(key)
+            QTimer.singleShot(0, lambda d=obj, k=key: self._fit(d, k))
+        return False
+
+    def _fit(self, dlg, key) -> None:
+        self._pending.discard(key)
+        try:
+            lay = dlg.layout()
+            if lay is None or not dlg.isVisible() or lay.sizeConstraint() != QLayout.SetMinimumSize:
+                return
+            lay.activate()
+            m = dlg.contentsMargins()
+            w = dlg.width() - m.left() - m.right()
+            need = lay.totalHeightForWidth(w) if lay.hasHeightForWidth() else lay.totalMinimumSize().height()
+            need += m.top() + m.bottom()
+            screen = dlg.screen()
+            if screen is not None:
+                need = min(need, screen.availableGeometry().height() - 40)
+            if need > dlg.minimumHeight():
+                dlg.setMinimumHeight(need)
+            if dlg.height() < need:
+                dlg.resize(dlg.width(), need)
+        except RuntimeError:          # dialog already deleted
+            pass
 
 
 def _icon_file(name: str, color: str) -> str:

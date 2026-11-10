@@ -185,7 +185,7 @@ class RemoteDialog(QDialog):
         self.err.setText(self.ctl.error)
         self.err.setVisible(bool(self.ctl.error))
         self.hint.setText("Klappt es nicht, lässt die Firewall den Port evtl. nicht durch. Einmalig im Terminal:\n"
-                          f"sudo firewall-cmd --add-port={self.ctl.port}/tcp --permanent && "
+                          f"sudo firewall-cmd --add-port={self.ctl.port}/tcp --permanent\n"
                           "sudo firewall-cmd --reload")
         if self.ctl.error:
             self.on.blockSignals(True)

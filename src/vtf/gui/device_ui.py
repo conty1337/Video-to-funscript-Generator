@@ -11,11 +11,12 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSlider,
     QSpinBox,
     QVBoxLayout,
@@ -24,9 +25,9 @@ from PySide6.QtWidgets import (
 
 from ..device import Device, DeviceError, SimulatedDevice
 from ..device.buttplug import DEFAULT_URL, VIBE_MODES, ButtplugDevice
+from ..device.sync import ScriptSync, SyncSettings
 from ..device.tcode import DEFAULT_PORT as TCODE_PORT
 from ..device.tcode import AxisProxy, TCodeDevice
-from ..device.sync import ScriptSync, SyncSettings
 from ..safety import SafetyGuard, SafetySettings
 from . import theme
 
@@ -296,11 +297,18 @@ class DeviceDialog(QDialog):
         super().__init__(parent)
         self.ctl = ctl
         self.setWindowTitle("Gerät")
-        lay = QVBoxLayout(self)
+        # the content scrolls when the screen is too low for it; the window opens as tall as it needs
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        outer.addWidget(self.scroll)
+        self.body = QWidget()
+        lay = QVBoxLayout(self.body)
         lay.setContentsMargins(24, 24, 24, 24)
         lay.setSpacing(8)
-        # the window can never be shrunk below what the content needs
-        lay.setSizeConstraint(QLayout.SetMinimumSize)
 
         title = QLabel("Verbindung")
         title.setObjectName("section")
@@ -440,6 +448,7 @@ class DeviceDialog(QDialog):
         self.log_label.setMinimumHeight(self.log_label.fontMetrics().lineSpacing() * 3 + 4)
         lay.addWidget(self.log_label)
         lay.addStretch(1)
+        self.scroll.setWidget(self.body)
         # fixed control heights, set after the stylesheet has been applied
         # (QSS min-height would otherwise override them on first show)
         self.ensurePolished()
@@ -569,6 +578,26 @@ class DeviceDialog(QDialog):
 
     def log(self, msg: str):
         self.log_label.setText(msg)
+
+    def showEvent(self, ev):
+        super().showEvent(ev)
+        if not getattr(self, "_sized", False):
+            self._sized = True
+            self._fit_to_content()
+
+    def _fit_to_content(self) -> None:
+        """As wide as the content needs (plus room for the scroll bar), as tall as it needs up to the screen."""
+        lay = self.body.layout()
+        lay.activate()
+        bar = self.scroll.verticalScrollBar().sizeHint().width()
+        w = max(self.body.minimumSizeHint().width(), self.body.sizeHint().width()) + bar
+        h = lay.totalHeightForWidth(w - bar) if lay.hasHeightForWidth() else self.body.sizeHint().height()
+        scr = self.screen()
+        if scr is not None:
+            h = min(h, scr.availableGeometry().height() - 60)
+        self.setMinimumWidth(w)
+        self.setMinimumHeight(min(h, 360))
+        self.resize(w, h)
 
     def refresh(self):
         dev = self.ctl.device

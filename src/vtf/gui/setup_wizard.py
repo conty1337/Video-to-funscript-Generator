@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QPushButton,
     QSlider,
@@ -103,6 +104,7 @@ class SetupWizard(QDialog):
         self.setWindowTitle("Gerät einrichten")
         self.resize(620, 520)
         lay = QVBoxLayout(self)
+        lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(12)
         self.steps = QLabel()

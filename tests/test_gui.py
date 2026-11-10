@@ -1274,3 +1274,35 @@ def test_live_strip_all_modes(app, tmp_path, monkeypatch):
     assert d.live.hint
     d.set_mode(0)
     w.close()
+
+
+def test_dialogs_never_squeezed(app, tmp_path, monkeypatch):
+    """Wrapped text counts towards the minimum height, so a window manager cannot squeeze the rows."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    from vtf.gui.device_ui import DeviceDialog
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.players_ui import PlayersDialog
+    from vtf.gui.remote_ui import RemoteDialog
+
+    w = MainWindow()
+    w.remote.set_enabled(True)
+    for d in (RemoteDialog(w.remote, w), PlayersDialog(w.external, w)):
+        d.show()
+        app.processEvents()
+        d.resize(d.width(), 120)              # e.g. a window manager restoring a too small size
+        for _ in range(5):
+            app.processEvents()
+        lay = d.layout()
+        assert d.height() >= lay.totalHeightForWidth(d.width()) - 1
+        d.close()
+    dd = DeviceDialog(w.devices, w)
+    dd.show()
+    for _ in range(5):
+        app.processEvents()
+    avail = dd.screen().availableGeometry().height()
+    assert dd.height() <= avail                  # taller content scrolls instead
+    assert dd.scroll.widget() is dd.body
+    dd.close()
+    w.remote.set_enabled(False)
+    w.dirty = False
+    w.close()

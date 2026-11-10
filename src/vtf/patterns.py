@@ -179,31 +179,46 @@ def actions(p: Pattern, bpm: float, lo: float, hi: float, start_ms: float, end_m
             start_pos: float | None = None) -> list[Action]:
     """The pattern repeated from start_ms to end_ms, positions mapped to lo..hi.
     The first point is at start_ms (at start_pos if given)."""
+    return [a for a, _ in actions_from(p, bpm, lo, hi, start_ms, end_ms, start_pos)]
+
+
+def actions_from(p: Pattern, bpm: float, lo: float, hi: float, start_ms: float, end_ms: float,
+                 start_pos: float | None = None, seg: int = 0) -> list[tuple[Action, int]]:
+    """Like actions(), but starting with movement number `seg` of a run, and each point paired with
+    the number of the movement that ends there (the start point gets seg - 1). This lets a runner
+    continue a pattern where it is instead of starting it over."""
     segs = segments(p, bpm)
     if not segs or sum(d for d, _ in segs) < 1:
         return []
+    n = len(segs)
+    seg %= n
     lo, hi = sorted((float(lo), float(hi)))
 
     def to_pos(f: float) -> int:
         return int(round(max(0.0, min(100.0, lo + f * (hi - lo)))))
 
     t = float(start_ms)
-    first = to_pos(segs[-1][1]) if start_pos is None else int(round(max(0, min(100, start_pos))))
-    out = [Action(int(round(t)), first)]
+    first = to_pos(segs[seg - 1][1]) if start_pos is None else int(round(max(0, min(100, start_pos))))
+    out = [(Action(int(round(t)), first), (seg - 1) % n)]
+    k = seg
     while True:
-        for d, f in segs:
-            t += d
-            if t > end_ms + 0.5:
-                return out
-            at = int(round(t))
-            if at > out[-1].at:
-                out.append(Action(at, to_pos(f)))
+        d, f = segs[k]
+        t += d
+        if t > end_ms + 0.5:
+            return out
+        at = int(round(t))
+        if at > out[-1][0].at:
+            out.append((Action(at, to_pos(f)), k))
+        else:
+            out[-1] = (out[-1][0], k)
+        k = (k + 1) % n
 
 
 # ------------------------------------------------------------ playback
 class PatternRunner:
     """Plays a pattern on a device through a ScriptSync with a free-running clock.
-    Tempo, stroke range and pattern can change while it runs, without a jump."""
+    Tempo, stroke range and pattern can change while it runs, without a jump: the movement under
+    way is finished, then the pattern goes on from there (a new pattern starts from its beginning)."""
 
     AHEAD_MS = 30_000
 
@@ -213,10 +228,12 @@ class PatternRunner:
         self.bpm, self.lo, self.hi = 60.0, 0, 100
         self.running = False
         self.acts: list[Action] = []
-        self.anchor = 0.0                  # clock time a run started
+        self._segs: list[int] = []         # movement number that ends at each action
+        self.anchor = 0.0                  # clock time the current run of the pattern started
 
     def configure(self, now: float, pattern: Pattern | None = None, bpm: float | None = None,
                   lo: float | None = None, hi: float | None = None) -> None:
+        new_pattern = pattern is not None
         if pattern is not None:
             self.pattern = pattern
         if bpm is not None:
@@ -226,25 +243,58 @@ class PatternRunner:
         if hi is not None:
             self.hi = hi
         if self.running:
-            self._build(now, self.position(now))
+            self._continue(now, new_pattern)
 
     def start(self, now: float) -> None:
         if self.pattern is None:
             return
         self.running = True
         self.sync.stop()
-        self._build(now, None)
+        self._set(actions_from(self.pattern, self.bpm, self.lo, self.hi, now, now + self.AHEAD_MS), now, 0)
 
     def stop(self) -> None:
         if self.running:
             self.running = False
             self.sync.stop()
         self.acts = []
+        self._segs = []
 
-    def _build(self, now: float, start_pos: float | None) -> None:
-        self.anchor = now
-        self.acts = actions(self.pattern, self.bpm, self.lo, self.hi, now, now + self.AHEAD_MS, start_pos)
+    def _set(self, pairs, now: float, seg: int, keep: tuple[list, list] = ([], [])) -> None:
+        """Planned moves = kept ones + new ones; anchor so that `seg` starts at the first new point."""
+        if not pairs:
+            return
+        start = pairs[0][0].at
+        segs = segments(self.pattern, self.bpm)
+        self.anchor = start - sum(d for d, _ in segs[:seg % max(1, len(segs))])
+        ka, ks = keep
+        if ka:
+            pairs = pairs[1:]
+        self.acts = [a for a in ka if a.at >= now - 2000] + [a for a, _ in pairs]
+        self._segs = [k for a, k in zip(ka, ks) if a.at >= now - 2000] + [k for _, k in pairs]
         self.sync.set_actions(self.acts)
+
+    def _continue(self, now: float, new_pattern: bool) -> None:
+        segs = segments(self.pattern, self.bpm)
+        if not segs:
+            return
+        nxt = next((i for i, a in enumerate(self.acts) if a.at > now), None)
+        if nxt is None:                    # nothing under way: go on from where it stands
+            pos = self.position(now)
+            at, keep = now, ([], [])
+        else:                              # finish the movement under way, then go on
+            pos = self.acts[nxt].pos
+            at, keep = self.acts[nxt].at, (self.acts[:nxt + 1], self._segs[:nxt + 1])
+        if new_pattern or nxt is None and not self._segs:
+            seg = 0
+            lo, hi = sorted((float(self.lo), float(self.hi)))
+            first = lo + segs[0][1] * (hi - lo)
+            if pos is not None and len(segs) > 1 and abs(first - pos) < 8:
+                seg = 1                    # do not start with a move to where it already is
+        else:
+            last = self._segs[nxt] if nxt is not None else self._segs[-1]
+            seg = (last + 1) % len(segs)
+        pairs = actions_from(self.pattern, self.bpm, self.lo, self.hi, at, at + self.AHEAD_MS, pos, seg)
+        self._set(pairs, now, seg, keep)
 
     def position(self, now: float) -> float | None:
         return position_at(self.acts, now) if self.acts else None
@@ -261,8 +311,13 @@ class PatternRunner:
             return
         last = self.acts[-1]
         if now > last.at - self.AHEAD_MS / 3:
-            more = actions(self.pattern, self.bpm, self.lo, self.hi, last.at, last.at + self.AHEAD_MS, last.pos)
-            self.acts = [a for a in self.acts if a.at >= now - 2000] + more[1:]
+            n = len(segments(self.pattern, self.bpm)) or 1
+            seg = (self._segs[-1] + 1) % n if self._segs else 0
+            more = actions_from(self.pattern, self.bpm, self.lo, self.hi, last.at, last.at + self.AHEAD_MS,
+                                last.pos, seg)
+            keep = [i for i, a in enumerate(self.acts) if a.at >= now - 2000]
+            self.acts = [self.acts[i] for i in keep] + [a for a, _ in more[1:]]
+            self._segs = [self._segs[i] for i in keep] + [k for _, k in more[1:]]
             self.sync.set_actions(self.acts)
         self.sync.tick(now, True)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -10,12 +11,11 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
-
-from PySide6.QtCore import QSize
 
 from .. import patterns as P
 from ..editing import PATTERNS
@@ -37,6 +37,7 @@ class RhythmDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Rhythmus einfügen")
         lay = QVBoxLayout(self)
+        lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
         info = QLabel("Ersetzt die Punkte im Bereich durch einen Rhythmus oder ein Muster aus der Muster-Steuerung.")
         info.setObjectName("caption")
         info.setWordWrap(True)
