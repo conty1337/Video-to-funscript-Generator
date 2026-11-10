@@ -84,7 +84,7 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
       beim Abspielen.
 - [x] **Muster-Steuerung** (0.9): über 30 fertige Muster mit Vorschaubild,
       eigene Muster aus Bausteinen (Hub, Fahren, Halten, mit Verlauf),
-      Tempo und Hub dauerhaft gespeichert und live änderbar. Muster auch beim
-      Rhythmus-Einfügen im Editor.
+      Tiefe und Tempo dauerhaft gespeichert und live änderbar (Maus, Tasten,
+      Controller über /dev/input/js*). Muster auch beim Rhythmus-Einfügen.
 - [ ] **Andere Player**: Scripts auch zu Videos aus anderen Playern (Browser,
       VLC) auf dem Gerät abspielen.

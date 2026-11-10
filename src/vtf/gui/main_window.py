@@ -1476,7 +1476,9 @@ class MainWindow(QMainWindow):
             "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\n"
             "Muster-Steuerung (Strg+M)\n"
             "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
-            "Tempo und Hub bleiben gespeichert. Eigene Muster gibt es auch bei Strg+T.\n\n"
+            "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
+            "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
+            "Eigene Muster gibt es auch bei Strg+T.\n\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 
     # ------------------------------------------------------------ misc

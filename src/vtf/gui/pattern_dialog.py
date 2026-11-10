@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QElapsedTimer, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QElapsedTimer, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -26,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import gamepad as G
 from .. import patterns as P
 from ..device.sync import ScriptSync
 from . import theme
@@ -69,11 +71,27 @@ def _speed_spin(v: float) -> QDoubleSpinBox:
     return sp
 
 
+class GamepadBridge(QObject):
+    """Hands controller events from the reader thread to the GUI thread."""
+
+    event = Signal(object)
+    state = Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.reader = G.GamepadReader(self.event.emit, self.state.emit)
+
+
 class PatternDialog(QDialog):
-    """Library of patterns (presets and own ones) with pictures, live tempo and
-    stroke range (kept), start/stop on the device."""
+    """Library of patterns (presets and own ones) with pictures, one depth and one
+    tempo (kept, changeable on the fly by mouse, keys or controller), start/stop."""
 
     TICK_MS = 20
+    APPLY_MS = 120          # live changes reach the device at most this often
+    DEADZONE = 0.25
+    STICK_DEPTH = 60.0      # % per second at full stick
+    STICK_TEMPO = 60.0      # strokes/min per second at full stick
+    STEP_DEPTH, STEP_TEMPO = 5, 5
 
     def __init__(self, ctl, parent=None):
         super().__init__(parent)
@@ -158,15 +176,26 @@ class PatternDialog(QDialog):
         self.bpm_val.setFont(theme.mono_font(12))
         self.bpm_val.setMinimumWidth(96)
         form.addRow(self._label("Tempo"), _hrow(self.bpm, self.bpm_val))
-        self.lo = _pct_spin(int(self._setting("lo", 0)))
-        self.hi = _pct_spin(int(self._setting("hi", 100)))
-        form.addRow(self._label("Hub"), _hrow(self.lo, "bis", self.hi, stretch=True))
+        self.depth = QSlider(Qt.Horizontal)
+        self.depth.setRange(10, 100)
+        self.depth.setValue(int(self._setting("depth", 100)))
+        self.depth_val = QLabel()
+        self.depth_val.setObjectName("value")
+        self.depth_val.setFont(theme.mono_font(12))
+        self.depth_val.setMinimumWidth(96)
+        form.addRow(self._label("Tiefe"), _hrow(self.depth, self.depth_val))
         right.addLayout(form)
-        cap = QLabel("Tempo und Hub bleiben gespeichert und gelten für alle Muster. Sie lassen sich "
-                     "auch während des Abspielens ändern. Grenzen und Tempo-Limit aus „Gerät“ gelten zusätzlich.")
+        cap = QLabel("Tiefe und Tempo bleiben gespeichert und gelten für alle Muster. Ändern geht jederzeit, "
+                     "auch beim Abspielen: ↑/↓ Tiefe, ←/→ Tempo, Leertaste Start/Stopp, Bild↑/↓ Muster. "
+                     "Hubbereich und Tempo-Limit aus „Gerät“ gelten zusätzlich.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         right.addWidget(cap)
+
+        self.pad_label = QLabel()
+        self.pad_label.setObjectName("caption")
+        self.pad_label.setWordWrap(True)
+        right.addWidget(self.pad_label)
 
         row = QHBoxLayout()
         self.device_label = QLabel()
@@ -183,9 +212,32 @@ class PatternDialog(QDialog):
         right.addLayout(row)
         root.addLayout(right, 1)
 
+        self._apply_timer = QTimer(self)
+        self._apply_timer.setSingleShot(True)
+        self._apply_timer.setInterval(self.APPLY_MS)
+        self._apply_timer.timeout.connect(self._apply_live)
         self.bpm.valueChanged.connect(self._params_changed)
-        self.lo.valueChanged.connect(self._params_changed)
-        self.hi.valueChanged.connect(self._params_changed)
+        self.depth.valueChanged.connect(self._params_changed)
+        for keys, fn in ((Qt.Key_Up, lambda: self.nudge(depth=self.STEP_DEPTH)),
+                         (Qt.Key_Down, lambda: self.nudge(depth=-self.STEP_DEPTH)),
+                         (Qt.Key_Right, lambda: self.nudge(tempo=self.STEP_TEMPO)),
+                         (Qt.Key_Left, lambda: self.nudge(tempo=-self.STEP_TEMPO)),
+                         (Qt.Key_Space, self.toggle),
+                         (Qt.Key_PageDown, lambda: self.step_pattern(1)),
+                         (Qt.Key_PageUp, lambda: self.step_pattern(-1))):
+            QShortcut(QKeySequence(keys), self, fn)
+
+        # controller: sticks change smoothly, D-pad in steps, buttons start/stop/switch
+        self._axes: dict[int, float] = {}
+        self._depth_f = float(self.depth.value())
+        self._tempo_f = float(self.bpm.value())
+        self.pad_timer = QTimer(self)
+        self.pad_timer.setInterval(50)
+        self.pad_timer.timeout.connect(self._pad_tick)
+        self.pad = GamepadBridge(self)
+        self.pad.event.connect(self.pad_event)
+        self.pad.state.connect(self.pad_state)
+        self.pad_state(None)
         self._fill()
         self._select_name(str(self._setting("last", P.BUILTIN[0].name)))
         self._params_changed()
@@ -270,7 +322,7 @@ class PatternDialog(QDialog):
         self.qs.setValue("pattern/last", p.name)
         self.title.setText(p.name)
         self._update_info()
-        self.view.set_pattern(p, self.bpm.value(), self.lo.value(), self.hi.value())
+        self.view.set_pattern(p, self.bpm.value(), *self.stroke_range())
         self.runner.configure(self._now(), pattern=p)
 
     def _update_info(self):
@@ -283,14 +335,99 @@ class PatternDialog(QDialog):
         self.info.setText(f"{kind} · {n} Baustein{'e' if n != 1 else ''} · ein Durchlauf {secs:.1f} s"
                           .replace(".", ","))
 
+    def stroke_range(self) -> tuple[int, int]:
+        """Depth as a range: from the top (out) down by `depth` percent."""
+        return 100 - self.depth.value(), 100
+
     def _params_changed(self, *_):
-        bpm, lo, hi = self.bpm.value(), self.lo.value(), self.hi.value()
+        bpm, depth = self.bpm.value(), self.depth.value()
         self.bpm_val.setText(f"{bpm} Hübe/min")
-        for k, v in (("bpm", bpm), ("lo", lo), ("hi", hi)):
-            self.qs.setValue(f"pattern/{k}", v)
-        self.view.set_pattern(self.current(), bpm, lo, hi)
+        self.depth_val.setText(f"{depth} %")
+        self.qs.setValue("pattern/bpm", bpm)
+        self.qs.setValue("pattern/depth", depth)
+        if round(self._tempo_f) != bpm:
+            self._tempo_f = float(bpm)
+        if round(self._depth_f) != depth:
+            self._depth_f = float(depth)
+        self.view.set_pattern(self.current(), bpm, *self.stroke_range())
         self._update_info()
-        self.runner.configure(self._now(), bpm=bpm, lo=lo, hi=hi)
+        if self.running:
+            if not self._apply_timer.isActive():
+                self._apply_timer.start()
+        else:
+            self._apply_live()
+
+    def _apply_live(self):
+        lo, hi = self.stroke_range()
+        self.runner.configure(self._now(), bpm=self.bpm.value(), lo=lo, hi=hi)
+
+    def nudge(self, depth: float = 0, tempo: float = 0):
+        if depth:
+            self.depth.setValue(int(round(self.depth.value() + depth)))
+        if tempo:
+            self.bpm.setValue(int(round(self.bpm.value() + tempo)))
+
+    def step_pattern(self, d: int):
+        rows = [i for i in range(self.list.count()) if self.list.item(i).data(ROLE) is not None]
+        if not rows:
+            return
+        cur = self.list.currentRow()
+        pos = rows.index(cur) if cur in rows else -1
+        self.list.setCurrentRow(rows[(pos + d) % len(rows)])
+
+    # ------------------------------------------------------------ controller
+    def pad_state(self, name):
+        if name:
+            self.pad_label.setText(f"Controller: {name} · A/✕ Start/Stopp, B/○ Stopp, linker Stick/Steuerkreuz "
+                                   "↕ Tiefe, rechter Stick ↕ bzw. Steuerkreuz ↔ Tempo, LB/RB Muster")
+            self.pad_timer.start()
+        else:
+            self.pad_label.setText("Kein Controller gefunden (Xbox, PlayStation u.a. per USB oder Bluetooth).")
+            self.pad_timer.stop()
+            self._axes.clear()
+            if self.running and self._pad_was_used:
+                self.stop()                         # lost the controller while it was in charge
+        self._pad_was_used = False
+
+    _pad_was_used = False
+
+    def pad_event(self, ev):
+        if ev.kind == "axis":
+            if ev.number == G.AX_DY and not ev.init and ev.value and self._axes.get(ev.number, 0) == 0:
+                self.nudge(depth=self.STEP_DEPTH if ev.value < 0 else -self.STEP_DEPTH)
+            if ev.number == G.AX_DX and not ev.init and ev.value and self._axes.get(ev.number, 0) == 0:
+                self.nudge(tempo=self.STEP_TEMPO if ev.value > 0 else -self.STEP_TEMPO)
+            self._axes[ev.number] = round(ev.value) if ev.number in (G.AX_DX, G.AX_DY) else ev.value
+            return
+        if ev.init or not ev.value:
+            return
+        self._pad_was_used = True
+        if ev.number in (G.BTN_A, G.BTN_START):
+            self.toggle()
+        elif ev.number == G.BTN_B:
+            self.stop()
+        elif ev.number == G.BTN_LB:
+            self.step_pattern(-1)
+        elif ev.number == G.BTN_RB:
+            self.step_pattern(1)
+
+    def _stick(self, axis: int) -> float:
+        v = self._axes.get(axis, 0.0)
+        if abs(v) < self.DEADZONE:
+            return 0.0
+        return (abs(v) - self.DEADZONE) / (1 - self.DEADZONE) * (1 if v > 0 else -1)
+
+    def _pad_tick(self):
+        dt = self.pad_timer.interval() / 1000
+        ly, ry = self._stick(G.AX_LY), self._stick(G.AX_RY)
+        if ly:                                      # stick up = deeper / faster
+            self._pad_was_used = True
+            self._depth_f = max(10.0, min(100.0, self._depth_f - ly * self.STICK_DEPTH * dt))
+            self.depth.setValue(int(round(self._depth_f)))
+        if ry:
+            self._pad_was_used = True
+            self._tempo_f = max(10.0, min(240.0, self._tempo_f - ry * self.STICK_TEMPO * dt))
+            self.bpm.setValue(int(round(self._tempo_f)))
 
     # ------------------------------------------------------------ own patterns
     def new_pattern(self):
@@ -306,7 +443,7 @@ class PatternDialog(QDialog):
             self._open_editor(p.copy(), p)
 
     def _open_editor(self, pattern: P.Pattern, original: P.Pattern | None):
-        dlg = PatternEditor(pattern, self.bpm.value(), self.lo.value(), self.hi.value(), self)
+        dlg = PatternEditor(pattern, self.bpm.value(), *self.stroke_range(), self)
         if not dlg.exec():
             return
         result = dlg.result_pattern()
@@ -369,8 +506,8 @@ class PatternDialog(QDialog):
         if win is not None and hasattr(win, "pause") and getattr(win, "timer", None) is not None \
                 and win.timer.isActive():
             win.pause()                    # the video and a pattern never drive the device together
-        self.runner.configure(self._now(), pattern=p, bpm=self.bpm.value(), lo=self.lo.value(),
-                              hi=self.hi.value())
+        lo, hi = self.stroke_range()
+        self.runner.configure(self._now(), pattern=p, bpm=self.bpm.value(), lo=lo, hi=hi)
         self.runner.start(self._now())
         self.timer.start()
         self.play_btn.setIcon(theme.icon("pause", theme.ON_ACCENT))
@@ -392,12 +529,21 @@ class PatternDialog(QDialog):
             pos = self.ctl.device_position()
             win.rail.set_device_position(pos if pos is not None else self.runner.position(now))
 
-    def closeEvent(self, ev):
+    def showEvent(self, ev):
+        self.pad.reader.start()
+        super().showEvent(ev)
+
+    def _shutdown(self):
         self.stop()
+        self.pad_timer.stop()
+        self.pad.reader.stop()
+
+    def closeEvent(self, ev):
+        self._shutdown()
         super().closeEvent(ev)
 
     def reject(self):
-        self.stop()
+        self._shutdown()
         super().reject()
 
 
@@ -509,8 +655,8 @@ class PatternEditor(QDialog):
         f.addRow("", self.ramp)
         self.form = f
         props.addLayout(f)
-        cap = QLabel("Tempo 1× = ein Hub im eingestellten Tempo. Tiefe in Prozent vom Hub, "
-                     "den du in der Steuerung einstellst (0 = unten, 100 = oben).")
+        cap = QLabel("Tempo 1× = ein Hub im eingestellten Tempo. Tiefe in Prozent der Tiefe "
+                     "aus der Steuerung (0 = ganz rein, 100 = ganz raus).")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         props.addWidget(cap)

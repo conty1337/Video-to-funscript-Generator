@@ -869,11 +869,44 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     assert d.list.count() > len(P.BUILTIN)              # with category headers
     assert d._select_name("Welle") and d.current().name == "Welle"
     d.bpm.setValue(90)
-    d.lo.setValue(20)
+    d.depth.setValue(80)
     assert w.qsettings.value("pattern/bpm") in (90, "90") and w.qsettings.value("pattern/last") == "Welle"
+    assert w.qsettings.value("pattern/depth") in (80, "80") and d.stroke_range() == (20, 100)
     d.start()                                            # without a device: only the preview runs
     d._tick()
     assert d.running and d.view.phase is not None
+    assert (d.runner.lo, d.runner.hi, d.runner.bpm) == (20, 100, 90)
+
+    # on the fly: keys and controller, applied to the running pattern (bundled)
+    d.nudge(depth=-5, tempo=10)
+    assert (d.depth.value(), d.bpm.value()) == (75, 100)
+    assert d._apply_timer.isActive()
+    d._apply_live()
+    assert (d.runner.lo, d.runner.bpm) == (25, 100)
+    from vtf.gamepad import Event
+    d.pad_state("Testpad")
+    assert "Testpad" in d.pad_label.text() and d.pad_timer.isActive()
+    d.pad_event(Event("axis", 7, -1.0))                  # D-pad up: deeper
+    d.pad_event(Event("axis", 7, 0.0))
+    d.pad_event(Event("axis", 6, -1.0))                  # D-pad left: slower
+    assert (d.depth.value(), d.bpm.value()) == (80, 95)
+    d.pad_event(Event("axis", 1, -1.0))                  # left stick up, held
+    for _ in range(5):
+        d._pad_tick()
+    assert d.depth.value() == 95
+    d.pad_event(Event("axis", 1, 0.1))                   # inside the dead zone
+    d._pad_tick()
+    assert d.depth.value() == 95
+    name = d.current().name
+    d.pad_event(Event("button", 5, 1.0))                 # RB: next pattern, keeps playing
+    assert d.current().name != name and d.running
+    d.pad_event(Event("button", 1, 1.0))                 # B: stop
+    assert not d.running
+    d.pad_event(Event("button", 0, 1.0))                 # A: start
+    assert d.running
+    d.pad_state(None)                                    # controller gone while in charge: stop
+    assert not d.running and not d.pad_timer.isActive()
+    d.start()
     w.emergency_stop()                                   # Esc stops the pattern too
     assert not d.running and d.view.phase is None
 

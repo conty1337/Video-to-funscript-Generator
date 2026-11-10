@@ -43,7 +43,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 22 | Bereiche 2/3 fest verankern, Kästchen nur verschieben (für Maschinen) | ✅ |
 | 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
 | 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
-| 25 | Muster-Steuerung: über 30 fertige Muster, eigene aus Bausteinen bauen und speichern | ✅ |
+| 25 | Muster-Steuerung: über 30 fertige Muster, eigene aus Bausteinen, Tiefe/Tempo live, Controller | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -284,12 +284,28 @@ spielst du Muster direkt auf dem Gerät ab, ohne Video und ohne Script.
 - **Links** die Bibliothek mit Vorschaubildern: über 30 fertige Muster in den
   Gruppen Grundlagen, Rhythmus, Steigerung und Necken, darunter deine eigenen.
   Doppelklick startet.
-- **Tempo** (Hübe pro Minute) und **Hub** (von–bis) gelten für alle Muster und
-  bleiben gespeichert. Beides lässt sich auch während des Abspielens ändern, das
-  Gerät macht dabei keinen Sprung. Hubbereich, Richtung und Tempo-Limit aus dem
-  Geräte-Dialog gelten zusätzlich.
-- **Start/Stopp**. Esc, Schließen des Fensters oder Abspielen eines Videos
-  stoppt das Muster sofort.
+- Nur zwei Regler: **Tiefe** (wie weit es reingeht, 10–100 %) und **Tempo**
+  (Hübe pro Minute). Beide gelten für alle Muster und bleiben gespeichert.
+  Du kannst sie jederzeit ändern, auch beim Abspielen, das Gerät springt
+  dabei nicht. Hubbereich, Richtung und Tempo-Limit aus dem Geräte-Dialog
+  gelten zusätzlich.
+- **Tasten**: ↑/↓ Tiefe, ←/→ Tempo (je 5), Leertaste Start/Stopp, Bild↑/↓
+  voriges/nächstes Muster.
+- **Controller** (Xbox, PlayStation und andere, per USB oder Bluetooth): wird
+  automatisch erkannt, solange die Muster-Steuerung offen ist, auch wenn ein
+  anderes Fenster vorne ist.
+
+  | Taste | Funktion |
+  |---|---|
+  | A / ✕ oder Start | Start/Stopp |
+  | B / ○ | Stopp |
+  | linker Stick ↕ | Tiefe stufenlos |
+  | rechter Stick ↕ | Tempo stufenlos |
+  | Steuerkreuz ↕ / ↔ | Tiefe / Tempo in 5er-Schritten |
+  | LB / RB (L1 / R1) | voriges/nächstes Muster |
+
+- **Start/Stopp**. Esc, Schließen des Fensters, Abspielen eines Videos oder ein
+  Controller, der während der Steuerung verloren geht, stoppt das Muster sofort.
 
 **Eigene Muster (Baukasten):** **Neu** oder bei einer Vorlage **Als Kopie
 ändern**. Bausteine wie Voller Hub, Kurz oben, Zittern, Schneller werdend oder
@@ -300,7 +316,7 @@ Pause oben anklicken, sie werden hinten angehängt. Jeder Baustein hat:
 | Art | *Hub* (runter und rauf), *Fahren* (eine Bewegung zu einer Position), *Halten* (dort bleiben) |
 | Wiederholen | wie oft der Hub kommt |
 | Tempo | 1× = ein Hub im eingestellten Tempo, 2× doppelt so schnell |
-| Tiefe | von–bis in Prozent vom eingestellten Hub (0 = unten, 100 = oben) |
+| Tiefe | von–bis in Prozent der eingestellten Tiefe (0 = ganz rein, 100 = ganz raus) |
 | Verlauf | Tempo und Tiefe ändern sich gleichmäßig über die Wiederholungen |
 
 Die Reihenfolge änderst du mit den Pfeilen oder per Ziehen. Unten zeigt das

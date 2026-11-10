@@ -82,9 +82,12 @@ Muster-Steuerung für einen Bereich ein.
 - **Player** (Strg+P): Videos in die Playlist ziehen, „Playlist abspielen“.
   Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown.
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
-  abspielen. Tempo und Hub einstellen, sie bleiben gespeichert. Eigene Muster
-  baust du aus Bausteinen (Neu bzw. „Als Kopie ändern“), das Bild zeigt sofort,
-  wie es aussieht.
+  abspielen. Nur zwei Regler, **Tiefe** und **Tempo**. Sie bleiben gespeichert
+  und lassen sich beim Abspielen ändern: ↑/↓ Tiefe, ←/→ Tempo, Leertaste
+  Start/Stopp. Ein Controller (Xbox/PlayStation) geht auch: linker Stick
+  Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp, LB/RB Muster wechseln.
+  Eigene Muster baust du aus Bausteinen (Neu bzw. „Als Kopie ändern“), das
+  Bild zeigt sofort, wie es aussieht.
 - **Esc** stoppt das Gerät sofort.
 
 ## Wenn etwas nicht passt

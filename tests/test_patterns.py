@@ -88,3 +88,30 @@ def test_rhythm_with_pattern():
     out, sel = rhythm([], 0, 6000, 60, 10, 90, p)
     assert len(sel) == len(out) > 8
     assert out[0].pos == 90 and min(a.pos for a in out) == 10
+
+
+def test_gamepad_parse_and_reader(tmp_path):
+    import struct
+    import threading
+
+    from vtf import gamepad as G
+
+    ev = struct.pack("<IhBB", 10, 1, G.JS_BUTTON, 0) + struct.pack("<IhBB", 11, -32767, G.JS_AXIS | G.JS_INIT, 1)
+    out = G.parse(ev + b"\x01\x02")                      # a cut-off event at the end is ignored
+    assert [(e.kind, e.number, e.value, e.init) for e in out] == [("button", 0, 1.0, False),
+                                                              ("axis", 1, -1.0, True)]
+    dev = tmp_path / "js0"                               # a file: its end counts as unplugged
+    dev.write_bytes(ev)
+    got, states, done = [], [], threading.Event()
+
+    def state(name):
+        states.append(name)
+        if name is None:
+            done.set()
+
+    r = G.GamepadReader(got.append, state, paths=lambda: [str(dev)])
+    r.start()
+    assert done.wait(3)                                  # writer closed = unplugged
+    r.stop()
+    assert states[0] and states[-1] is None
+    assert [e.number for e in got] == [0, 1]
