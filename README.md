@@ -497,12 +497,17 @@ aktualisieren sich daraufhin selbst.
 3. Die Geschwindigkeit wird auf die gewählte Achse projiziert und zu einer
    Position aufsummiert, Drift wird entfernt, geglättet und normalisiert.
 4. Hoch- und Tiefpunkte (mit Hysterese = Empfindlichkeit) werden zu
-   Funscript-Punkten.
+   Funscript-Punkten. Die Schwelle richtet sich nach den Hüben der letzten
+   Sekunde, so werden kleine Hübe direkt neben großen nicht übersehen. Der
+   Zeitpunkt jedes Wendepunkts wird zwischen zwei Bildern berechnet (auf wenige
+   Millisekunden statt auf ein ganzes Bild genau).
 
 Beim **Tracking** ersetzt Schritt 2 der optische Fluss nur innerhalb der
 markierten Bereiche: Bis zu 60 Merkmalspunkte je Bereich werden mit
 Lucas-Kanade verfolgt, eine Vorwärts-Rückwärts-Prüfung verwirft abgerutschte
-Punkte, und der Bereich bewegt sich um den Median der übrigen.
+Punkte, und der Bereich bewegt sich um den Median der übrigen. Alle paar
+Bilder wird das Aussehen verglichen und der Bereich (mit Zwischenpixeln)
+zurückgezogen, falls er weggedriftet ist.
 
 Da Schritt 1–2 (teuer) von 3–4 (billig) getrennt sind, wirken
 Script-Einstellungen sofort ohne neue Analyse.
@@ -518,6 +523,12 @@ ein Bernstein-Akzent nur für das Script). Details und Quellen stehen in
 ```bash
 .venv/bin/pytest
 ```
+
+Wie genau das Tracking ist, misst `python tools/measure_tracking.py`: künstliche
+Videos mit bekannter Bewegung (schneller werdend, kleine Hübe, groß/klein im
+Wechsel, wenig Muster, Pausen), dazu Fehler beim Verfolgen in Pixeln, Abweichung
+der Wendepunkte in ms, Hubhöhe, verpasste und falsche Punkte. `--shake 0.5`
+fügt Zittern hinzu, `--width` ändert die Analysebreite.
 
 Projektstruktur:
 
