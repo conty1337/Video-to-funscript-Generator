@@ -416,13 +416,15 @@ Eigene Abläufe liegen in `~/.config/video-to-funscript/programs.json`.
 
 ### Zufall und Musik
 
-- **Zufall**: wechselt Muster, Tempo und Tiefe von selbst, nie zweimal dasselbe
+- **Zufall**: wechselt Muster und Tempo von selbst, nie zweimal dasselbe
   Muster hintereinander, manchmal nur ein Stück davon. Jeder Abschnitt wird
   **live gewürfelt**, wenn er drankommt. Alles lässt sich beim Abspielen ändern:
   - Eine neue **Stimmung** (Ruhig, Gemischt, Intensiv oder **Alles** mit allen
     Mustern) wechselt sofort in einen neuen Abschnitt.
-  - Neue **Bereiche** für Tempo und Tiefe ziehen den laufenden Abschnitt gleich
-    mit hinein.
+  - Ein neuer **Tempo-Bereich** zieht den laufenden Abschnitt gleich mit hinein.
+  - Die **Tiefe** ist ein Regler wie bei Mustern und Abläufen. Mit „Tiefe leicht
+    variieren“ bekommt jeder Abschnitt 70–100 % davon, ohne Häkchen gilt sie genau.
+    Für Abwechslung in der Tiefe sorgen die Muster selbst (Welle, Treppe, …).
   - Die **Wechselzeit** (z.B. alle 1–3 Minuten) gilt ab dem nächsten Abschnitt.
   - „Neu würfeln“ bzw. Bild↓/RB springt sofort weiter.
 

@@ -39,6 +39,7 @@ from . import theme
 from .pattern_view import LiveStrip, PatternView, ProgramView, _fmt_min, block_icon, pattern_icon
 
 ROLE = Qt.UserRole + 1
+VARY_MIN = 70            # % of the set depth a random step may go down to with "Tiefe leicht variieren"
 
 
 def _hrow(*widgets, stretch=False) -> QWidget:
@@ -205,7 +206,7 @@ class PatternDialog(QDialog):
         rl = QVBoxLayout(page)
         rl.setContentsMargins(0, 8, 0, 0)
         rl.setSpacing(8)
-        cap = QLabel("Wechselt Muster, Tempo und Tiefe von selbst. Jeder Abschnitt wird erst gewürfelt, wenn er "
+        cap = QLabel("Wechselt Muster und Tempo von selbst, die Tiefe bestimmst du. Jeder Abschnitt wird erst gewürfelt, wenn er "
                      "drankommt. Alles hier wirkt sofort, auch beim Abspielen.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
@@ -222,12 +223,14 @@ class PatternDialog(QDialog):
             sp.setRange(10, 240)
             sp.setSingleStep(5)
         rf.addRow(self._label("Tempo"), _hrow(self.r_bpm0, "bis", self.r_bpm1))
-        self.r_d0, self.r_d1 = QSpinBox(), QSpinBox()
-        for sp in (self.r_d0, self.r_d1):
-            sp.setRange(10, 100)
-            sp.setSingleStep(5)
-            sp.setSuffix(" %")
-        rf.addRow(self._label("Tiefe"), _hrow(self.r_d0, "bis", self.r_d1))
+        self.r_depth = QSlider(Qt.Horizontal)
+        self.r_depth.setRange(10, 100)
+        self.r_depth.setToolTip("Wie tief gefahren wird: 100 % = ganzer Hub, 50 % = obere Hälfte")
+        self.r_depth_val = QLabel()
+        self.r_depth_val.setObjectName("value")
+        self.r_depth_val.setFont(theme.mono_font(12))
+        self.r_depth_val.setMinimumWidth(48)
+        rf.addRow(self._label("Tiefe"), _hrow(self.r_depth, self.r_depth_val))
         self.r_m0, self.r_m1 = QDoubleSpinBox(), QDoubleSpinBox()
         for sp in (self.r_m0, self.r_m1):
             sp.setRange(0.25, 30)
@@ -236,13 +239,10 @@ class PatternDialog(QDialog):
             sp.setSuffix(" min")
         rf.addRow(self._label("Wechsel"), _hrow(self.r_m0, "bis", self.r_m1))
         rl.addLayout(rf)
-        tip = "Hubtiefe je Abschnitt, zufällig dazwischen: 100 % = ganzer Hub, 30 % = nur das obere Drittel."
-        for sp in (self.r_d0, self.r_d1):
-            sp.setToolTip(tip)
-        self.r_dhint = QLabel(tip + " Für große Hübe den unteren Wert erhöhen.")
-        self.r_dhint.setObjectName("caption")
-        self.r_dhint.setWordWrap(True)
-        rl.addWidget(self.r_dhint)
+        self.r_vary = QCheckBox("Tiefe leicht variieren")
+        self.r_vary.setToolTip(f"Jeder Abschnitt bekommt {VARY_MIN}–100 % der eingestellten Tiefe. "
+                               "Ohne Häkchen gilt die Tiefe genau.")
+        rl.addWidget(self.r_vary)
         self.r_own = QCheckBox("Eigene Muster mit einbeziehen")
         rl.addWidget(self.r_own)
         self.reroll_btn = QPushButton(theme.icon("shuffle"), "Neu würfeln")
@@ -290,14 +290,17 @@ class PatternDialog(QDialog):
         self.random_prog: P.Program | None = None
         r = self._random_settings()
         self.mood.setCurrentIndex(max(0, self.mood.findData(r["mood"])))
-        for sp, v in ((self.r_bpm0, r["bpm0"]), (self.r_bpm1, r["bpm1"]), (self.r_d0, r["d0"]),
-                      (self.r_d1, r["d1"]), (self.r_m0, r["m0"]), (self.r_m1, r["m1"])):
+        for sp, v in ((self.r_bpm0, r["bpm0"]), (self.r_bpm1, r["bpm1"]), (self.r_depth, r["depth"]),
+                      (self.r_m0, r["m0"]), (self.r_m1, r["m1"])):
             sp.setValue(v)
+        self.r_depth_val.setText(f"{self.r_depth.value()} %")
         self.r_own.setChecked(r["own"])
+        self.r_vary.setChecked(r["vary"])
         self.mood.currentIndexChanged.connect(self._mood_changed)
-        for w in (self.r_bpm0, self.r_bpm1, self.r_d0, self.r_d1, self.r_m0, self.r_m1):
+        for w in (self.r_bpm0, self.r_bpm1, self.r_depth, self.r_m0, self.r_m1):
             w.valueChanged.connect(self._random_changed)
         self.r_own.toggled.connect(self._random_changed)
+        self.r_vary.toggled.connect(self._random_changed)
         root.addWidget(left)
 
         # ---- preview and control
@@ -564,15 +567,16 @@ class PatternDialog(QDialog):
     # ------------------------------------------------------------ random
     def _random_settings(self) -> dict:
         mood = str(self._setting("r_mood", "gemischt"))
-        _l, _c, (b0, b1), (d0, d1) = P.MOODS.get(mood, P.MOODS["gemischt"])
+        _l, _c, (b0, b1), (_d0, d1) = P.MOODS.get(mood, P.MOODS["gemischt"])
         return {"mood": mood, "bpm0": int(self._setting("r_bpm0", b0)), "bpm1": int(self._setting("r_bpm1", b1)),
-                "d0": int(self._setting("r_d0", d0)), "d1": int(self._setting("r_d1", d1)),
+                "depth": int(self._setting("r_depth", d1)),
+                "vary": str(self.qs.value("pattern/r_vary", "true")).lower() == "true",
                 "m0": float(self._setting("r_m0", 1.0)), "m1": float(self._setting("r_m1", 3.0)),
                 "own": str(self.qs.value("pattern/r_own", "false")).lower() == "true"}
 
     def _mood_changed(self, *_):
-        _l, _c, (b0, b1), (d0, d1) = P.MOODS[self.mood.currentData()]
-        for sp, v in ((self.r_bpm0, b0), (self.r_bpm1, b1), (self.r_d0, d0), (self.r_d1, d1)):
+        _l, _c, (b0, b1), _depth = P.MOODS[self.mood.currentData()]
+        for sp, v in ((self.r_bpm0, b0), (self.r_bpm1, b1)):                # the depth stays yours
             sp.blockSignals(True)
             sp.setValue(v)
             sp.blockSignals(False)
@@ -581,13 +585,15 @@ class PatternDialog(QDialog):
 
     def _save_random(self):
         for k, v in (("r_mood", self.mood.currentData()), ("r_bpm0", self.r_bpm0.value()),
-                     ("r_bpm1", self.r_bpm1.value()), ("r_d0", self.r_d0.value()), ("r_d1", self.r_d1.value()),
+                     ("r_bpm1", self.r_bpm1.value()), ("r_depth", self.r_depth.value()),
+                     ("r_vary", "true" if self.r_vary.isChecked() else "false"),
                      ("r_m0", self.r_m0.value()), ("r_m1", self.r_m1.value()),
                      ("r_own", "true" if self.r_own.isChecked() else "false")):
             self.qs.setValue(f"pattern/{k}", v)
 
     def _random_changed(self, *_):
         """Ranges changed: the running step moves into them now, the next step is rolled anew."""
+        self.r_depth_val.setText(f"{self.r_depth.value()} %")
         self._save_random()
         if not (self.mode == 2 and self.prunner.running and self.random_prog is not None):
             self.reroll()
@@ -596,16 +602,25 @@ class PatternDialog(QDialog):
         if 0 <= i < len(pr.steps):
             st = pr.steps[i]
             b0, b1 = sorted((self.r_bpm0.value(), self.r_bpm1.value()))
-            d0, d1 = sorted((self.r_d0.value(), self.r_d1.value()))
+            d0, d1 = self.random_depth()
             st.bpm = int(min(b1, max(b0, st.bpm)))
             st.depth = int(min(d1, max(d0, st.depth)))
         del pr.steps[i + 1:]
         self._roll_next()
         self._show_program(pr)
 
+    def _depth_text(self) -> str:
+        d0, d1 = self.random_depth()
+        return f"{d1} %" if d0 == d1 else f"{d0}–{d1} %"
+
+    def random_depth(self) -> tuple[int, int]:
+        """The depth a random step may get: exactly the set one, or (when varied) a bit less."""
+        v = self.r_depth.value()
+        return (max(10, round(v * VARY_MIN / 100)), v) if self.r_vary.isChecked() else (v, v)
+
     def _roll(self, last: str | None) -> P.Step:
         return P.random_step(self._rng, self.mood.currentData(), (self.r_bpm0.value(), self.r_bpm1.value()),
-                             (self.r_d0.value(), self.r_d1.value()), (self.r_m0.value(), self.r_m1.value()),
+                             self.random_depth(), (self.r_m0.value(), self.r_m1.value()),
                              last, self.user if self.r_own.isChecked() else None)
 
     def _roll_next(self):
@@ -1185,7 +1200,7 @@ class PatternDialog(QDialog):
             self.ptitle.setText("Zufall · " + self.mood.currentText())
             self.pinfo.setText(f"wechselt alle {self.r_m0.value():g}–{self.r_m1.value():g} min · "
                                f"Tempo {self.r_bpm0.value()}–{self.r_bpm1.value()} · "
-                               f"Tiefe {self.r_d0.value()}–{self.r_d1.value()} % · würfelt jeden Abschnitt neu"
+                               f"Tiefe {self._depth_text()} · würfelt jeden Abschnitt neu"
                                .replace(".", ","))
         else:
             self.ptitle.setText(pr.name)

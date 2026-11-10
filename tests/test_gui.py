@@ -1306,3 +1306,27 @@ def test_dialogs_never_squeezed(app, tmp_path, monkeypatch):
     w.remote.set_enabled(False)
     w.dirty = False
     w.close()
+
+
+def test_random_single_depth(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    d = w.ensure_patterns()
+    d.set_mode(2)
+    d.r_vary.setChecked(False)
+    d.r_depth.setValue(80)
+    assert all(st.depth == 80 for st in d.random_prog.steps)
+    assert "Tiefe 80 %" in d.pinfo.text()
+    d.r_vary.setChecked(True)
+    d.start()
+    for _ in range(40):
+        d.reroll(restart=True)
+    assert all(56 <= st.depth <= 80 for st in d.random_prog.steps)
+    d.r_depth.setValue(50)                     # the running step follows at once
+    assert d.random_prog.steps[d.prunner.index].depth <= 50
+    d.stop()
+    assert d.qs.value("pattern/r_depth") in (50, "50")
+    d.set_mode(0)
+    w.close()

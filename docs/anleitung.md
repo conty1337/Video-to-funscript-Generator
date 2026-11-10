@@ -94,7 +94,7 @@ Muster-Steuerung für einen Bereich ein.
   langsamen Start bis zum Ende. Pro Schritt lässt sich mit „Teil“ auch nur ein
   Stück eines Musters nehmen.
 - **Zufall** und **Musik** (in der Muster-Steuerung oben links): Zufall wechselt
-  selbst Muster, Tempo und Tiefe. Bei Musik folgt das Gerät dem Takt der Musik,
+  selbst Muster und Tempo, die Tiefe stellst du wie gewohnt mit einem Regler ein. Bei Musik folgt das Gerät dem Takt der Musik,
   die am PC läuft.
 - **Handy** (Gerät → Handy-Fernbedienung): Adresse am Handy im Browser öffnen,
   PIN eingeben.
