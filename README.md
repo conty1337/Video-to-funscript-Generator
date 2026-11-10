@@ -43,7 +43,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 22 | Bereiche 2/3 fest verankern, Kästchen nur verschieben (für Maschinen) | ✅ |
 | 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
 | 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
-| 25 | Muster-Steuerung: über 30 fertige Muster, eigene aus Bausteinen, Tiefe/Tempo live, Controller | ✅ |
+| 25 | Muster-Steuerung: über 50 Muster, eigene aus Bausteinen, Abläufe (z.B. 1 Stunde), Controller | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -281,8 +281,10 @@ spielst du Muster direkt auf dem Gerät ab, ohne Video und ohne Script.
 
 ![Muster-Steuerung](docs/patterns.png)
 
-- **Links** die Bibliothek mit Vorschaubildern: über 30 fertige Muster in den
-  Gruppen Grundlagen, Rhythmus, Steigerung und Necken, darunter deine eigenen.
+- **Links** die Bibliothek mit Vorschaubildern: über 50 fertige Muster in den
+  Gruppen Grundlagen, Rhythmus, Steigerung, Necken, Mehr Rhythmus, Mehr
+  Steigerung und Intensiv, darunter deine eigenen. Oben schaltest du zwischen
+  **Muster** und **Abläufe** um.
   Doppelklick startet.
 - Nur zwei Regler: **Tiefe** (wie weit es reingeht, 10–100 %) und **Tempo**
   (Hübe pro Minute). Beide gelten für alle Muster und bleiben gespeichert.
@@ -326,6 +328,35 @@ auch beim **Rhythmus einfügen** (Strg+T) im Editor, so kommt ein Muster
 direkt ins Script.
 
 ![Baukasten](docs/pattern-editor.png)
+
+### Abläufe (z.B. eine Stunde)
+
+Ein **Ablauf** spielt mehrere Schritte nacheinander. Jeder Schritt hat ein
+Muster, eine **Dauer** in Minuten und ein eigenes **Tempo** und eine eigene
+**Tiefe**. Vorlagen: „Eine Stunde“, „Kurz und knackig (15 min)“,
+„Langsam steigern (30 min)“ und „Necken ohne Ende“ (Schleife).
+
+![Ablauf](docs/program.png)
+
+- Die Zeitleiste zeigt alle Schritte mit ihrem Muster, die Breite entspricht
+  der Dauer. Der Strich zeigt, wo du bist, darunter stehen Schritt, Tempo,
+  Tiefe und die Restzeit.
+- Beim Abspielen verschieben ↑/↓ und ←/→ (oder der Controller) Tiefe und Tempo
+  des **ganzen** Ablaufs, z.B. alles 10 Hübe/min schneller.
+  „Anpassung zurücksetzen“ nimmt das zurück. Bild↑/↓ bzw. LB/RB springt zum
+  vorigen/nächsten Schritt.
+- **Neu** oder **Als Kopie ändern** öffnet den Editor. Dort fügst du Schritte
+  hinzu, sortierst sie und wählst pro Schritt Muster, Dauer, Tempo und Tiefe.
+- **Muster kürzen**: Mit **Teil** spielt ein Schritt nur einen Teil des Musters,
+  z.B. von „Kurz vor Schluss“ nur Baustein 1 (den schnellen Anfang). Das Bild
+  hebt den gewählten Teil hervor.
+- **Weiche Übergänge**: Tempo und Tiefe gleiten in den ersten 8 Sekunden eines
+  Schritts vom vorigen Schritt her, statt hart umzuschalten.
+- **Am Ende von vorne anfangen**: sonst stoppt das Gerät am Ende.
+
+Eigene Abläufe liegen in `~/.config/video-to-funscript/programs.json`.
+
+![Ablauf bauen](docs/program-editor.png)
 
 ## Kommandozeile
 

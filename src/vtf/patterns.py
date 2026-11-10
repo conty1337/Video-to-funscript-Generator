@@ -323,6 +323,35 @@ _LIB = {
         "Tief halten": [_m(0, 1), _h(0, 1), _m(100, 2)],
         "Ruhig": [_s(1, 0.35), _h(100, 1)],
         "Abwechslung": [_s(3, 1), _s(4, 2, 50, 100), _m(0, 0.6), _h(0, 0.5), _m(100, 1.5), _s(4, 3, 85, 100)],
+        "Fast drin": [_s(6, 1.5, 10, 40), _m(100, 0.6)],
+        "Rein und halten": [_m(0, 0.8), _h(0, 2), _m(100, 0.8), _h(100, 1)],
+        "Nur einmal tief": [_s(5, 1.6, 55, 100), _s(1, 0.5)],
+        "Ebbe und Flut": [_s(4, 0.7, 50, 100, lo_to=0), _h(100, 1), _s(4, 0.7, 0, 100, lo_to=50), _h(100, 1)],
+        "Schmetterling": [_s(3, 2.5, 80, 100), _s(1, 0.8), _s(3, 2.5, 0, 20), _m(100, 0.8)],
+    },
+    "Mehr Rhythmus": {
+        "Vierer": [_s(4, 2), _h(100, 1)],
+        "Synkope": [_s(1, 1), _s(1, 2.5), _h(100, 0.5), _s(1, 2.5)],
+        "Morse": [_s(3, 3, 60, 100), _h(100, 0.5), _s(3, 1.2), _h(100, 0.5)],
+        "Echo": [_s(1, 1.2), _s(1, 2, 40, 100), _s(1, 3, 75, 100), _h(100, 0.75)],
+        "Pendel": [_m(0, 1.5), _h(0, 0.25), _m(100, 1.5), _h(100, 0.25)],
+        "Tango": [_s(1, 0.8), _s(1, 0.8), _s(3, 2.5, 30, 100)],
+    },
+    "Mehr Steigerung": {
+        "Sprint": [_s(6, 1), _s(10, 2.5)],
+        "Pyramide": [_s(2, 1, 75, 100), _s(2, 1.2, 50, 100), _s(2, 1.4, 25, 100), _s(2, 1.6, 0, 100),
+                     _s(2, 1.4, 25, 100), _s(2, 1.2, 50, 100)],
+        "Brandung": [_s(5, 0.8, 70, 100, speed_to=2, lo_to=0), _h(100, 0.5), _s(2, 0.6)],
+        "Treppe hoch und runter": [_s(6, 0.8, speed_to=2.4), _s(6, 2.4, speed_to=0.8)],
+        "Langer Anlauf": [_s(16, 0.4, 70, 100, speed_to=2.4, lo_to=0)],
+    },
+    "Intensiv": {
+        "Dauerfeuer": [_s(1, 3)],
+        "Vollgas tief": [_s(1, 2.5, 0, 100)],
+        "Hammer": [_m(0, 3), _h(0, 0.25), _m(100, 1)],
+        "Turbo-Zittern": [_s(12, 5, 0, 20), _s(12, 5, 80, 100)],
+        "Wechselbad": [_s(4, 3), _s(2, 0.5)],
+        "Gewitter": [_s(6, 3.5, 40, 100), _h(100, 0.5), _s(2, 3), _s(4, 4, 0, 30), _m(100, 2)],
     },
 }
 
@@ -345,6 +374,236 @@ PALETTE = (
     ("Pause oben", _h(100)),
     ("Pause unten", _h(0)),
 )
+
+
+# ------------------------------------------------------------ programs (Abläufe)
+@dataclass
+class Step:
+    """One part of a program: a pattern (or a part of it) for some minutes with its
+    own tempo and depth."""
+
+    pattern: str = "Gleichmäßig"
+    minutes: float = 5.0
+    bpm: int = 60
+    depth: int = 100                  # 10..100 % from the top (out)
+    first: int = 1                    # blocks used: first..last (1-based), last 0 = to the end
+    last: int = 0
+
+    def part(self, pattern: Pattern) -> Pattern:
+        n = len(pattern.blocks)
+        a = max(1, min(n, self.first))
+        b = n if self.last <= 0 else max(a, min(n, self.last))
+        if a == 1 and b == n:
+            return pattern
+        return Pattern(f"{pattern.name} ({a}–{b})", pattern.blocks[a - 1:b], pattern.category)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Step:
+        st = cls()
+        for k in ("pattern", "minutes", "bpm", "depth", "first", "last"):
+            if k in d and d[k] is not None:
+                setattr(st, k, d[k])
+        st.pattern = str(st.pattern)
+        st.minutes = max(0.25, min(600.0, float(st.minutes)))
+        st.bpm = int(max(10, min(240, round(float(st.bpm)))))
+        st.depth = int(max(10, min(100, round(float(st.depth)))))
+        st.first = max(1, int(st.first))
+        st.last = max(0, int(st.last))
+        return st
+
+
+@dataclass
+class Program:
+    name: str
+    steps: list[Step] = field(default_factory=list)
+    loop: bool = False                # at the end: start again (else stop)
+    smooth: bool = True               # glide tempo and depth into the next step
+    builtin: bool = False
+
+    @property
+    def total_ms(self) -> float:
+        return sum(st.minutes for st in self.steps) * 60_000
+
+    def starts(self) -> list[float]:
+        out, t = [], 0.0
+        for st in self.steps:
+            out.append(t)
+            t += st.minutes * 60_000
+        return out
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "loop": self.loop, "smooth": self.smooth,
+                "steps": [st.to_dict() for st in self.steps]}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Program:
+        return cls(str(d.get("name") or "Ablauf"),
+                   [Step.from_dict(x) for x in d.get("steps", []) if isinstance(x, dict)],
+                   bool(d.get("loop", False)), bool(d.get("smooth", True)))
+
+    def copy(self, name: str | None = None) -> Program:
+        p = Program.from_dict(self.to_dict())
+        p.name = name or self.name
+        return p
+
+
+def _st(pattern, minutes, bpm, depth, first=1, last=0) -> Step:
+    return Step(pattern, minutes, bpm, depth, first, last)
+
+
+BUILTIN_PROGRAMS: list[Program] = [
+    Program("Eine Stunde", [_st("Ruhig", 8, 40, 50), _st("Gleichmäßig", 7, 50, 70), _st("Welle", 10, 60, 85),
+                            _st("Necken", 8, 70, 100), _st("Treppe", 7, 70, 100), _st("Anschwellen", 12, 85, 100),
+                            _st("Ruhig", 8, 40, 60)], builtin=True),
+    Program("Kurz und knackig (15 min)", [_st("Gleichmäßig", 3, 50, 70), _st("Galopp", 4, 70, 90),
+                                          _st("Sprint", 5, 90, 100), _st("Ruhig", 3, 40, 60)], builtin=True),
+    Program("Langsam steigern (30 min)", [_st("Langsam und tief", 6, 30, 100), _st("Gleichmäßig", 6, 45, 90),
+                                          _st("Gleichmäßig", 6, 60, 90), _st("Schnell", 6, 50, 100),
+                                          _st("Dauerfeuer", 6, 40, 100)], builtin=True),
+    Program("Necken ohne Ende", [_st("Necken", 5, 60, 100), _st("Kurz oben", 5, 70, 60),
+                                 _st("Kurz vor Schluss", 5, 70, 100), _st("Fast drin", 5, 60, 100)],
+            loop=True, builtin=True),
+]
+
+
+class ProgramRunner:
+    """Plays a program: switches pattern, tempo and depth by the clock, optionally
+    gliding into each step. Offsets from keys or controller apply on top."""
+
+    SMOOTH_MS = 8000
+    APPLY_EVERY_MS = 250
+
+    def __init__(self, sync, lookup):
+        self.runner = PatternRunner(sync)
+        self.lookup = lookup              # name -> Pattern | None
+        self.program: Program | None = None
+        self.start_ms = 0.0
+        self.index = -1
+        self.offset_bpm = 0.0
+        self.offset_depth = 0.0
+        self.finished = False
+        self.loops = 0                    # how often the program started again
+        self._applied: tuple | None = None
+        self._applied_at = -1e9
+
+    @property
+    def running(self) -> bool:
+        return self.runner.running
+
+    def _pattern(self, st: Step) -> Pattern:
+        p = self.lookup(st.pattern) or BUILTIN[0]
+        return st.part(p) if p.blocks else BUILTIN[0]
+
+    def elapsed(self, now: float) -> float:
+        return max(0.0, now - self.start_ms) if self.running else 0.0
+
+    def step_at(self, elapsed: float) -> int:
+        starts = self.program.starts()
+        i = 0
+        for k, t in enumerate(starts):
+            if elapsed >= t:
+                i = k
+        return i
+
+    def targets(self, elapsed: float) -> tuple[int, float, float]:
+        """(step, tempo, depth) at a time in the program, before the offsets."""
+        steps = self.program.steps
+        i = self.step_at(elapsed)
+        st = steps[i]
+        bpm, depth = float(st.bpm), float(st.depth)
+        into = elapsed - self.program.starts()[i]
+        prev = steps[i - 1] if i > 0 else (steps[-1] if self.loops > 0 else None)
+        if self.program.smooth and prev is not None and into < self.SMOOTH_MS:
+            f = into / self.SMOOTH_MS
+            bpm = prev.bpm + (bpm - prev.bpm) * f
+            depth = prev.depth + (depth - prev.depth) * f
+        return i, bpm, depth
+
+    def effective(self, bpm: float, depth: float) -> tuple[float, float]:
+        return (max(10.0, min(240.0, bpm + self.offset_bpm)), max(10.0, min(100.0, depth + self.offset_depth)))
+
+    def start(self, now: float, program: Program, index: int = 0) -> None:
+        if not program.steps:
+            return
+        self.program = program
+        self.finished = False
+        self.loops = 0
+        self.start_ms = now - program.starts()[max(0, min(len(program.steps) - 1, index))]
+        self.index = -1
+        self._apply(now, force=True)
+        self.runner.start(now)
+
+    def stop(self) -> None:
+        self.runner.stop()
+        self.index = -1
+
+    def skip(self, now: float, d: int) -> None:
+        if not self.running or not self.program:
+            return
+        n = len(self.program.steps)
+        i = (self.index + d) % n
+        self.start_ms = now - self.program.starts()[i]
+        self._apply(now, force=True)
+
+    def _apply(self, now: float, force: bool = False) -> None:
+        i, bpm, depth = self.targets(self.elapsed(now) if self.running else now - self.start_ms)
+        bpm, depth = self.effective(bpm, depth)
+        key = (i, round(bpm), round(depth))
+        if not force and key == self._applied:
+            return
+        if not force and i == self.index and now - self._applied_at < self.APPLY_EVERY_MS:
+            return
+        pattern = self._pattern(self.program.steps[i]) if (force or i != self.index) else None
+        self.index = i
+        self._applied, self._applied_at = key, now
+        self.runner.configure(now, pattern=pattern, bpm=round(bpm), lo=100 - round(depth), hi=100)
+
+    def tick(self, now: float) -> None:
+        if not self.running or not self.program:
+            return
+        total = self.program.total_ms
+        if now - self.start_ms >= total:
+            if not self.program.loop:
+                self.stop()
+                self.finished = True
+                return
+            self.loops += int((now - self.start_ms) // total)
+            self.start_ms += total * ((now - self.start_ms) // total)
+        self._apply(now)
+        self.runner.tick(now)
+
+    def current(self, now: float) -> tuple[float, float] | None:
+        """Tempo and depth playing now (with offsets)."""
+        if not self.running:
+            return None
+        _i, bpm, depth = self.targets(self.elapsed(now))
+        return self.effective(bpm, depth)
+
+
+def programs_path() -> Path:
+    return user_path().with_name("programs.json")
+
+
+def load_programs(path: Path | None = None) -> list[Program]:
+    path = path or programs_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    items = data.get("programs", []) if isinstance(data, dict) else []
+    return [p for p in (Program.from_dict(d) for d in items if isinstance(d, dict)) if p.steps]
+
+
+def save_programs(programs: list[Program], path: Path | None = None) -> None:
+    path = path or programs_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"version": 1, "programs": [p.to_dict() for p in programs]},
+                              ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(path)
 
 
 def user_path() -> Path:

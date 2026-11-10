@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QElapsedTimer, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QStackedWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -31,7 +32,7 @@ from .. import gamepad as G
 from .. import patterns as P
 from ..device.sync import ScriptSync
 from . import theme
-from .pattern_view import PatternView, block_icon, pattern_icon
+from .pattern_view import PatternView, ProgramView, _fmt_min, block_icon, pattern_icon
 
 ROLE = Qt.UserRole + 1
 
@@ -98,10 +99,13 @@ class PatternDialog(QDialog):
         self.ctl = ctl
         self.qs = ctl.qs
         self.setWindowTitle("Muster-Steuerung")
-        self.resize(940, 600)
+        self.resize(1040, 640)
         self.user: list[P.Pattern] = P.load_user()
         self.sync = ScriptSync(ctl.device, ctl.sync.settings)
         self.runner = P.PatternRunner(self.sync)
+        self.programs: list[P.Program] = P.load_programs()
+        self.prunner = P.ProgramRunner(self.sync, self.find_pattern)
+        self._offset_f = [0.0, 0.0]          # program: tempo, depth offsets (float for the sticks)
         self.clock = QElapsedTimer()
         self.clock.start()
         self.timer = QTimer(self)
@@ -120,9 +124,25 @@ class PatternDialog(QDialog):
         ll = QVBoxLayout(left)
         ll.setContentsMargins(16, 16, 8, 16)
         ll.setSpacing(8)
-        t = QLabel("Muster")
-        t.setObjectName("section")
-        ll.addWidget(t)
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(4)
+        self.mode_btns = []
+        for i, text in enumerate(("Muster", "Abläufe")):
+            b = QPushButton(text)
+            b.setObjectName("segment")
+            b.setCheckable(True)
+            b.clicked.connect(lambda _c=False, k=i: self.set_mode(k))
+            mode_row.addWidget(b)
+            self.mode_btns.append(b)
+        mode_row.addStretch(1)
+        ll.addLayout(mode_row)
+        self.left_stack = QStackedWidget()
+        ll.addWidget(self.left_stack, 1)
+        page = QWidget()
+        ll = QVBoxLayout(page)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(8)
+        self.left_stack.addWidget(page)
         self.filter = QComboBox()
         self.filter.addItem("Alle", "")
         for cat in dict.fromkeys(p.category for p in P.BUILTIN):
@@ -149,12 +169,43 @@ class PatternDialog(QDialog):
         self.new_btn.clicked.connect(self.new_pattern)
         self.edit_btn.clicked.connect(self.edit_pattern)
         self.del_btn.clicked.connect(self.delete_pattern)
+
+        page = QWidget()
+        pl = QVBoxLayout(page)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(8)
+        self.prog_list = QListWidget()
+        self.prog_list.setObjectName("playlist")
+        self.prog_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.prog_list.currentItemChanged.connect(self._prog_selected)
+        self.prog_list.itemDoubleClicked.connect(lambda _i: self.toggle())
+        pl.addWidget(self.prog_list, 1)
+        row = QHBoxLayout()
+        self.pnew_btn = QPushButton(theme.icon("plus"), "Neu")
+        self.pedit_btn = QPushButton(theme.icon("pencil"), "Bearbeiten")
+        self.pdel_btn = QPushButton(theme.icon("trash"), "")
+        self.pdel_btn.setToolTip("Eigenen Ablauf löschen")
+        self.pdel_btn.setFixedWidth(40)
+        for b in (self.pnew_btn, self.pedit_btn, self.pdel_btn):
+            row.addWidget(b)
+        pl.addLayout(row)
+        self.pnew_btn.clicked.connect(self.new_program)
+        self.pedit_btn.clicked.connect(self.edit_program)
+        self.pdel_btn.clicked.connect(self.delete_program)
+        self.left_stack.addWidget(page)
         root.addWidget(left)
 
         # ---- preview and control
-        right = QVBoxLayout()
-        right.setContentsMargins(24, 16, 24, 20)
+        outer = QVBoxLayout()
+        outer.setContentsMargins(24, 16, 24, 20)
+        outer.setSpacing(10)
+        self.right_stack = QStackedWidget()
+        outer.addWidget(self.right_stack, 1)
+        page = QWidget()
+        right = QVBoxLayout(page)
+        right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(10)
+        self.right_stack.addWidget(page)
         self.title = QLabel("")
         self.title.setObjectName("section")
         right.addWidget(self.title)
@@ -192,6 +243,47 @@ class PatternDialog(QDialog):
         cap.setWordWrap(True)
         right.addWidget(cap)
 
+        # program page
+        page = QWidget()
+        pr = QVBoxLayout(page)
+        pr.setContentsMargins(0, 0, 0, 0)
+        pr.setSpacing(10)
+        self.ptitle = QLabel("")
+        self.ptitle.setObjectName("section")
+        pr.addWidget(self.ptitle)
+        self.pinfo = QLabel("")
+        self.pinfo.setObjectName("caption")
+        pr.addWidget(self.pinfo)
+        self.pview = ProgramView(self.find_pattern)
+        pr.addWidget(self.pview, 1)
+        self.pnow = QLabel("")
+        self.pnow.setObjectName("value")
+        self.pnow.setFont(theme.mono_font(12))
+        pr.addWidget(self.pnow)
+        row = QHBoxLayout()
+        self.prev_btn = QPushButton(theme.icon("skip-back"), "Schritt zurück")
+        self.next_btn = QPushButton(theme.icon("skip-forward"), "Nächster Schritt")
+        self.prev_btn.clicked.connect(lambda: self.step_pattern(-1))
+        self.next_btn.clicked.connect(lambda: self.step_pattern(1))
+        self.offset_label = QLabel("")
+        self.offset_label.setObjectName("caption")
+        self.reset_btn = QPushButton("Anpassung zurücksetzen")
+        self.reset_btn.clicked.connect(self.reset_offsets)
+        for w in (self.prev_btn, self.next_btn):
+            row.addWidget(w)
+        row.addSpacing(12)
+        row.addWidget(self.offset_label, 1)
+        row.addWidget(self.reset_btn)
+        pr.addLayout(row)
+        cap = QLabel("Ein Ablauf spielt seine Schritte nacheinander, jeder mit eigenem Muster, Dauer, Tempo und "
+                     "Tiefe. Beim Abspielen passen ↑/↓ und ←/→ (oder Controller) alles gemeinsam an, "
+                     "Bild↑/↓ bzw. LB/RB springt zum vorigen/nächsten Schritt.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        pr.addWidget(cap)
+        self.right_stack.addWidget(page)
+        right = outer
+
         self.pad_label = QLabel()
         self.pad_label.setObjectName("caption")
         self.pad_label.setWordWrap(True)
@@ -210,7 +302,7 @@ class PatternDialog(QDialog):
         self.play_btn.clicked.connect(self.toggle)
         row.addWidget(self.play_btn)
         right.addLayout(row)
-        root.addLayout(right, 1)
+        root.addLayout(outer, 1)
 
         self._apply_timer = QTimer(self)
         self._apply_timer.setSingleShot(True)
@@ -240,8 +332,12 @@ class PatternDialog(QDialog):
         self.pad_state(None)
         self._fill()
         self._select_name(str(self._setting("last", P.BUILTIN[0].name)))
+        self._fill_programs()
+        self._select_program(str(self._setting("last_program", P.BUILTIN_PROGRAMS[0].name)))
         self._params_changed()
+        self._update_offsets()
         self._device_changed()
+        self.set_mode(int(self._setting("mode", 0)))
 
     # ------------------------------------------------------------ helpers
     def _label(self, text: str) -> QLabel:
@@ -263,6 +359,30 @@ class PatternDialog(QDialog):
 
     def all_patterns(self) -> list[P.Pattern]:
         return P.BUILTIN + self.user
+
+    def find_pattern(self, name: str) -> P.Pattern | None:
+        for p in self.user + P.BUILTIN:
+            if p.name == name:
+                return p
+        return None
+
+    def all_programs(self) -> list[P.Program]:
+        return self.programs + P.BUILTIN_PROGRAMS
+
+    @property
+    def mode(self) -> int:
+        """0 = single pattern, 1 = program (Ablauf)."""
+        return self.right_stack.currentIndex()
+
+    def set_mode(self, mode: int):
+        mode = 1 if mode == 1 else 0
+        if mode != self.mode and self.running:
+            self.stop()
+        for i, b in enumerate(self.mode_btns):
+            b.setChecked(i == mode)
+        self.left_stack.setCurrentIndex(mode)
+        self.right_stack.setCurrentIndex(mode)
+        self.qs.setValue("pattern/mode", mode)
 
     def current(self) -> P.Pattern | None:
         it = self.list.currentItem()
@@ -362,12 +482,22 @@ class PatternDialog(QDialog):
         self.runner.configure(self._now(), bpm=self.bpm.value(), lo=lo, hi=hi)
 
     def nudge(self, depth: float = 0, tempo: float = 0):
+        if self.mode == 1:
+            self._offset_f[0] += tempo
+            self._offset_f[1] += depth
+            self._update_offsets()
+            return
         if depth:
             self.depth.setValue(int(round(self.depth.value() + depth)))
         if tempo:
             self.bpm.setValue(int(round(self.bpm.value() + tempo)))
 
     def step_pattern(self, d: int):
+        if self.mode == 1:
+            if self.prunner.running:
+                self.prunner.skip(self._now(), d)
+                self._tick()
+            return
         rows = [i for i in range(self.list.count()) if self.list.item(i).data(ROLE) is not None]
         if not rows:
             return
@@ -379,7 +509,7 @@ class PatternDialog(QDialog):
     def pad_state(self, name):
         if name:
             self.pad_label.setText(f"Controller: {name} · A/✕ Start/Stopp, B/○ Stopp, linker Stick/Steuerkreuz "
-                                   "↕ Tiefe, rechter Stick ↕ bzw. Steuerkreuz ↔ Tempo, LB/RB Muster")
+                                   "↕ Tiefe, rechter Stick ↕ bzw. Steuerkreuz ↔ Tempo, LB/RB Muster bzw. Schritt")
             self.pad_timer.start()
         else:
             self.pad_label.setText("Kein Controller gefunden (Xbox, PlayStation u.a. per USB oder Bluetooth).")
@@ -420,6 +550,12 @@ class PatternDialog(QDialog):
     def _pad_tick(self):
         dt = self.pad_timer.interval() / 1000
         ly, ry = self._stick(G.AX_LY), self._stick(G.AX_RY)
+        if self.mode == 1 and (ly or ry):           # program: the sticks move the offsets
+            self._pad_was_used = True
+            self._offset_f[0] -= ry * self.STICK_TEMPO * dt
+            self._offset_f[1] -= ly * self.STICK_DEPTH * dt
+            self._update_offsets()
+            return
         if ly:                                      # stick up = deeper / faster
             self._pad_was_used = True
             self._depth_f = max(10.0, min(100.0, self._depth_f - ly * self.STICK_DEPTH * dt))
@@ -475,14 +611,132 @@ class PatternDialog(QDialog):
         except OSError as e:
             QMessageBox.warning(self, "Muster", f"Konnte die Muster nicht speichern: {e}")
 
+    # ------------------------------------------------------------ programs
+    def current_program(self) -> P.Program | None:
+        it = self.prog_list.currentItem()
+        return it.data(ROLE) if it is not None else None
+
+    def _fill_programs(self):
+        cur = self.current_program()
+        self.prog_list.blockSignals(True)
+        self.prog_list.clear()
+        for title, items in (("EIGENE", self.programs), ("VORLAGEN", P.BUILTIN_PROGRAMS)):
+            if not items:
+                continue
+            head = QListWidgetItem(title)
+            head.setFlags(Qt.NoItemFlags)
+            head.setForeground(theme.qcolor(theme.MUTED))
+            fnt = head.font()
+            fnt.setPixelSize(10)
+            head.setFont(fnt)
+            self.prog_list.addItem(head)
+            for pr in items:
+                it = QListWidgetItem(f"{pr.name}\n{len(pr.steps)} Schritte · {_fmt_min(pr.total_ms)}"
+                                     + (" · Schleife" if pr.loop else ""))
+                it.setData(ROLE, pr)
+                self.prog_list.addItem(it)
+        self.prog_list.blockSignals(False)
+        if not (cur is not None and self._select_program(cur.name)):
+            for i in range(self.prog_list.count()):
+                if self.prog_list.item(i).data(ROLE) is not None:
+                    self.prog_list.setCurrentRow(i)
+                    break
+
+    def _select_program(self, name: str) -> bool:
+        for i in range(self.prog_list.count()):
+            pr = self.prog_list.item(i).data(ROLE)
+            if pr is not None and pr.name == name:
+                self.prog_list.setCurrentRow(i)
+                return True
+        return False
+
+    def _prog_selected(self, *_):
+        pr = self.current_program()
+        self.pedit_btn.setEnabled(pr is not None)
+        self.pdel_btn.setVisible(pr is not None and not pr.builtin)
+        self.pedit_btn.setText("Als Kopie ändern" if pr is not None and pr.builtin else "Bearbeiten")
+        if pr is None:
+            return
+        if self.prunner.running and pr is not self.prunner.program:
+            self.stop()
+        self.qs.setValue("pattern/last_program", pr.name)
+        self.ptitle.setText(pr.name)
+        end = "fängt dann von vorne an" if pr.loop else "stoppt dann"
+        self.pinfo.setText(f"{'Vorlage' if pr.builtin else 'Eigener Ablauf'} · {len(pr.steps)} Schritte · "
+                           f"{_fmt_min(pr.total_ms)} · {end}")
+        self.pview.set_program(pr)
+
+    def _update_offsets(self):
+        t, d = (int(round(v)) for v in self._offset_f)
+        if t or d:
+            self.offset_label.setText(f"Anpassung: Tempo {t:+d} · Tiefe {d:+d} %")
+        else:
+            self.offset_label.setText("Anpassung: keine")
+        self.reset_btn.setEnabled(bool(t or d))
+        self.prunner.offset_bpm, self.prunner.offset_depth = t, d
+
+    def reset_offsets(self):
+        self._offset_f = [0.0, 0.0]
+        self._update_offsets()
+
+    def new_program(self):
+        self._open_program_editor(P.Program("Mein Ablauf", [P.Step("Ruhig", 5, 40, 60),
+                                                             P.Step("Gleichmäßig", 10, 60, 90)]), None)
+
+    def edit_program(self):
+        pr = self.current_program()
+        if pr is None:
+            return
+        if pr.builtin:
+            self._open_program_editor(pr.copy(f"{pr.name} (eigen)"), None)
+        else:
+            self._open_program_editor(pr.copy(), pr)
+
+    def _open_program_editor(self, program: P.Program, original: P.Program | None):
+        dlg = ProgramEditor(program, self.all_patterns(), self.find_pattern, self)
+        if not dlg.exec():
+            return
+        result = dlg.result_program()
+        taken = [x.name for x in self.all_programs() if x is not original]
+        result.name = P.unique_name(result.name, taken)
+        if original is not None:
+            if self.prunner.program is original:
+                self.stop()
+            self.programs[self.programs.index(original)] = result
+        else:
+            self.programs.append(result)
+        self.save_programs()
+        self._fill_programs()
+        self._select_program(result.name)
+
+    def delete_program(self):
+        pr = self.current_program()
+        if pr is None or pr.builtin:
+            return
+        if QMessageBox.question(self, "Ablauf löschen", f"„{pr.name}“ löschen?") != QMessageBox.Yes:
+            return
+        if self.prunner.program is pr:
+            self.stop()
+        self.programs.remove(pr)
+        self.save_programs()
+        self._fill_programs()
+
+    def save_programs(self):
+        try:
+            P.save_programs(self.programs)
+        except OSError as e:
+            QMessageBox.warning(self, "Abläufe", f"Konnte die Abläufe nicht speichern: {e}")
+
     # ------------------------------------------------------------ playback
     def _device_changed(self):
         dev = self.ctl.device
         if dev is not self.sync.device:
-            was = self.runner.running
+            was, pwas = self.runner.running, self.prunner.running
             self.sync.set_device(dev)
             if was:
                 self.runner.start(self._now())
+            if pwas:
+                self.prunner.runner.start(self._now())
         if dev is not None and dev.connected:
             self.device_label.setText(f"Gerät: {dev.name}")
         else:
@@ -490,7 +744,7 @@ class PatternDialog(QDialog):
 
     @property
     def running(self) -> bool:
-        return self.runner.running
+        return self.runner.running or self.prunner.running
 
     def toggle(self):
         if self.running:
@@ -499,35 +753,66 @@ class PatternDialog(QDialog):
             self.start()
 
     def start(self):
-        p = self.current()
-        if p is None:
-            return
+        if self.mode == 1:
+            pr = self.current_program()
+            if pr is None or not pr.steps:
+                return
+        else:
+            p = self.current()
+            if p is None:
+                return
         win = self.parent()
         if win is not None and hasattr(win, "pause") and getattr(win, "timer", None) is not None \
                 and win.timer.isActive():
             win.pause()                    # the video and a pattern never drive the device together
-        lo, hi = self.stroke_range()
-        self.runner.configure(self._now(), pattern=p, bpm=self.bpm.value(), lo=lo, hi=hi)
-        self.runner.start(self._now())
+        if self.mode == 1:
+            self.runner.stop()
+            self.prunner.start(self._now(), pr)
+        else:
+            self.prunner.stop()
+            lo, hi = self.stroke_range()
+            self.runner.configure(self._now(), pattern=p, bpm=self.bpm.value(), lo=lo, hi=hi)
+            self.runner.start(self._now())
         self.timer.start()
         self.play_btn.setIcon(theme.icon("pause", theme.ON_ACCENT))
         self.play_btn.setText("Stopp")
 
     def stop(self):
         self.runner.stop()
+        self.prunner.stop()
         self.timer.stop()
         self.view.set_phase(None)
+        self.pview.set_elapsed(None)
+        self.pnow.setText("")
         self.play_btn.setIcon(theme.icon("play", theme.ON_ACCENT))
         self.play_btn.setText("Start")
 
     def _tick(self):
         now = self._now()
-        self.runner.tick(now)
-        self.view.set_phase(self.runner.phase(now))
+        if self.prunner.running or self.prunner.finished:
+            self.prunner.tick(now)
+            if self.prunner.finished:
+                self.prunner.finished = False
+                self.stop()
+                self.pnow.setText("Ablauf fertig.")
+                return
+            pr = self.prunner.program
+            el = self.prunner.elapsed(now)
+            self.pview.set_elapsed(el)
+            st = pr.steps[self.prunner.index]
+            bpm, depth = self.prunner.current(now)
+            self.pnow.setText(f"Schritt {self.prunner.index + 1}/{len(pr.steps)} · {st.pattern} · "
+                              f"{round(bpm)} Hübe/min · Tiefe {round(depth)} % · "
+                              f"{_fmt_min(el)} von {_fmt_min(pr.total_ms)}, noch {_fmt_min(pr.total_ms - el)}")
+            runner = self.prunner.runner
+        else:
+            self.runner.tick(now)
+            self.view.set_phase(self.runner.phase(now))
+            runner = self.runner
         win = self.parent()
         if win is not None and hasattr(win, "rail"):
             pos = self.ctl.device_position()
-            win.rail.set_device_position(pos if pos is not None else self.runner.position(now))
+            win.rail.set_device_position(pos if pos is not None else runner.position(now))
 
     def showEvent(self, ev):
         self.pad.reader.start()
@@ -803,4 +1088,285 @@ class PatternEditor(QDialog):
 
     def result_pattern(self) -> P.Pattern:
         p = self.pattern.copy(self.name.text().strip() or "Mein Muster")
+        return p
+
+
+class ProgramEditor(QDialog):
+    """Put steps together: pattern (or a part of it), minutes, tempo, depth."""
+
+    def __init__(self, program: P.Program, patterns: list[P.Pattern], lookup, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Ablauf bauen")
+        self.resize(940, 680)
+        self.program = program.copy()
+        self.lookup = lookup
+        self._loading = False
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(10)
+
+        self.name = QLineEdit(self.program.name)
+        self.name.setPlaceholderText("Name")
+        self.loop = QCheckBox("Am Ende von vorne anfangen")
+        self.loop.setChecked(self.program.loop)
+        self.smooth = QCheckBox("Weiche Übergänge")
+        self.smooth.setToolTip("Tempo und Tiefe gleiten in den ersten 8 Sekunden eines Schritts vom vorigen her")
+        self.smooth.setChecked(self.program.smooth)
+        lay.addWidget(_hrow("Name", self.name, self.loop, self.smooth))
+        self.loop.toggled.connect(self._opts_changed)
+        self.smooth.toggled.connect(self._opts_changed)
+
+        mid = QHBoxLayout()
+        mid.setSpacing(16)
+        col = QVBoxLayout()
+        t = QLabel("Schritte")
+        t.setObjectName("section")
+        col.addWidget(t)
+        self.steps = QListWidget()
+        self.steps.setObjectName("playlist")
+        self.steps.setIconSize(QSize(72, 24))
+        self.steps.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.steps.setWordWrap(True)
+        self.steps.currentRowChanged.connect(self._step_selected)
+        col.addWidget(self.steps, 1)
+        row = QHBoxLayout()
+        self.add_btn = QPushButton(theme.icon("plus"), "Schritt")
+        self.up_btn = QPushButton(theme.icon("arrow-up"), "")
+        self.down_btn = QPushButton(theme.icon("arrow-down"), "")
+        self.dup_btn = QPushButton("Doppeln")
+        self.rm_btn = QPushButton(theme.icon("trash"), "")
+        self.up_btn.setToolTip("Nach vorne")
+        self.down_btn.setToolTip("Nach hinten")
+        self.rm_btn.setToolTip("Schritt entfernen")
+        for b in (self.add_btn, self.up_btn, self.down_btn, self.dup_btn, self.rm_btn):
+            row.addWidget(b)
+        self.add_btn.clicked.connect(self.add_step)
+        self.up_btn.clicked.connect(lambda: self.move_step(-1))
+        self.down_btn.clicked.connect(lambda: self.move_step(1))
+        self.dup_btn.clicked.connect(self.duplicate_step)
+        self.rm_btn.clicked.connect(self.remove_step)
+        col.addLayout(row)
+        mid.addLayout(col, 1)
+
+        props = QVBoxLayout()
+        t = QLabel("Schritt")
+        t.setObjectName("section")
+        props.addWidget(t)
+        form = QFormLayout()
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(8)
+        self.pattern = QComboBox()
+        self.pattern.setIconSize(QSize(72, 24))
+        self.pattern.setMaxVisibleItems(16)
+        for p in patterns:
+            self.pattern.addItem(pattern_icon(p, 72, 24), p.name, p.name)
+        form.addRow("Muster", self.pattern)
+        self.first = QSpinBox()
+        self.last = QSpinBox()
+        self.part_of = QLabel()
+        self.part_of.setObjectName("caption")
+        form.addRow("Teil", _hrow("Baustein", self.first, "bis", self.last, self.part_of, stretch=True))
+        self.minutes = QDoubleSpinBox()
+        self.minutes.setRange(0.25, 600)
+        self.minutes.setDecimals(2)
+        self.minutes.setSingleStep(1)
+        self.minutes.setSuffix(" min")
+        form.addRow("Dauer", _hrow(self.minutes, stretch=True))
+        self.bpm = QSpinBox()
+        self.bpm.setRange(10, 240)
+        self.bpm.setSingleStep(5)
+        self.bpm.setSuffix(" Hübe/min")
+        form.addRow("Tempo", _hrow(self.bpm, stretch=True))
+        self.depth = QSpinBox()
+        self.depth.setRange(10, 100)
+        self.depth.setSingleStep(5)
+        self.depth.setSuffix(" %")
+        form.addRow("Tiefe", _hrow(self.depth, stretch=True))
+        props.addLayout(form)
+        cap = QLabel("Teil: nur diese Bausteine des Musters spielen, z.B. von „Kurz vor Schluss“ nur den "
+                     "schnellen Anfang. Im Bild ist der gewählte Teil hervorgehoben.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        props.addWidget(cap)
+        self.part_view = PatternView(cycles=1)
+        self.part_view.setMinimumHeight(120)
+        props.addWidget(self.part_view, 1)
+        pw = QWidget()
+        pw.setLayout(props)
+        pw.setMinimumWidth(440)
+        mid.addWidget(pw)
+        lay.addLayout(mid, 1)
+
+        self.total = QLabel()
+        self.total.setObjectName("caption")
+        lay.addWidget(self.total)
+        self.view = ProgramView(lookup)
+        self.view.setMinimumHeight(130)
+        lay.addWidget(self.view)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Save).setText("Speichern")
+        bb.button(QDialogButtonBox.Save).setObjectName("primary")
+        bb.button(QDialogButtonBox.Cancel).setText("Abbrechen")
+        bb.accepted.connect(self._accept)
+        bb.rejected.connect(self.reject)
+        self.save_btn = bb.button(QDialogButtonBox.Save)
+        lay.addWidget(bb)
+
+        self.pattern.currentIndexChanged.connect(self._pattern_changed)
+        for w in (self.first, self.last, self.minutes, self.bpm, self.depth):
+            w.valueChanged.connect(self._props_changed)
+        self._fill(0)
+
+    # ------------------------------------------------------------ list
+    def _describe(self, st: P.Step) -> str:
+        txt = f"{st.pattern} · {st.minutes:g} min · {st.bpm}/min · {st.depth} %".replace(".", ",")
+        p = self.lookup(st.pattern)
+        if p is None:
+            return txt + " · (Muster fehlt)"
+        part = st.part(p)
+        if part is not p:
+            a, b = max(1, st.first), st.last or len(p.blocks)
+            txt += f" · Baustein {a}" if a == b else f" · Bausteine {a}–{b}"
+        return txt
+
+    def _icon(self, st: P.Step):
+        p = self.lookup(st.pattern)
+        return pattern_icon(st.part(p), 72, 24) if p is not None and p.blocks else QIcon()
+
+    def _fill(self, select: int = 0):
+        self.steps.blockSignals(True)
+        self.steps.clear()
+        for st in self.program.steps:
+            self.steps.addItem(QListWidgetItem(self._icon(st), self._describe(st)))
+        self.steps.blockSignals(False)
+        if self.program.steps:
+            self.steps.setCurrentRow(max(0, min(len(self.program.steps) - 1, select)))
+        else:
+            self._step_selected(-1)
+        self._refresh()
+
+    def _refresh(self):
+        self.view.set_program(self.program)
+        self.view.set_selected(self.steps.currentRow() if self.program.steps else None)
+        self.total.setText(f"Gesamt {_fmt_min(self.program.total_ms)} · {len(self.program.steps)} Schritte"
+                           + (" · danach von vorne" if self.program.loop else " · danach Stopp"))
+        self.save_btn.setEnabled(bool(self.program.steps))
+
+    def add_step(self):
+        i = self.steps.currentRow()
+        base = self.program.steps[i] if 0 <= i < len(self.program.steps) else P.Step()
+        st = P.Step.from_dict(base.to_dict())
+        self.program.steps.insert(i + 1, st)
+        self._fill(i + 1)
+
+    def move_step(self, d: int):
+        i = self.steps.currentRow()
+        j = i + d
+        n = len(self.program.steps)
+        if 0 <= i < n and 0 <= j < n:
+            st = self.program.steps
+            st[i], st[j] = st[j], st[i]
+            self._fill(j)
+
+    def duplicate_step(self):
+        self.add_step()
+
+    def remove_step(self):
+        i = self.steps.currentRow()
+        if 0 <= i < len(self.program.steps):
+            del self.program.steps[i]
+            self._fill(max(0, i - 1))
+
+    # ------------------------------------------------------------ properties
+    def _step_selected(self, i: int):
+        has = 0 <= i < len(self.program.steps)
+        for w in (self.pattern, self.first, self.last, self.minutes, self.bpm, self.depth,
+                  self.up_btn, self.down_btn, self.dup_btn, self.rm_btn):
+            w.setEnabled(has)
+        if not has:
+            self.part_view.set_pattern(None)
+            return
+        st = self.program.steps[i]
+        self._loading = True
+        k = self.pattern.findData(st.pattern)
+        if k < 0:                                      # deleted pattern: show it, keep it
+            self.pattern.addItem(f"{st.pattern} (fehlt)", st.pattern)
+            k = self.pattern.count() - 1
+        self.pattern.setCurrentIndex(k)
+        self.minutes.setValue(st.minutes)
+        self.bpm.setValue(st.bpm)
+        self.depth.setValue(st.depth)
+        self._set_part_limits(st)
+        self._loading = False
+        self._show_part(st)
+        self.view.set_selected(i)
+
+    def _set_part_limits(self, st: P.Step):
+        p = self.lookup(st.pattern)
+        n = max(1, len(p.blocks)) if p is not None else 1
+        for sp in (self.first, self.last):
+            sp.setRange(1, n)
+        self.first.setValue(max(1, min(n, st.first)))
+        self.last.setValue(n if st.last <= 0 else max(1, min(n, st.last)))
+        self.part_of.setText(f"von {n}")
+
+    def _show_part(self, st: P.Step):
+        p = self.lookup(st.pattern)
+        self.part_view.set_pattern(p, st.bpm, 100 - st.depth, 100)
+        if p is not None and p.blocks:
+            n = len(p.blocks)
+            a = max(1, min(n, st.first))
+            b = n if st.last <= 0 else max(a, min(n, st.last))
+            self.part_view.set_highlight(None if (a, b) == (1, n) else (a - 1, b - 1))
+
+    def _pattern_changed(self, *_):
+        i = self.steps.currentRow()
+        if self._loading or not 0 <= i < len(self.program.steps):
+            return
+        st = self.program.steps[i]
+        st.pattern = self.pattern.currentData()
+        st.first, st.last = 1, 0                       # new pattern: all of it
+        self._loading = True
+        self._set_part_limits(st)
+        self._loading = False
+        self._props_changed()
+
+    def _props_changed(self, *_):
+        i = self.steps.currentRow()
+        if self._loading or not 0 <= i < len(self.program.steps):
+            return
+        st = self.program.steps[i]
+        if self.last.value() < self.first.value():
+            self._loading = True
+            if self.sender() is self.first:
+                self.last.setValue(self.first.value())
+            else:
+                self.first.setValue(self.last.value())
+            self._loading = False
+        p = self.lookup(st.pattern)
+        n = len(p.blocks) if p is not None else 1
+        st.first = self.first.value()
+        st.last = 0 if self.last.value() >= n else self.last.value()
+        st.minutes = self.minutes.value()
+        st.bpm = self.bpm.value()
+        st.depth = self.depth.value()
+        it = self.steps.item(i)
+        it.setIcon(self._icon(st))
+        it.setText(self._describe(st))
+        self._show_part(st)
+        self._refresh()
+
+    def _opts_changed(self, *_):
+        self.program.loop = self.loop.isChecked()
+        self.program.smooth = self.smooth.isChecked()
+        self._refresh()
+
+    def _accept(self):
+        if self.program.steps:
+            self.accept()
+
+    def result_program(self) -> P.Program:
+        p = self.program.copy(self.name.text().strip() or "Mein Ablauf")
+        p.loop, p.smooth = self.loop.isChecked(), self.smooth.isChecked()
         return p

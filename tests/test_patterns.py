@@ -115,3 +115,61 @@ def test_gamepad_parse_and_reader(tmp_path):
     r.stop()
     assert states[0] and states[-1] is None
     assert [e.number for e in got] == [0, 1]
+
+
+def _runner():
+    dev = SimulatedDevice()
+    dev.connect()
+    lib = {p.name: p for p in P.BUILTIN}
+    return P.ProgramRunner(ScriptSync(dev, SyncSettings(max_speed=0)), lib.get)
+
+
+def test_program_steps_smooth_offsets():
+    prog = P.Program("t", [P.Step("Gleichmäßig", 1, 60, 50), P.Step("Kurz vor Schluss", 1, 120, 100, 1, 1)])
+    r = _runner()
+    r.start(0, prog)
+    assert r.index == 0 and r.runner.bpm == 60 and r.runner.lo == 50
+    for t in range(0, 60_000, 50):
+        r.tick(t)
+    r.tick(60_000 + 4000)                                # halfway through the glide
+    assert r.index == 1 and r.runner.bpm == 90 and r.runner.lo == 25
+    assert len(r.runner.pattern.blocks) == 1             # only the first block of the pattern
+    r.tick(60_000 + 9000)
+    assert r.runner.bpm == 120 and r.runner.lo == 0
+    r.offset_bpm, r.offset_depth = 10, -30
+    r.tick(60_000 + 9500)
+    assert r.runner.bpm == 130 and r.runner.lo == 30
+    assert r.current(60_000 + 9500) == (130, 70)
+    r.tick(120_001)                                      # end: stops
+    assert not r.running and r.finished
+
+
+def test_program_loop_skip_and_hard_switch():
+    prog = P.Program("t", [P.Step("Gleichmäßig", 1, 60, 50), P.Step("Schnell", 1, 100, 100)],
+                     loop=True, smooth=False)
+    r = _runner()
+    r.start(1000, prog)
+    r.tick(1000 + 60_000)
+    assert r.index == 1 and r.runner.bpm == 100          # no glide
+    r.tick(1000 + 120_000 + 10)                          # starts again
+    assert r.running and r.index == 0 and r.loops == 1
+    r.skip(200_000, 1)
+    assert r.index == 1 and r.elapsed(200_000) == pytest.approx(60_000)
+    r.skip(200_100, 1)                                   # wraps around
+    assert r.index == 0
+    r.stop()
+    assert not r.running
+
+
+def test_program_save_load_and_missing_pattern(tmp_path):
+    path = tmp_path / "programs.json"
+    prog = P.BUILTIN_PROGRAMS[0].copy("Meins")
+    prog.steps[0].first, prog.steps[0].last = 2, 3
+    P.save_programs([prog], path)
+    back = P.load_programs(path)
+    assert back[0].to_dict() == prog.to_dict() and not back[0].builtin
+    for pr in P.BUILTIN_PROGRAMS:                        # presets only use existing patterns
+        assert all(any(p.name == st.pattern for p in P.BUILTIN) for st in pr.steps)
+    r = _runner()
+    r.start(0, P.Program("x", [P.Step("Gibt es nicht", 1, 60, 100)]))
+    assert r.running and r.runner.pattern is P.BUILTIN[0]

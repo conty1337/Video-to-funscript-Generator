@@ -866,6 +866,7 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     w = MainWindow()
     w.open_patterns()
     d = w.pattern_dialog
+    d.set_mode(0)
     assert d.list.count() > len(P.BUILTIN)              # with category headers
     assert d._select_name("Welle") and d.current().name == "Welle"
     d.bpm.setValue(90)
@@ -935,5 +936,40 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     names = [r.pattern.itemData(i).name for i in range(r.pattern.count())
              if isinstance(r.pattern.itemData(i), P.Pattern)]
     assert names[0] == "Neu" and "Welle" in names
+
+    # programs (Abläufe): steps with a part of a pattern, offsets, step skipping
+    from vtf.gui.pattern_dialog import ProgramEditor
+    d.set_mode(1)
+    assert d.left_stack.currentIndex() == 1 and d._select_program("Eine Stunde")
+    pe = ProgramEditor(P.Program("Abend", [P.Step("Gleichmäßig", 2, 50, 70)]), d.all_patterns(),
+                       d.find_pattern, d)
+    pe.add_step()
+    pe.pattern.setCurrentIndex(pe.pattern.findData("Kurz vor Schluss"))
+    assert pe.last.maximum() == 3 and pe.last.value() == 3
+    pe.last.setValue(1)                                  # only the fast start of it
+    pe.minutes.setValue(3)
+    pe.depth.setValue(90)
+    assert pe.part_view.highlight == (0, 0)
+    res = pe.result_program()
+    assert res.steps[1].pattern == "Kurz vor Schluss" and (res.steps[1].first, res.steps[1].last) == (1, 1)
+    assert res.total_ms == 5 * 60_000
+    d.programs.append(res)
+    d.save_programs()
+    assert [p.name for p in P.load_programs()] == ["Abend"]
+    d._fill_programs()
+    assert d._select_program("Abend")
+    d.start()
+    assert d.prunner.running and not d.runner.running
+    d._tick()
+    assert "Schritt 1/2" in d.pnow.text()
+    d.nudge(depth=-10, tempo=5)                          # keys move the whole program
+    assert (d.prunner.offset_bpm, d.prunner.offset_depth) == (5, -10)
+    d.step_pattern(1)                                    # next step
+    assert d.prunner.index == 1 and "Schritt 2/2" in d.pnow.text()
+    assert len(d.prunner.runner.pattern.blocks) == 1
+    d.reset_offsets()
+    assert d.prunner.offset_depth == 0
+    d.set_mode(0)                                        # switching mode stops
+    assert not d.running
     d.close()
     w.close()

@@ -1478,6 +1478,7 @@ class MainWindow(QMainWindow):
             "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
             "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
             "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
+            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"
             "Eigene Muster gibt es auch bei Strg+T.\n\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 

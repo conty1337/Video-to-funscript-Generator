@@ -82,7 +82,7 @@ class PatternView(QWidget):
         self.cycles = cycles
         self.bpm, self.lo, self.hi = 60.0, 0, 100
         self.phase: float | None = None
-        self.highlight: int | None = None
+        self.highlight = None               # block index or (first, last)
         self._pts: list = []
         self._ranges: list = []
         self.setMinimumHeight(140)
@@ -106,7 +106,7 @@ class PatternView(QWidget):
             self.phase = phase
             self.update()
 
-    def set_highlight(self, idx: int | None) -> None:
+    def set_highlight(self, idx) -> None:
         self.highlight = idx
         self.update()
 
@@ -132,8 +132,11 @@ class PatternView(QWidget):
             return
         total = self._pts[-1][0] or 1.0
         one = total / self.cycles
-        if self.highlight is not None and 0 <= self.highlight < len(self._ranges):
-            a, b = self._ranges[self.highlight]
+        hl = self.highlight
+        if isinstance(hl, int):
+            hl = (hl, hl)
+        if hl is not None and self._ranges and 0 <= hl[0] <= hl[1] < len(self._ranges):
+            a, b = self._ranges[hl[0]][0], self._ranges[hl[1]][1]
             for c in range(self.cycles):
                 x0 = r.left() + r.width() * (c * one + a) / total
                 x1 = r.left() + r.width() * (c * one + b) / total
@@ -150,3 +153,88 @@ class PatternView(QWidget):
             x = r.left() + r.width() * self.phase / self.cycles
             p.setPen(QPen(QColor(theme.TEXT), 1.5))
             p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+
+
+def _fmt_min(ms: float) -> str:
+    s = int(round(ms / 1000))
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+
+
+class ProgramView(QWidget):
+    """Timeline of a program: one block per step (width = duration) with the
+    pattern's shape at its depth, and a playhead with elapsed/remaining time."""
+
+    def __init__(self, lookup, parent=None):
+        super().__init__(parent)
+        self.lookup = lookup                  # name -> Pattern | None
+        self.program: P.Program | None = None
+        self.elapsed: float | None = None
+        self.selected: int | None = None
+        self.setMinimumHeight(120)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def sizeHint(self) -> QSize:
+        return QSize(480, 160)
+
+    def set_program(self, program: P.Program | None) -> None:
+        self.program = program
+        self.update()
+
+    def set_elapsed(self, ms: float | None) -> None:
+        self.elapsed = ms
+        self.update()
+
+    def set_selected(self, i: int | None) -> None:
+        self.selected = i
+        self.update()
+
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(theme.CARD))
+        r = QRectF(self.rect()).adjusted(12, 26, -12, -40)
+        p.setFont(theme.mono_font(10))
+        prog = self.program
+        if prog is None or not prog.steps or prog.total_ms <= 0:
+            p.setPen(QColor(theme.MUTED))
+            p.drawText(r, Qt.AlignCenter, "Keine Schritte – Schritt hinzufügen")
+            return
+        total = prog.total_ms
+        starts = prog.starts()
+        cur = None
+        if self.elapsed is not None:
+            cur = max(i for i, t in enumerate(starts) if self.elapsed >= t)
+        for i, st in enumerate(prog.steps):
+            x0 = r.left() + r.width() * starts[i] / total
+            x1 = r.left() + r.width() * (starts[i] + st.minutes * 60_000) / total
+            box = QRectF(x0 + 1, r.top(), max(1.0, x1 - x0 - 2), r.height())
+            on = i == cur or i == self.selected
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(theme.RAISED) if on else theme.qcolor(theme.TEXT, 0.03))
+            p.drawRoundedRect(box, 4, 4)
+            pat = self.lookup(st.pattern)
+            if pat is not None and pat.blocks:
+                part = st.part(pat)
+                one = P.cycle_ms(part, st.bpm)
+                fit = max(1, int(box.width() / (5 * max(1, len(P.segments(part, st.bpm))))))
+                cycles = max(1, min(fit, int(st.minutes * 60_000 / one) if one > 0 else 1))
+                pts = P.preview(part, st.bpm, cycles)
+                p.save()
+                p.setClipRect(box)
+                draw_curve(p, box.adjusted(3, 4, -3, -4), pts, 100 - st.depth, 100,
+                           color=theme.ACCENT if on else theme.TEXT_2, width=1.2)
+                p.restore()
+            p.setPen(QColor(theme.TEXT if on else theme.TEXT_2))
+            p.drawText(QRectF(x0 + 3, self.rect().top() + 4, x1 - x0 - 6, 18), Qt.AlignLeft | Qt.AlignVCenter,
+                       p.fontMetrics().elidedText(st.pattern, Qt.ElideRight, int(max(0, x1 - x0 - 6))))
+            p.setPen(QColor(theme.MUTED))
+            w = int(max(0, x1 - x0 - 6))
+            for k, lab in enumerate((f"{st.minutes:g} min".replace(".", ","), f"{st.bpm}/min · {st.depth} %")):
+                p.drawText(QRectF(x0 + 3, r.bottom() + 3 + 15 * k, x1 - x0 - 6, 15), Qt.AlignLeft | Qt.AlignVCenter,
+                           p.fontMetrics().elidedText(lab, Qt.ElideRight, w))
+        if self.elapsed is not None:
+            x = r.left() + r.width() * min(1.0, self.elapsed / total)
+            p.setPen(QPen(QColor(theme.TEXT), 1.5))
+            p.drawLine(QPointF(x, r.top() - 2), QPointF(x, r.bottom() + 2))

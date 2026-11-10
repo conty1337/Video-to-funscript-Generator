@@ -82,9 +82,12 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
 - [x] **Tempo-Grenze beim Erzeugen**: Hübe, die das Gerät nicht schafft (F21S:
       voller Hub unter ca. 200 ms), schon im Script begrenzen, nicht erst
       beim Abspielen.
-- [x] **Muster-Steuerung** (0.9): über 30 fertige Muster mit Vorschaubild,
+- [x] **Muster-Steuerung** (0.9): über 50 fertige Muster mit Vorschaubild,
       eigene Muster aus Bausteinen (Hub, Fahren, Halten, mit Verlauf),
       Tiefe und Tempo dauerhaft gespeichert und live änderbar (Maus, Tasten,
       Controller über /dev/input/js*). Muster auch beim Rhythmus-Einfügen.
+- [x] **Abläufe** (0.9): Schritte mit Muster (ganz oder Teil), Dauer, Tempo
+      und Tiefe, weiche Übergänge, Schleife; Vorlagen bis zu einer Stunde.
+      Mehr Muster (56).
 - [ ] **Andere Player**: Scripts auch zu Videos aus anderen Playern (Browser,
       VLC) auf dem Gerät abspielen.

@@ -198,6 +198,10 @@ QListWidget#playlist::item:hover {{ background: {CARD}; }}
 QListWidget#playlist::item:selected {{ background: {RAISED}; color: {TEXT}; }}
 QToolButton:checked {{ background: {RAISED}; color: {ACCENT}; }}
 QPushButton#transport:checked {{ background: {RAISED}; }}
+QPushButton#segment {{ background: transparent; border: none; min-height: 28px; padding: 0 12px;
+    color: {TEXT_2}; border-radius: 6px; }}
+QPushButton#segment:hover {{ color: {TEXT}; }}
+QPushButton#segment:checked {{ background: {RAISED}; color: {TEXT}; }}
 
 QProgressBar {{ background: {RAISED}; border: none; border-radius: 2px; max-height: 4px; min-height: 4px; }}
 QProgressBar::chunk {{ background: {ACCENT}; border-radius: 2px; }}

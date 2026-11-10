@@ -88,6 +88,10 @@ Muster-Steuerung für einen Bereich ein.
   Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp, LB/RB Muster wechseln.
   Eigene Muster baust du aus Bausteinen (Neu bzw. „Als Kopie ändern“), das
   Bild zeigt sofort, wie es aussieht.
+- **Abläufe** (oben links umschalten): mehrere Muster hintereinander, jedes mit
+  eigener Dauer, eigenem Tempo und eigener Tiefe, z.B. eine Stunde vom
+  langsamen Start bis zum Ende. Pro Schritt lässt sich mit „Teil“ auch nur ein
+  Stück eines Musters nehmen.
 - **Esc** stoppt das Gerät sofort.
 
 ## Wenn etwas nicht passt
