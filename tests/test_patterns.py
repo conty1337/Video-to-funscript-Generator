@@ -285,3 +285,57 @@ def test_runner_extension_keeps_the_rhythm():
     assert all(x.pos != y.pos for x, y in pairwise(a))            # always up/down, never a flat move
     gaps = {y.at - x.at for x, y in pairwise(a)}
     assert max(gaps) - min(gaps) <= 2
+
+
+def _lookup(name):
+    return next((p for p in P.BUILTIN if p.name == name), None)
+
+
+def test_plan_matches_what_is_played():
+    """The live strip's preview is what the device really gets, glides and step change included."""
+    prog = P.Program("t", [P.Step("Gleichmäßig", 0.25, 60, 40), P.Step("Schnell", 1, 110, 100)], smooth=True)
+    pr = P.ProgramRunner(ScriptSync(SimulatedDevice(), SyncSettings()), _lookup)
+    pr.start(0, prog)
+    for t in range(0, 10_000, 50):
+        pr.tick(t)
+    plan, marks = pr.plan(10_000, 40_000)
+    assert marks and marks[0][1] == 1 and abs(marks[0][0] - 15_000) <= 250
+    played = []
+    for t in range(10_000, 40_000, 50):
+        pr.tick(t)
+        played.append((t, pr.runner.position(t)))
+    for t, pos in played[::10]:
+        assert pos == pytest.approx(P.position_at(plan, t), abs=1)
+
+
+def test_sync_does_not_resend_unchanged_move():
+    class Dev(SimulatedDevice):
+        moves = 0
+
+        def move(self, pos, ms):
+            Dev.moves += 1
+            super().move(pos, ms)
+
+    dev = Dev()
+    dev.connect()
+    sync = ScriptSync(dev, SyncSettings(max_speed=0))
+    acts = [P.Action(0, 0), P.Action(5000, 100), P.Action(9000, 0), P.Action(10000, 100)]
+    sync.set_actions(acts)
+    for t in range(0, 6000, 100):
+        sync.tick(t, True)        # past the approach, under way to 0 at 9 s
+    n = Dev.moves
+    sync.set_actions(acts[:3] + [P.Action(10000, 50)])    # only a later point changed
+    sync.tick(6100, True)
+    assert Dev.moves == n
+    sync.set_actions(acts[:2] + [P.Action(9000, 20), P.Action(10000, 100)])   # the move under way changed
+    sync.tick(6200, True)
+    assert Dev.moves == n + 1
+
+
+def test_random_step_never_nearly_flat():
+    import random
+    rng = random.Random(3)
+    for _ in range(300):
+        st = P.random_step(rng, "alles", (40, 100), (10, 100))
+        p = st.part(_lookup(st.pattern))
+        assert P.travel(p) * st.depth >= min(P.MIN_TRAVEL, P.travel(p) * 100) - 1

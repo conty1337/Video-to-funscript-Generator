@@ -563,7 +563,21 @@ def random_step(rng, mood: str = "gemischt", bpm: tuple[int, int] | None = None,
     if n > 2 and rng.random() < 0.3:              # now and then only a part of the pattern
         first = rng.randint(1, n - 1)
         end = rng.randint(first, n)
-    return Step(p.name, mins, rng.randint(b0, b1), rng.randint(d0, max(d0, d1)), first, end)
+    st = Step(p.name, mins, rng.randint(b0, b1), rng.randint(d0, max(d0, d1)), first, end)
+    span = travel(st.part(p))
+    if span > 0:                                  # never a nearly flat line: at least MIN_TRAVEL of the stroke
+        need = int(-(-MIN_TRAVEL // span))
+        st.depth = max(st.depth, min(max(d0, d1), need))
+    return st
+
+
+MIN_TRAVEL = 25           # % of the full stroke a random step moves at least (if its depth range allows)
+
+
+def travel(p: Pattern) -> float:
+    """How much of the stroke range the pattern itself uses (0..1)."""
+    fs = [f for _, f in segments(p, 60)]
+    return (max(fs) - min(fs)) if fs else 0.0
 
 
 def random_program(mood: str = "gemischt", bpm: tuple[int, int] | None = None,
@@ -582,6 +596,19 @@ def random_program(mood: str = "gemischt", bpm: tuple[int, int] | None = None,
         last = st.pattern
         t += st.minutes
     return Program("Zufall", steps, loop=True, smooth=True)
+
+
+class _NullSync:
+    """Stands in for a ScriptSync when a runner is only played ahead for a preview."""
+
+    def set_actions(self, actions) -> None:
+        pass
+
+    def tick(self, now, playing) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
 
 
 class ProgramRunner:
@@ -689,6 +716,37 @@ class ProgramRunner:
             self.start_ms += total * ((now - self.start_ms) // total)
         self._apply(now)
         self.runner.tick(now)
+
+    def plan(self, now: float, end: float, step_ms: float = 250) -> tuple[list[Action], list[tuple[float, int]]]:
+        """What will really be played from now to `end`, glides and step changes included:
+        a copy of this runner is played ahead without a device. Returns the moves and the
+        (time, step) of each step change."""
+        if not self.running or not self.program:
+            return [], []
+        sim = ProgramRunner(_NullSync(), self.lookup)
+        for k in ("program", "start_ms", "index", "offset_bpm", "offset_depth", "loops", "_applied", "_applied_at"):
+            setattr(sim, k, getattr(self, k))
+        r, src = sim.runner, self.runner
+        r.pattern, r.bpm, r.lo, r.hi, r.anchor = src.pattern, src.bpm, src.lo, src.hi, src.anchor
+        r.acts, r._segs, r.running = list(src.acts), list(src._segs), True
+        r.AHEAD_MS = 6000
+        out = [a for a in src.acts if a.at <= now]
+        marks: list[tuple[float, int]] = []
+        t, idx = now, sim.index
+        while t < end and sim.running:
+            t += step_ms
+            sim.tick(t)
+            if sim.index != idx and sim.running:
+                marks.append((t, sim.index))
+                idx = sim.index
+            # moves up to the next one under way can no longer change
+            nxt = next((a.at for a in r.acts if a.at > t), None)
+            fixed_to = nxt if nxt is not None else t
+            last = out[-1].at if out else -1e18
+            out += [a for a in r.acts if last < a.at <= fixed_to]
+        last = out[-1].at if out else -1e18
+        out += [a for a in r.acts if a.at > last and a.at <= end + 1000]
+        return out, marks
 
     def current(self, now: float) -> tuple[float, float] | None:
         """Tempo and depth playing now (with offsets)."""

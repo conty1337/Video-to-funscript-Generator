@@ -57,9 +57,17 @@ class ScriptSync:
         self._reset()
 
     def set_actions(self, actions: list[Action]) -> None:
+        prev = (self.actions[self._target_idx]
+                if self._target_idx is not None and self._target_idx < len(self.actions) else None)
         self.actions = list(actions)
         self._times = [a.at for a in self.actions]
         self._target_idx = None
+        if prev is not None:
+            # the move under way is unchanged: do not send it again (a resent command makes
+            # the device start that move anew, which feels like a hitch)
+            i = bisect.bisect_left(self._times, prev.at)
+            if i < len(self.actions) and self.actions[i].at == prev.at and self.actions[i].pos == prev.pos:
+                self._target_idx = i
 
     def _reset(self) -> None:
         self._last_t = None
