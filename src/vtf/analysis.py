@@ -84,6 +84,7 @@ class AnalysisSettings:
     track_start_ms: int = 0
     track_sections: tuple = ()            # TrackSection, ... (mode "track"); wins over track_boxes
     track_turn: bool = True               # areas follow turning and size, not only moving
+    track_anchor: bool = False            # areas 2 and 3 stay put (only follow the camera)
 
     def sections(self) -> tuple:
         if self.track_sections:
@@ -101,6 +102,7 @@ class AnalysisSettings:
         if d["mode"] == "flow":       # same key as before tracking existed: old caches stay valid
             d.pop("mode")
             d.pop("track_turn")
+            d.pop("track_anchor")
         else:
             d.pop("roi")
             # calibration is applied when generating, it does not need a new analysis
@@ -386,7 +388,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                 boxes = sections[sec].boxes[:MAX_AREAS]
                 boxes_px = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h, *b[4:5]) for b in boxes]
                 tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur,
-                                       turn=settings.track_turn)
+                                       turn=settings.track_turn, anchor=settings.track_anchor)
                 active = sec
                 d = np.zeros(2)
             else:
