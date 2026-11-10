@@ -1585,7 +1585,9 @@ class MainWindow(QMainWindow):
             "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
             "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
             "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
-            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"
+            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"            "Zufall wechselt selbst, Musik folgt dem Takt der Musik am PC.\n\n"
+            "Gerät-Menü: Einrichtungs-Assistent, Handy-Fernbedienung, Andere Player (mpv, VLC, VR).\n"
+            "Im Fenster „Gerät“: Sicherheits-Timer (abschaltbar), Vibration folgt Tempo/Tiefe.\n"
             "Eigene Muster gibt es auch bei Strg+T.\n\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 

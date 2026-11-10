@@ -78,7 +78,8 @@ Muster-Steuerung für einen Bereich ein.
 ## Abspielen
 
 - **Gerät**: Intiface Central starten → „Start Server“ → in der App
-  **Gerät** (Strg+D) → Verbinden. Ohne Gerät: „Simulation“.
+  **Gerät** (Strg+D) → Verbinden. Beim ersten Mal am besten Gerät →
+  **Einrichtungs-Assistent**. Ohne Gerät: „Simulation“.
 - **Player** (Strg+P): Videos in die Playlist ziehen, „Playlist abspielen“.
   Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown.
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
@@ -92,6 +93,15 @@ Muster-Steuerung für einen Bereich ein.
   eigener Dauer, eigenem Tempo und eigener Tiefe, z.B. eine Stunde vom
   langsamen Start bis zum Ende. Pro Schritt lässt sich mit „Teil“ auch nur ein
   Stück eines Musters nehmen.
+- **Zufall** und **Musik** (in der Muster-Steuerung oben links): Zufall wechselt
+  selbst Muster, Tempo und Tiefe. Bei Musik folgt das Gerät dem Takt der Musik,
+  die am PC läuft.
+- **Handy** (Gerät → Handy-Fernbedienung): Adresse am Handy im Browser öffnen,
+  PIN eingeben.
+- **Andere Player** (Gerät → Andere Player): mpv, VLC, DeoVR oder HereSphere,
+  das Script liegt neben dem Video.
+- **Sicherheits-Timer** (im Fenster „Gerät“, abschaltbar): Stopp nach X Minuten,
+  Stopp ohne Bedienung, Pausen.
 - **Esc** stoppt das Gerät sofort.
 
 ## Wenn etwas nicht passt

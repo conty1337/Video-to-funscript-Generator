@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.9.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 0.10.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
@@ -89,5 +89,41 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
 - [x] **Abläufe** (0.9): Schritte mit Muster (ganz oder Teil), Dauer, Tempo
       und Tiefe, weiche Übergänge, Schleife; Vorlagen bis zu einer Stunde.
       Mehr Muster (56).
-- [ ] **Andere Player**: Scripts auch zu Videos aus anderen Playern (Browser,
-      VLC) auf dem Gerät abspielen.
+
+## Phase 5 (0.10.0)
+
+- [x] **Handy-Fernbedienung**: Webseite im Heimnetz mit PIN (nur Python-Standardbibliothek),
+      Start/Stopp, Not-Aus, Muster/Ablauf/Zufall, Tiefe, Tempo, Schritte.
+- [x] **Einrichtungs-Assistent**: Verbinden, Richtung, Hubbereich (fährt live
+      an die Grenze), Höchsttempo in Stufen, Verzögerung mit Blink-Takt und Klick.
+- [x] **Sicherheits-Timer** (abschaltbar, standardmäßig aus): Höchstdauer, Stopp
+      ohne Bedienung, Pausen mit automatischem Weiter.
+- [x] **Musik-Modus**: Schlagerkennung live vom Systemton (parec/pw-record) oder
+      Mikrofon, Tempo-Schätzung und Vorhersage. **Script aus Musik** für die
+      Tonspur eines Videos.
+- [x] **Andere Player**: mpv (IPC), VLC (Weboberfläche), DeoVR und HereSphere
+      (DeoVR-Fernsteuerung), Script neben dem Video oder im Script-Ordner.
+- [x] **Zufallsgenerator**: Stimmung, Bereiche, Wechselzeit, neu gewürfelt bei jedem Start.
+- [x] **Andere Geräte**: Vibratoren über Intiface (ScalarCmd, Stärke aus Tempo
+      oder Tiefe), TCode-Geräte (OSR2/SR6) über USB oder UDP mit allen sechs Achsen.
+
+## Für später
+
+- [ ] **Automatisches Tracking per KI (Pose-Erkennung)**: Die App findet
+      Körperteile selbst, statt dass man Kästchen zieht. Dafür braucht es
+      **keine API und keine große KI**: Haltungsmodelle wie MediaPipe Pose,
+      RTMPose oder MoveNet sind klein (etwa 5–30 MB), laufen lokal auf der CPU
+      mit 10–30 Bildern pro Sekunde und lassen sich über OpenCV (ONNX)
+      einbauen. Das AppImage würde dadurch etwas größer. Offene Punkte: Die
+      Modelle sind auf normale Körperhaltungen trainiert, bei Nahaufnahmen
+      und verdeckten Körpern werden sie ungenau. Deshalb eher als Vorschlag für
+      die Kästchen, die man dann korrigiert. Lizenzen prüfen: MediaPipe und
+      RTMPose Apache-2.0 (gut), YOLO-Pose AGPL (ungünstig).
+- [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,
+      Suche und Bewertung, Doppelklick spielt ab.
+- [ ] **Script-Qualitätsprüfung**: warnt vor zu schnellen Stellen, Lücken,
+      Zittern und Abschnitten ohne Bewegung, mit Sprung zur Stelle.
+- [ ] **Sitzungs-Statistik**: Dauer, Hübe, Lieblingsmuster (nur lokal).
+- [ ] **Browser-Videos** (Erweiterung oder Bookmarklet), um Scripts auch zu
+      Videos im Browser zu spielen.
+- [ ] **QR-Code** für die Handy-Fernbedienung statt Adresse abtippen.
