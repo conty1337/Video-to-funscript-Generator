@@ -417,10 +417,16 @@ Eigene Abläufe liegen in `~/.config/video-to-funscript/programs.json`.
 ### Zufall und Musik
 
 - **Zufall**: wechselt Muster, Tempo und Tiefe von selbst, nie zweimal dasselbe
-  Muster hintereinander, manchmal nur ein Stück davon. Du wählst eine Stimmung
-  (ruhig, gemischt, intensiv), die Bereiche für Tempo und Tiefe und wie oft
-  gewechselt wird (z.B. alle 1–3 Minuten). Bei jedem Start wird neu gewürfelt,
-  nach jeder Stunde kommt eine neue.
+  Muster hintereinander, manchmal nur ein Stück davon. Jeder Abschnitt wird
+  **live gewürfelt**, wenn er drankommt. Alles lässt sich beim Abspielen ändern:
+  - Eine neue **Stimmung** (Ruhig, Gemischt, Intensiv oder **Alles** mit allen
+    Mustern) wechselt sofort in einen neuen Abschnitt.
+  - Neue **Bereiche** für Tempo und Tiefe ziehen den laufenden Abschnitt gleich
+    mit hinein.
+  - Die **Wechselzeit** (z.B. alle 1–3 Minuten) gilt ab dem nächsten Abschnitt.
+  - „Neu würfeln“ bzw. Bild↓/RB springt sofort weiter.
+
+  Auch vom Handy aus lässt sich die Stimmung wechseln.
 - **Musik**: Das Gerät folgt dem Takt der Musik, die gerade auf dem PC läuft
   (Spotify, YouTube, …), oder dem, was das Mikrofon hört. Die App erkennt die
   Schläge, schätzt das Tempo und sagt die nächsten Schläge voraus, so ist das

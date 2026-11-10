@@ -190,3 +190,16 @@ def test_random_program():
     own = P.Pattern("Meins", [P.Block()])
     d = P.random_program("gemischt", seed=3, total_minutes=600, extra=[own])
     assert any(st.pattern == "Meins" for st in d.steps)
+
+
+def test_random_step_and_moods():
+    import random
+
+    rng = random.Random(5)
+    every = {st.pattern for st in (P.random_step(rng, "alles", last=None) for _ in range(400))}
+    intense = {p.name for p in P.BUILTIN if p.category == "Intensiv"}
+    assert every & intense                               # "Alles" includes everything
+    calm = {P.random_step(rng, "ruhig").pattern for _ in range(200)}
+    assert not calm & intense
+    st = P.random_step(rng, "gemischt", bpm=(90, 90), depth=(70, 70), minutes=(2, 2), last="Welle")
+    assert (st.bpm, st.depth, st.minutes) == (90, 70, 2) and st.pattern != "Welle"

@@ -989,6 +989,24 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     d.stop()
     d.start()
     assert d.random_prog is not first
+    # live: only the current and the next step exist, the next is rolled when a step starts
+    pr = d.random_prog
+    assert len(pr.steps) == 2
+    d.prunner.start_ms -= pr.steps[0].minutes * 60_000 + 10
+    d._tick()
+    assert d.prunner.index == 1 and len(pr.steps) == 3
+    assert len(d.pview.program.steps) == 2               # the view shows this step and the next
+    # ranges changed while playing: the running step moves into them, the next is rolled anew
+    d.r_bpm0.setValue(200)
+    d.r_bpm1.setValue(210)
+    assert 200 <= pr.steps[d.prunner.index].bpm <= 210 and 200 <= pr.steps[-1].bpm <= 210
+    # a new mood switches to a new step right away
+    i = d.prunner.index
+    d.mood.setCurrentIndex(d.mood.findData("alles"))
+    assert d.prunner.index == i + 1 and d.running
+    for _ in range(4):
+        d.step_pattern(1)                                # skipping ahead rolls as needed
+    assert d.prunner.index == i + 5 and len(pr.steps) == i + 7
     d.stop()
     d.set_mode(0)
     d.close()
@@ -1210,4 +1228,22 @@ def test_multi_axis_tcode(app):
     assert ctl.axis_syncs == {}
     os.close(master)
     os.close(slave)
+    w.close()
+
+
+def test_remote_random_mood(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    rc = w.remote
+    rc._handle({"cmd": "mode", "mode": 2})
+    d = w.pattern_dialog
+    rc._handle({"cmd": "start"})
+    i = d.prunner.index
+    rc._handle({"cmd": "mood", "mood": "intensiv"})
+    assert d.mood.currentData() == "intensiv" and d.prunner.index == i + 1
+    assert rc._state["mood"] == "intensiv" and ["alles", "Alles"] in rc._state["moods"]
+    rc._handle({"cmd": "stop"})
+    d.set_mode(0)
     w.close()

@@ -103,7 +103,8 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
       Tonspur eines Videos.
 - [x] **Andere Player**: mpv (IPC), VLC (Weboberfläche), DeoVR und HereSphere
       (DeoVR-Fernsteuerung), Script neben dem Video oder im Script-Ordner.
-- [x] **Zufallsgenerator**: Stimmung, Bereiche, Wechselzeit, neu gewürfelt bei jedem Start.
+- [x] **Zufallsgenerator**: live gewürfelt pro Abschnitt, Stimmungen inkl. „Alles“, Bereiche und
+      Wechselzeit beim Abspielen änderbar, Stimmung auch vom Handy.
 - [x] **Andere Geräte**: Vibratoren über Intiface (ScalarCmd, Stärke aus Tempo
       oder Tiefe), TCode-Geräte (OSR2/SR6) über USB oder UDP mit allen sechs Achsen.
 

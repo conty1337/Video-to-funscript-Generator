@@ -179,7 +179,13 @@ section{margin-top:24px}
 .seg button{flex:1;min-height:36px;border:0;border-radius:8px;background:transparent;color:var(--t2);
 transition:background-color .15s var(--ease),color .15s var(--ease)}
 .seg button.on{background:var(--raised);color:var(--text);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
-.pickrow{display:flex;gap:8px;margin-top:8px}
+.pickrow{display:flex;gap:8px;margin-top:8px;justify-content:space-between}
+.moods{margin-top:8px}
+.wide{width:100%;min-height:44px;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px;
+border:1px solid var(--line);border-radius:10px;background:var(--raised);color:var(--text);
+transition:background-color .15s var(--ease),transform .12s var(--ease)}
+.wide:active{transform:scale(.97)}
+.wide svg{color:var(--t2)}
 select{flex:1;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--raised);
 padding:0 12px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 background-repeat:no-repeat;background-position:right 12px center;background-size:16px}
@@ -260,6 +266,8 @@ placeholder="······">
 <select id="pick" aria-label="Auswahl"></select>
 <button class="icon" aria-label="Weiter" onclick="cmd({cmd:'step',d:1})"><svg class="i"><use href="#i-fwd"/></svg></button>
 </div>
+<div class="seg moods hidden" id="moods"></div>
+<button class="wide hidden" id="next" onclick="cmd({cmd:'step',d:1})"><svg class="i"><use href="#i-fwd"/></svg>Nächster Abschnitt</button>
 </section>
 
 <section>
@@ -316,11 +324,16 @@ const play=$('play');play.classList.toggle('running',st.running);
 play.querySelector('use').setAttribute('href',st.running?'#i-pause':'#i-play');
 play.querySelector('span').textContent=st.running?'Stopp':'Start';
 $('sub').textContent=st.sub||'';$('step').textContent=st.step||'';$('time').textContent=st.time||'';$('safety').textContent=st.safety||'';
-$('hint').textContent=st.mode==1||st.mode==2?'Im Ablauf und bei Zufall verschiebt das den ganzen Plan':'';
+$('hint').textContent=st.mode==1?'Verschiebt den ganzen Ablauf':st.mode==2?'Gilt für alle Abschnitte, auch die nächsten':'';
 const ck=JSON.stringify(st.curve||[]);if(ck!==curveKey){curveKey=ck;drawCurve(st.curve)}
 document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',+b.dataset.m==st.mode));
 const items=st.mode==0?st.patterns:st.mode==1?st.programs:[];const key=st.mode+'|'+items.join('|');
-$('pick').parentElement.classList.toggle('hidden',st.mode>=2);
+$('pick').parentElement.classList.toggle('hidden',st.mode>=2);$('next').classList.toggle('hidden',st.mode!=2);
+$('moods').classList.toggle('hidden',st.mode!=2);
+if(st.mode==2&&st.moods){const mk=st.moods.map(m=>m[0]).join('|');if(mk!==$('moods').dataset.k){
+$('moods').dataset.k=mk;$('moods').innerHTML=st.moods.map(m=>'<button data-mood="'+esc(m[0])+'">'+esc(m[1])+
+'</button>').join('');$('moods').querySelectorAll('button').forEach(b=>b.onclick=()=>cmd({cmd:'mood',mood:b.dataset.mood}))}
+$('moods').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.mood==st.mood))}
 if(key!=listKey){listKey=key;$('pick').innerHTML=items.map(n=>'<option>'+esc(n)+'</option>').join('')}
 if(document.activeElement!==$('pick'))$('pick').value=st.name;
 if(Date.now()-drag>1500){$('depth').value=st.depth;$('bpm').value=st.bpm}

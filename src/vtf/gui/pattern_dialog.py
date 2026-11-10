@@ -205,7 +205,8 @@ class PatternDialog(QDialog):
         rl = QVBoxLayout(page)
         rl.setContentsMargins(0, 8, 0, 0)
         rl.setSpacing(8)
-        cap = QLabel("Wechselt Muster, Tempo und Tiefe von selbst. Bei jedem Start wird neu gewürfelt.")
+        cap = QLabel("Wechselt Muster, Tempo und Tiefe von selbst. Jeder Abschnitt wird erst gewürfelt, wenn er "
+                     "drankommt. Alles hier wirkt sofort, auch beim Abspielen.")
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         rl.addWidget(cap)
@@ -548,26 +549,63 @@ class PatternDialog(QDialog):
             sp.blockSignals(True)
             sp.setValue(v)
             sp.blockSignals(False)
-        self._random_changed()
+        self._save_random()
+        self.reroll(restart=True)                  # a new mood is felt right away
 
-    def _random_changed(self, *_):
+    def _save_random(self):
         for k, v in (("r_mood", self.mood.currentData()), ("r_bpm0", self.r_bpm0.value()),
                      ("r_bpm1", self.r_bpm1.value()), ("r_d0", self.r_d0.value()), ("r_d1", self.r_d1.value()),
                      ("r_m0", self.r_m0.value()), ("r_m1", self.r_m1.value()),
                      ("r_own", "true" if self.r_own.isChecked() else "false")):
             self.qs.setValue(f"pattern/{k}", v)
-        if not (self.mode == 2 and self.running):
+
+    def _random_changed(self, *_):
+        """Ranges changed: the running step moves into them now, the next step is rolled anew."""
+        self._save_random()
+        if not (self.mode == 2 and self.prunner.running and self.random_prog is not None):
             self.reroll()
+            return
+        pr, i = self.random_prog, self.prunner.index
+        if 0 <= i < len(pr.steps):
+            st = pr.steps[i]
+            b0, b1 = sorted((self.r_bpm0.value(), self.r_bpm1.value()))
+            d0, d1 = sorted((self.r_d0.value(), self.r_d1.value()))
+            st.bpm = int(min(b1, max(b0, st.bpm)))
+            st.depth = int(min(d1, max(d0, st.depth)))
+        del pr.steps[i + 1:]
+        self._roll_next()
+        self._show_program(pr)
+
+    def _roll(self, last: str | None) -> P.Step:
+        return P.random_step(self._rng, self.mood.currentData(), (self.r_bpm0.value(), self.r_bpm1.value()),
+                             (self.r_d0.value(), self.r_d1.value()), (self.r_m0.value(), self.r_m1.value()),
+                             last, self.user if self.r_own.isChecked() else None)
+
+    def _roll_next(self):
+        pr = self.random_prog
+        pr.steps.append(self._roll(pr.steps[-1].pattern if pr.steps else None))
 
     def reroll(self, restart: bool = False):
-        self.random_prog = P.random_program(
-            self.mood.currentData(), (self.r_bpm0.value(), self.r_bpm1.value()),
-            (self.r_d0.value(), self.r_d1.value()), (self.r_m0.value(), self.r_m1.value()),
-            total_minutes=60, extra=self.user if self.r_own.isChecked() else None)
+        """Live random: a program that only knows the current and the next step;
+        each further step is rolled when the previous one starts."""
+        import random
+
+        if not hasattr(self, "_rng"):
+            self._rng = random.Random()
+        running = self.mode == 2 and self.prunner.running and self.random_prog is not None
+        if running:
+            pr, i = self.random_prog, self.prunner.index
+            del pr.steps[i + 1:]
+            self._roll_next()
+            if restart:
+                self.prunner.skip(self._now(), 1)  # straight into the new step
+                self._roll_next()
+        else:
+            self.random_prog = P.Program("Zufall", [], loop=False, smooth=True)
+            self._roll_next()
+            self._roll_next()
         if self.mode == 2:
             self._show_program(self.random_prog)
-            if restart and self.running:
-                self.prunner.start(self._now(), self.random_prog)
 
     def current(self) -> P.Pattern | None:
         it = self.list.currentItem()
@@ -686,6 +724,11 @@ class PatternDialog(QDialog):
             return
         if self.mode >= 1:
             if self.prunner.running:
+                if self.mode == 2:                             # random: no wrapping around
+                    if d < 0 and self.prunner.index == 0:
+                        return
+                    while self.prunner.index + d >= len(self.random_prog.steps):
+                        self._roll_next()
                 self.prunner.skip(self._now(), d)
                 self._tick()
             return
@@ -807,6 +850,7 @@ class PatternDialog(QDialog):
                 "title": f"{titles[self.mode]}: {name}" if self.mode < 2 else "Zufall · " + self.mood.currentText(),
                 "bpm": bpm, "depth": depth, "now": self.pnow.text() if self.mode else "",
                 "curve": curve, "sub": sub, **self._remote_progress(now),
+                "mood": self.mood.currentData(), "moods": [[k, v[0]] for k, v in P.MOODS.items()],
                 "patterns": [p.name for p in self.all_patterns()],
                 "programs": [p.name for p in self.all_programs()]}
 
@@ -819,7 +863,7 @@ class PatternDialog(QDialog):
         if self.mode == 2:
             st = pr.steps[self.prunner.index]
             left = pr.starts()[self.prunner.index] + st.minutes * 60_000 - el
-            return {"step": "Zufall", "time": f"Wechsel in {_fmt_min(left)}"}
+            return {"step": f"Abschnitt {self.prunner.index + 1}", "time": f"Wechsel in {_fmt_min(left)}"}
         return {"step": f"Schritt {self.prunner.index + 1} von {len(pr.steps)}",
                 "time": f"{_fmt_min(el)} / {_fmt_min(pr.total_ms)}"}
 
@@ -882,6 +926,10 @@ class PatternDialog(QDialog):
                     self._select_program(name)
             elif cmd == "step":
                 self.step_pattern(int(c.get("d", 1)))
+            elif cmd == "mood":
+                i = self.mood.findData(str(c.get("mood", "")))
+                if i >= 0:
+                    self.mood.setCurrentIndex(i)
         except (TypeError, ValueError):
             pass
 
@@ -1057,7 +1105,7 @@ class PatternDialog(QDialog):
             self.ptitle.setText("Zufall · " + self.mood.currentText())
             self.pinfo.setText(f"wechselt alle {self.r_m0.value():g}–{self.r_m1.value():g} min · "
                                f"Tempo {self.r_bpm0.value()}–{self.r_bpm1.value()} · "
-                               f"Tiefe {self.r_d0.value()}–{self.r_d1.value()} % · würfelt bei jedem Start neu"
+                               f"Tiefe {self.r_d0.value()}–{self.r_d1.value()} % · würfelt jeden Abschnitt neu"
                                .replace(".", ","))
         else:
             self.ptitle.setText(pr.name)
@@ -1221,18 +1269,24 @@ class PatternDialog(QDialog):
             self._music_tick()
             return
         if self.prunner.running or self.prunner.finished:
+            if self.mode == 2 and self.prunner.running and self.random_prog is not None:
+                if self.prunner.step_at(self.prunner.elapsed(now)) >= len(self.random_prog.steps) - 1:
+                    self._roll_next()                          # live: roll the step after this one
             self.prunner.tick(now)
             if self.prunner.finished:
                 self.prunner.finished = False
                 self.stop()
                 self.pnow.setText("Ablauf fertig.")
                 return
-            if self.mode == 2 and self.prunner.loops > 0:      # random: a fresh hour after each one
-                self.reroll(restart=True)
             pr = self.prunner.program
             el = self.prunner.elapsed(now)
-            self.pview.set_elapsed(el)
             st = pr.steps[self.prunner.index]
+            if self.mode == 2:                                 # show only this step and the next
+                i = self.prunner.index
+                self.pview.set_program(P.Program("Zufall", pr.steps[i:i + 2]))
+                self.pview.set_elapsed(el - pr.starts()[i])
+            else:
+                self.pview.set_elapsed(el)
             bpm, depth = self.prunner.current(now)
             if self.mode == 2:
                 left = pr.starts()[self.prunner.index] + st.minutes * 60_000 - el

@@ -469,44 +469,63 @@ BUILTIN_PROGRAMS: list[Program] = [
 ]
 
 
-#: moods for the random generator: label, pattern groups (None = all but "Intensiv"),
-#: tempo range, depth range
+#: moods for the random generator: label, pattern groups (None = all but "Intensiv",
+#: "*" = really all), tempo range, depth range
 MOODS = {
     "ruhig": ("Ruhig", ("Grundlagen", "Necken", "Steigerung"), (30, 60), (40, 80)),
     "gemischt": ("Gemischt", None, (40, 100), (50, 100)),
     "intensiv": ("Intensiv", ("Intensiv", "Rhythmus", "Mehr Rhythmus", "Steigerung", "Mehr Steigerung"),
                  (70, 150), (80, 100)),
+    "alles": ("Alles", "*", (30, 150), (40, 100)),
 }
+
+
+def mood_pool(mood: str, extra: list[Pattern] | None = None) -> list[Pattern]:
+    cats = MOODS.get(mood, MOODS["gemischt"])[1]
+    if cats == "*":
+        pool = list(BUILTIN)
+    elif cats:
+        pool = [p for p in BUILTIN if p.category in cats]
+    else:
+        pool = [p for p in BUILTIN if p.category != "Intensiv"]
+    return pool + [p for p in (extra or []) if p.blocks]
+
+
+def random_step(rng, mood: str = "gemischt", bpm: tuple[int, int] | None = None,
+                depth: tuple[int, int] | None = None, minutes: tuple[float, float] = (1.0, 3.0),
+                last: str | None = None, extra: list[Pattern] | None = None) -> Step:
+    """One random step: a pattern from the mood (sometimes only a part of it, never
+    the same as `last`), tempo and depth within the ranges, a random duration."""
+    _label, _cats, mood_bpm, mood_depth = MOODS.get(mood, MOODS["gemischt"])
+    b0, b1 = sorted(bpm or mood_bpm)
+    d0, d1 = sorted(depth or mood_depth)
+    m0, m1 = sorted(minutes)
+    pool = mood_pool(mood, extra) or list(BUILTIN)
+    p = rng.choice([x for x in pool if x.name != last] or pool)
+    mins = round(rng.uniform(max(0.25, m0), max(0.25, m1)) * 4) / 4
+    first, end = 1, 0
+    n = len(p.blocks)
+    if n > 2 and rng.random() < 0.3:              # now and then only a part of the pattern
+        first = rng.randint(1, n - 1)
+        end = rng.randint(first, n)
+    return Step(p.name, mins, rng.randint(b0, b1), rng.randint(d0, max(d0, d1)), first, end)
 
 
 def random_program(mood: str = "gemischt", bpm: tuple[int, int] | None = None,
                    depth: tuple[int, int] | None = None, minutes: tuple[float, float] = (1.0, 3.0),
                    total_minutes: float = 240, seed: int | None = None,
                    extra: list[Pattern] | None = None) -> Program:
-    """An endless-feeling program: random patterns (sometimes only a part of one),
-    tempo and depth within the ranges, each for a random time. Loops at the end."""
+    """A whole random plan in advance (the live generator rolls step by step instead)."""
     import random
 
     rng = random.Random(seed)
-    _label, cats, mood_bpm, mood_depth = MOODS.get(mood, MOODS["gemischt"])
-    b0, b1 = sorted(bpm or mood_bpm)
-    d0, d1 = sorted(depth or mood_depth)
-    m0, m1 = sorted(minutes)
-    pool = [p for p in BUILTIN if (p.category in cats if cats else p.category != "Intensiv")]
-    pool += list(extra or [])
     steps: list[Step] = []
     t, last = 0.0, None
-    while t < total_minutes and pool:
-        p = rng.choice([x for x in pool if x.name != last] or pool)
-        last = p.name
-        mins = round(rng.uniform(max(0.25, m0), max(0.25, m1)) * 4) / 4
-        first, end = 1, 0
-        n = len(p.blocks)
-        if n > 2 and rng.random() < 0.3:          # now and then only a part of the pattern
-            first = rng.randint(1, n - 1)
-            end = rng.randint(first, n)
-        steps.append(Step(p.name, mins, rng.randint(b0, b1), rng.randint(d0, max(d0, d1)), first, end))
-        t += mins
+    while t < total_minutes:
+        st = random_step(rng, mood, bpm, depth, minutes, last, extra)
+        steps.append(st)
+        last = st.pattern
+        t += st.minutes
     return Program("Zufall", steps, loop=True, smooth=True)
 
 
