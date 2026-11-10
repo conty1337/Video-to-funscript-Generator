@@ -36,7 +36,7 @@ from .. import music as M
 from .. import patterns as P
 from ..device.sync import ScriptSync
 from . import theme
-from .pattern_view import PatternView, ProgramView, _fmt_min, block_icon, pattern_icon
+from .pattern_view import LiveStrip, PatternView, ProgramView, _fmt_min, block_icon, pattern_icon
 
 ROLE = Qt.UserRole + 1
 
@@ -311,6 +311,8 @@ class PatternDialog(QDialog):
         self.info.setObjectName("caption")
         right.addWidget(self.info)
         self.view = PatternView(cycles=2)
+        self.view.setMinimumHeight(120)
+        self.view.setMaximumHeight(220)
         right.addWidget(self.view, 1)
 
         form = QFormLayout()
@@ -353,6 +355,8 @@ class PatternDialog(QDialog):
         self.pinfo.setObjectName("caption")
         pr.addWidget(self.pinfo)
         self.pview = ProgramView(self.find_pattern)
+        self.pview.setMinimumHeight(110)
+        self.pview.setMaximumHeight(150)          # overview; the live strip below shows real scale
         pr.addWidget(self.pview, 1)
         self.pnow = QLabel("")
         self.pnow.setObjectName("value")
@@ -389,6 +393,7 @@ class PatternDialog(QDialog):
         mr.addWidget(t)
         from .setup_wizard import Flash
         self.m_flash = Flash()
+        self.m_flash.setMaximumHeight(160)
         mr.addWidget(self.m_flash, 1)
         self.m_info = QLabel("Start drücken und Musik abspielen.")
         self.m_info.setObjectName("value")
@@ -424,6 +429,9 @@ class PatternDialog(QDialog):
         self._last_flash = -1e9
         right = outer
 
+        self.live = LiveStrip()                   # real-scale, scrolling, in every mode
+        self._hist: deque = deque()
+        right.insertWidget(1, self.live, 2)
         self.pad_label = QLabel()
         self.pad_label.setObjectName("caption")
         self.pad_label.setWordWrap(True)
@@ -541,6 +549,7 @@ class PatternDialog(QDialog):
             self._show_program(self.random_prog)
         elif mode == 1:
             self._prog_selected()
+        self._update_live()
 
     def active_program(self) -> P.Program | None:
         return self.random_prog if self.mode == 2 else self.current_program()
@@ -678,6 +687,7 @@ class PatternDialog(QDialog):
         self._update_info()
         self.view.set_pattern(p, self.bpm.value(), *self.stroke_range())
         self.runner.configure(self._now(), pattern=p)
+        self._update_live()
 
     def _update_info(self):
         p = self.current()
@@ -705,6 +715,7 @@ class PatternDialog(QDialog):
             self._depth_f = float(depth)
         self.view.set_pattern(self.current(), bpm, *self.stroke_range())
         self._update_info()
+        self._update_live()
         if self.running:
             if not self._apply_timer.isActive():
                 self._apply_timer.start()
@@ -749,6 +760,74 @@ class PatternDialog(QDialog):
         cur = self.list.currentRow()
         pos = rows.index(cur) if cur in rows else -1
         self.list.setCurrentRow(rows[(pos + d) % len(rows)])
+
+    # ------------------------------------------------------------ live strip
+    def _update_live(self):
+        """Feed the real-scale strip: what was played (history) and what comes."""
+        if not hasattr(self, "live"):
+            return
+        before, after = self.live.window_ms()
+        if self.mode == 3:
+            now = time.monotonic() * 1000
+            acts = self.music.acts if self.music.running else []
+            runner_pos = M.position_at(acts, now) if acts else None
+            future = [(a.at, a.pos) for a in acts]
+            marks, hint = [], "" if self.music.running else "Start drücken und Musik abspielen"
+        else:
+            now = self._now()
+            future, marks, hint = self._planned(now, after)
+            runner = self.prunner.runner if self.prunner.running else self.runner
+            runner_pos = runner.position(now) if self.running else None
+        if self.running and runner_pos is not None:
+            self._hist.append((now, runner_pos))
+        while self._hist and self._hist[0][0] < now - before - 1000:
+            self._hist.popleft()
+        if not self.running:
+            self._hist.clear()
+        self.live.set_data(now, list(self._hist), future, marks, hint)
+
+    def _planned(self, now: float, after: float):
+        """Coming moves (ms, pos) from now on, and step changes as marks."""
+        end = now + after + 1000
+        if self.mode == 0:
+            if self.runner.running:
+                acts = self.runner.acts
+            else:
+                p = self.current()
+                lo, hi = self.stroke_range()
+                acts = P.actions(p, self.bpm.value(), lo, hi, now, end) if p else []
+            return [(a.at, a.pos) for a in acts if a.at <= end], [], ""
+        pr = self.active_program()
+        if pr is None or not pr.steps:
+            return [], [], "Kein Ablauf gewählt"
+        if self.prunner.running:
+            i = self.prunner.index
+            starts = pr.starts()
+            base = self.prunner.start_ms
+            boundary = base + starts[i] + pr.steps[i].minutes * 60_000
+            pts = [(a.at, a.pos) for a in self.prunner.runner.acts if a.at < boundary]
+            marks = []
+            t, k = boundary, i + 1
+            last = pts[-1][1] if pts else 100
+            while t < end and k < len(pr.steps):      # the next steps as they will start
+                st = pr.steps[k]
+                pat = self.find_pattern(st.pattern)
+                if pat is None or not pat.blocks:
+                    break
+                bpm, depth = self.prunner.effective(st.bpm, st.depth)
+                nxt = P.actions(st.part(pat), bpm, 100 - depth, 100, t, min(end, t + st.minutes * 60_000), last)
+                pts += [(a.at, a.pos) for a in nxt]
+                marks.append((t, st.pattern))
+                last = nxt[-1].pos if nxt else last
+                t += st.minutes * 60_000
+                k += 1
+            return pts, marks, ""
+        st = pr.steps[0]                                 # not playing: how it would start
+        pat = self.find_pattern(st.pattern)
+        if pat is None or not pat.blocks:
+            return [], [], ""
+        acts = P.actions(st.part(pat), st.bpm, 100 - st.depth, 100, now, end)
+        return [(a.at, a.pos) for a in acts], [(now, st.pattern)], ""
 
     # ------------------------------------------------------------ music
     def _music_settings(self, *_):
@@ -1124,6 +1203,7 @@ class PatternDialog(QDialog):
             self.pinfo.setText(f"{'Vorlage' if pr.builtin else 'Eigener Ablauf'} · {len(pr.steps)} Schritte · "
                                f"{_fmt_min(pr.total_ms)} · {end}")
         self.pview.set_program(pr)
+        self._update_live()
 
     def _update_offsets(self):
         t, d = (int(round(v)) for v in self._offset_f)
@@ -1273,8 +1353,13 @@ class PatternDialog(QDialog):
         self.pnow.setText("")
         self.play_btn.setIcon(theme.icon("play", theme.ON_ACCENT))
         self.play_btn.setText("Start")
+        self._update_live()
 
     def _tick(self):
+        self._tick_inner()
+        self._update_live()
+
+    def _tick_inner(self):
         now = self._now()
         if self.music.running:
             self._music_tick()

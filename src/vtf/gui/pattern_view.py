@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QLineF, QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -190,11 +190,39 @@ class ProgramView(QWidget):
         self.selected = i
         self.update()
 
+    def _rect(self) -> QRectF:
+        return QRectF(self.rect()).adjusted(12, 26, -12, -40)
+
     def paintEvent(self, _ev):
+        """The steps are drawn once into a cached picture; per frame only the playhead."""
+        prog = self.program
+        cur = None
+        if prog is not None and prog.steps and self.elapsed is not None:
+            cur = max(i for i, t in enumerate(prog.starts()) if self.elapsed >= t)
+        sig = None if prog is None else tuple((st.pattern, st.minutes, st.bpm, st.depth, st.first, st.last)
+                                              for st in prog.steps)
+        key = (self.width(), self.height(), self.devicePixelRatioF(), sig, cur, self.selected)
+        if getattr(self, "_key", None) != key:
+            ratio = self.devicePixelRatioF()
+            pm = QPixmap(int(self.width() * ratio), int(self.height() * ratio))
+            pm.setDevicePixelRatio(ratio)
+            q = QPainter(pm)
+            q.setRenderHint(QPainter.Antialiasing)
+            self._paint_static(q, cur)
+            q.end()
+            self._cache, self._key = pm, key
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor(theme.CARD))
-        r = QRectF(self.rect()).adjusted(12, 26, -12, -40)
+        p.drawPixmap(0, 0, self._cache)
+        if prog is not None and prog.steps and prog.total_ms > 0 and self.elapsed is not None:
+            r = self._rect()
+            x = r.left() + r.width() * min(1.0, self.elapsed / prog.total_ms)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setPen(QPen(QColor(theme.TEXT), 1.5))
+            p.drawLine(QPointF(x, r.top() - 2), QPointF(x, r.bottom() + 2))
+
+    def _paint_static(self, p: QPainter, cur: int | None) -> None:
+        p.fillRect(QRectF(0, 0, self.width(), self.height()), QColor(theme.CARD))
+        r = self._rect()
         p.setFont(theme.mono_font(10))
         prog = self.program
         if prog is None or not prog.steps or prog.total_ms <= 0:
@@ -203,9 +231,6 @@ class ProgramView(QWidget):
             return
         total = prog.total_ms
         starts = prog.starts()
-        cur = None
-        if self.elapsed is not None:
-            cur = max(i for i, t in enumerate(starts) if self.elapsed >= t)
         for i, st in enumerate(prog.steps):
             x0 = r.left() + r.width() * starts[i] / total
             x1 = r.left() + r.width() * (starts[i] + st.minutes * 60_000) / total
@@ -234,7 +259,106 @@ class ProgramView(QWidget):
             for k, lab in enumerate((f"{st.minutes:g} min".replace(".", ","), f"{st.bpm}/min · {st.depth} %")):
                 p.drawText(QRectF(x0 + 3, r.bottom() + 3 + 15 * k, x1 - x0 - 6, 15), Qt.AlignLeft | Qt.AlignVCenter,
                            p.fontMetrics().elidedText(lab, Qt.ElideRight, w))
-        if self.elapsed is not None:
-            x = r.left() + r.width() * min(1.0, self.elapsed / total)
-            p.setPen(QPen(QColor(theme.TEXT), 1.5))
-            p.drawLine(QPointF(x, r.top() - 2), QPointF(x, r.bottom() + 2))
+
+
+def _window(pts, t0: float, t1: float) -> list:
+    """Points inside t0..t1, cut exactly at both edges (no clipping needed, which is slow
+    with antialiasing)."""
+    out = []
+    for i, (t, v) in enumerate(pts):
+        if t < t0:
+            continue
+        if not out and i > 0:
+            pt, pv = pts[i - 1]
+            out.append((t0, pv + (v - pv) * (t0 - pt) / ((t - pt) or 1)))
+        if t > t1:
+            if out:
+                pt, pv = out[-1]
+                out.append((t1, pv + (v - pv) * (t1 - pt) / ((t - pt) or 1)))
+            break
+        out.append((t, v))
+    return out
+
+
+class LiveStrip(QWidget):
+    """What the device does, in real scale, scrolling: the last seconds on the left
+    (what was played), the coming seconds on the right (what is planned), the
+    playhead in between. Fixed pixels per second, so a bigger window shows more
+    time instead of stretching. Only the visible seconds are kept."""
+
+    PX_PER_S = 90.0
+    PAST = 0.3                              # share of the width left of the playhead
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.now = 0.0
+        self.past: list = []                # (ms, pos)
+        self.future: list = []              # (ms, pos)
+        self.marks: list = []               # (ms, label): step changes
+        self.hint = ""
+        self.setMinimumHeight(140)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def sizeHint(self) -> QSize:
+        return QSize(480, 200)
+
+    def window_ms(self) -> tuple[float, float]:
+        """Visible time before and after the playhead."""
+        span = max(1.0, (self.width() - 52) / self.PX_PER_S * 1000)
+        return span * self.PAST, span * (1 - self.PAST)
+
+    def set_data(self, now: float, past, future, marks=(), hint: str = "") -> None:
+        self.now, self.past, self.future, self.marks, self.hint = now, list(past), list(future), list(marks), hint
+        self.update()
+
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(theme.CARD))
+        r = QRectF(self.rect()).adjusted(40, 20, -12, -12)
+        before, after = self.window_ms()
+        t0 = self.now - before
+        px = r.width() / (before + after)
+
+        def x(t):
+            return r.left() + (t - t0) * px
+
+        def y(v):
+            return r.bottom() - r.height() * max(0.0, min(100.0, v)) / 100
+
+        p.setFont(theme.mono_font(10))
+        for v in (0, 50, 100):
+            p.setPen(QPen(theme.qcolor(theme.TEXT, 0.06), 1))
+            p.drawLine(QPointF(r.left(), y(v)), QPointF(r.right(), y(v)))
+            p.setPen(QColor(theme.MUTED))
+            p.drawText(QRectF(0, y(v) - 8, 34, 16), Qt.AlignRight | Qt.AlignVCenter, str(v))
+        # seconds ticks
+        p.setPen(QPen(theme.qcolor(theme.TEXT, 0.04), 1))
+        first = int(t0 // 1000 + 1) * 1000
+        for t in range(first, int(self.now + after) + 1, 1000):
+            p.drawLine(QPointF(x(t), r.top()), QPointF(x(t), r.bottom()))
+        for t, label in self.marks:                  # step changes
+            if t0 <= t <= self.now + after:
+                p.setPen(QPen(theme.qcolor(theme.TEXT, 0.25), 1, Qt.DashLine))
+                p.drawLine(QPointF(x(t), r.top() - 4), QPointF(x(t), r.bottom()))
+                p.setPen(QColor(theme.TEXT_2))
+                p.drawText(QRectF(x(t) + 4, 2, 260, 16), Qt.AlignLeft | Qt.AlignVCenter, label)
+        t1 = self.now + after
+        past = self.past if self.past else []
+        future_from = self.now if self.past else t0       # while playing: planned starts at the playhead
+        for pts, color, width in ((_window(past, t0, self.now), theme.TEXT_2, 1.5),
+                                  (_window(self.future, future_from, t1), theme.ACCENT, 2.0)):
+            if len(pts) < 2:
+                continue
+            pen = QPen(QColor(color), width)
+            pen.setCapStyle(Qt.SquareCap)          # round caps cost ~60x more when antialiased
+            p.setPen(pen)
+            # single segments: an antialiased zigzag polyline is about 100x slower to stroke
+            q = [QPointF(x(t), y(v)) for t, v in pts]
+            p.drawLines([QLineF(a, b) for a, b in zip(q, q[1:])])
+        xn = x(self.now)
+        p.setPen(QPen(QColor(theme.TEXT), 1.5))
+        p.drawLine(QPointF(xn, r.top() - 4), QPointF(xn, r.bottom()))
+        if self.hint:
+            p.setPen(QColor(theme.MUTED))
+            p.drawText(r, Qt.AlignCenter, self.hint)

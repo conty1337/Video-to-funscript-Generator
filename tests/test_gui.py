@@ -1241,3 +1241,36 @@ def test_remote_random_mood(app, tmp_path, monkeypatch):
     rc._handle({"cmd": "stop"})
     d.set_mode(0)
     w.close()
+
+
+def test_live_strip_all_modes(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.pattern_view import _window
+
+    assert _window([(0, 0), (10, 100), (20, 0)], 5, 15) == [(5, 50.0), (10, 100), (15, 50.0)]
+    w = MainWindow()
+    d = w.ensure_patterns()
+    d.resize(1200, 800)
+    for mode in (0, 1, 2):
+        d.set_mode(mode)
+        assert d.live.future                          # a preview even before starting
+        d.start()
+        for _ in range(5):
+            d._tick()
+        assert d.live.past and d.live.future and d.live.now >= d.live.past[-1][0]
+        before, after = d.live.window_ms()
+        assert after > before > 0
+        d.stop()
+        assert d.live.past == []
+    d.set_mode(1)
+    d.start()
+    d.prunner.start_ms -= d.prunner.program.steps[0].minutes * 60_000 - 3000   # 3 s before the next step
+    d._tick()
+    assert d.live.marks and d.live.marks[0][1] == d.prunner.program.steps[1].pattern
+    d.stop()
+    d.set_mode(3)
+    d._update_live()
+    assert d.live.hint
+    d.set_mode(0)
+    w.close()
