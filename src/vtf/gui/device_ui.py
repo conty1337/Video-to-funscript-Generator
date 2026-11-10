@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import threading
+import time
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLayout,
                                QLineEdit, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget)
 
 from ..device import Device, DeviceError, SimulatedDevice
 from ..device.buttplug import DEFAULT_URL, ButtplugDevice
 from ..device.sync import ScriptSync, SyncSettings
+from ..safety import SafetyGuard, SafetySettings
 from . import theme
 
 KINDS = [("Simulation (ohne Gerät)", "sim"), ("Intiface Central (Bluetooth)", "intiface")]
@@ -32,6 +34,23 @@ class DeviceController(QObject):
         self.status.setFont(theme.mono_font(11))
         window.statusBar().addPermanentWidget(self.status)
         self.message.connect(self._on_message)
+        # safety timer: everything that moves the device registers as a source
+        self.sources: list = []
+        self._paused_by_safety: list = []
+        self.safety = SafetyGuard(self._load_safety())
+        self.safety.touch(self._ms())
+        self.safety_label = QLabel()
+        self.safety_label.setFont(theme.mono_font(11))
+        self.safety_label.hide()
+        window.statusBar().addPermanentWidget(self.safety_label)
+        self._safety_timer = QTimer(self)
+        self._safety_timer.setInterval(1000)
+        self._safety_timer.timeout.connect(self._safety_tick)
+        self._safety_timer.start()
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
     # ------------------------------------------------------------ settings
     def _load_sync(self) -> SyncSettings:
@@ -45,6 +64,66 @@ class DeviceController(QObject):
                     pass
         s.invert = str(self.qs.value("device/invert", "false")).lower() == "true"
         return s
+
+    def _load_safety(self) -> SafetySettings:
+        s = SafetySettings()
+        for key in SafetySettings.KEYS:
+            v = self.qs.value(f"safety/{key}")
+            if v is None:
+                continue
+            if key == "enabled":
+                s.enabled = str(v).lower() == "true"
+            else:
+                try:
+                    setattr(s, key, max(0, int(v)))
+                except (TypeError, ValueError):
+                    pass
+        return s
+
+    def save_safety(self) -> None:
+        for key in SafetySettings.KEYS:
+            v = getattr(self.safety.settings, key)
+            self.qs.setValue(f"safety/{key}", ("true" if v else "false") if key == "enabled" else v)
+
+    # ------------------------------------------------------------ safety timer
+    @staticmethod
+    def _ms() -> float:
+        return time.monotonic() * 1000
+
+    def register_source(self, src) -> None:
+        """src: safety_active() -> bool, safety_pause() -> bool, safety_resume()."""
+        if src not in self.sources:
+            self.sources.append(src)
+
+    def touch(self) -> None:
+        self.safety.touch(self._ms())
+
+    def eventFilter(self, obj, ev):
+        if ev.type() in (QEvent.KeyPress, QEvent.MouseButtonPress, QEvent.Wheel):
+            self.safety.touch(self._ms())
+        return False
+
+    def _safety_tick(self) -> None:
+        now = self._ms()
+        active = any(_call(src, "safety_active") for src in self.sources)
+        ev = self.safety.update(now, active)
+        if ev is not None:
+            if ev[0] == "stop":
+                self._paused_by_safety = []
+                self.win.emergency_stop()
+                self.message.emit(ev[1])
+            elif ev[0] == "break":
+                self._paused_by_safety = [src for src in self.sources if _call(src, "safety_pause")]
+                self.sync.stop()
+                self.message.emit(f"Sicherheits-Timer: {ev[1]} s Pause, danach geht es weiter")
+            elif ev[0] == "resume":
+                for src in self._paused_by_safety:
+                    _call(src, "safety_resume")
+                self._paused_by_safety = []
+                self.message.emit("Pause vorbei, weiter geht's")
+        text = self.safety.status(now)
+        self.safety_label.setText(text)
+        self.safety_label.setVisible(bool(text))
 
     def save_sync(self) -> None:
         s = self.sync.settings
@@ -137,6 +216,14 @@ class DeviceController(QObject):
         self.dialog.raise_()
 
 
+def _call(obj, name: str):
+    fn = getattr(obj, name, None)
+    try:
+        return fn() if fn is not None else None
+    except Exception:
+        return None
+
+
 INPUT_H = 34
 BUTTON_H = 36
 
@@ -223,6 +310,40 @@ class DeviceDialog(QDialog):
         lay.addLayout(f)
 
         lay.addSpacing(16)
+        title = QLabel("Sicherheit")
+        title.setObjectName("section")
+        lay.addWidget(title)
+        g = ctl.safety.settings
+        self.safe_on = QCheckBox("Sicherheits-Timer an")
+        self.safe_on.setChecked(g.enabled)
+        lay.addWidget(self.safe_on)
+        f = QFormLayout()
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(8)
+        self.safe_max = self._minutes(g.max_minutes, 600)
+        self.safe_idle = self._minutes(g.idle_minutes, 240)
+        self.safe_every = self._minutes(g.break_every, 240)
+        self.safe_secs = QSpinBox()
+        self.safe_secs.setRange(5, 600)
+        self.safe_secs.setSuffix(" s")
+        self.safe_secs.setValue(max(5, g.break_seconds))
+        f.addRow(self._label("Höchstens"), self._row(self.safe_max, "am Stück, dann Stopp"))
+        f.addRow(self._label("Ohne Bedienung"), self._row(self.safe_idle, "dann Stopp"))
+        f.addRow(self._label("Pause alle"), self._row(self.safe_every, "für", self.safe_secs))
+        self.safe_form = QWidget()
+        self.safe_form.setLayout(f)
+        lay.addWidget(self.safe_form)
+        cap = QLabel("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, "
+                     "Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        lay.addWidget(cap)
+        for w in (self.safe_max, self.safe_idle, self.safe_every, self.safe_secs):
+            w.valueChanged.connect(self._apply_safety)
+        self.safe_on.toggled.connect(self._apply_safety)
+        self.safe_form.setEnabled(g.enabled)
+
+        lay.addSpacing(16)
         title = QLabel("Test")
         title.setObjectName("section")
         lay.addWidget(title)
@@ -299,6 +420,43 @@ class DeviceDialog(QDialog):
         lay.addWidget(s, 1)
         lay.addWidget(lbl)
         return box, s
+
+    @staticmethod
+    def _minutes(v: int, maximum: int) -> QSpinBox:
+        sp = QSpinBox()
+        sp.setRange(0, maximum)
+        sp.setSuffix(" min")
+        sp.setSpecialValueText("aus")
+        sp.setValue(v)
+        sp.setFixedHeight(INPUT_H)
+        return sp
+
+    @staticmethod
+    def _row(*items) -> QWidget:
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        for x in items:
+            if isinstance(x, str):
+                lb = QLabel(x)
+                lb.setObjectName("caption")
+                lay.addWidget(lb)
+            else:
+                lay.addWidget(x)
+        lay.addStretch(1)
+        return w
+
+    def _apply_safety(self):
+        g = self.ctl.safety.settings
+        g.enabled = self.safe_on.isChecked()
+        g.max_minutes = self.safe_max.value()
+        g.idle_minutes = self.safe_idle.value()
+        g.break_every = self.safe_every.value()
+        g.break_seconds = self.safe_secs.value()
+        self.safe_form.setEnabled(g.enabled)
+        self.ctl.touch()
+        self.ctl.save_safety()
 
     def _apply(self):
         s = self.ctl.sync.settings

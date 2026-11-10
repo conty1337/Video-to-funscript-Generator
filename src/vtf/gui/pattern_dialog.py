@@ -112,6 +112,8 @@ class PatternDialog(QDialog):
         self.timer.setInterval(self.TICK_MS)
         self.timer.timeout.connect(self._tick)
         ctl.changed.connect(self._device_changed)
+        ctl.register_source(self)
+        self._resume = None
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -522,6 +524,8 @@ class PatternDialog(QDialog):
     _pad_was_used = False
 
     def pad_event(self, ev):
+        if not ev.init:
+            self.ctl.touch()
         if ev.kind == "axis":
             if ev.number == G.AX_DY and not ev.init and ev.value and self._axes.get(ev.number, 0) == 0:
                 self.nudge(depth=self.STEP_DEPTH if ev.value < 0 else -self.STEP_DEPTH)
@@ -745,6 +749,28 @@ class PatternDialog(QDialog):
     @property
     def running(self) -> bool:
         return self.runner.running or self.prunner.running
+
+    # safety timer source
+    def safety_active(self) -> bool:
+        return self.running
+
+    def safety_pause(self) -> bool:
+        if not self.running:
+            return False
+        now = self._now()
+        self._resume = (self.mode, self.prunner.elapsed(now) if self.prunner.running else None)
+        self.stop()
+        return True
+
+    def safety_resume(self) -> None:
+        if self._resume is None:
+            return
+        mode, elapsed = self._resume
+        self._resume = None
+        self.set_mode(mode)
+        self.start()
+        if elapsed is not None and self.prunner.running:
+            self.prunner.start_ms = self._now() - elapsed
 
     def toggle(self):
         if self.running:

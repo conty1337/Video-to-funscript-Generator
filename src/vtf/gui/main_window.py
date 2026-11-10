@@ -255,6 +255,7 @@ class MainWindow(QMainWindow):
 
         self.updates = UpdateController(self, self.qsettings)
         self.devices = DeviceController(self, self.qsettings)
+        self.devices.register_source(self)
         self.pattern_dialog = None
         self._build_menu()
         self._build_toolbar()
@@ -686,6 +687,21 @@ class MainWindow(QMainWindow):
         self.pattern_dialog.show()
         self.pattern_dialog.raise_()
         self.pattern_dialog.activateWindow()
+
+    # safety timer source: the video drives the device while it plays
+    def safety_active(self) -> bool:
+        dev = self.devices.device
+        return self.timer.isActive() and dev is not None and dev.connected
+
+    def safety_pause(self) -> bool:
+        if self.timer.isActive():
+            self.pause()
+            return True
+        return False
+
+    def safety_resume(self) -> None:
+        if not self.timer.isActive():
+            self.toggle_play()
 
     def _stop_patterns(self):
         if self.pattern_dialog is not None and self.pattern_dialog.running:
