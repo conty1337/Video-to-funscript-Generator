@@ -173,3 +173,33 @@ def test_program_save_load_and_missing_pattern(tmp_path):
     r = _runner()
     r.start(0, P.Program("x", [P.Step("Gibt es nicht", 1, 60, 100)]))
     assert r.running and r.runner.pattern is P.BUILTIN[0]
+
+
+def test_random_program():
+    a = P.random_program("ruhig", seed=1, total_minutes=60)
+    b = P.random_program("ruhig", seed=1, total_minutes=60)
+    assert a.to_dict() == b.to_dict() and a.loop and a.smooth
+    assert 60 <= a.total_ms / 60_000 < 64
+    names = {p.name: p for p in P.BUILTIN}
+    for st in a.steps:
+        assert names[st.pattern].category in ("Grundlagen", "Necken", "Steigerung")
+        assert 30 <= st.bpm <= 60 and 40 <= st.depth <= 80 and 1 <= st.minutes <= 3
+    assert all(x.pattern != y.pattern for x, y in zip(a.steps, a.steps[1:]))
+    c = P.random_program("intensiv", bpm=(100, 110), depth=(90, 95), minutes=(0.5, 0.5), seed=2, total_minutes=5)
+    assert all(100 <= st.bpm <= 110 and 90 <= st.depth <= 95 and st.minutes == 0.5 for st in c.steps)
+    own = P.Pattern("Meins", [P.Block()])
+    d = P.random_program("gemischt", seed=3, total_minutes=600, extra=[own])
+    assert any(st.pattern == "Meins" for st in d.steps)
+
+
+def test_random_step_and_moods():
+    import random
+
+    rng = random.Random(5)
+    every = {st.pattern for st in (P.random_step(rng, "alles", last=None) for _ in range(400))}
+    intense = {p.name for p in P.BUILTIN if p.category == "Intensiv"}
+    assert every & intense                               # "Alles" includes everything
+    calm = {P.random_step(rng, "ruhig").pattern for _ in range(200)}
+    assert not calm & intense
+    st = P.random_step(rng, "gemischt", bpm=(90, 90), depth=(70, 70), minutes=(2, 2), last="Welle")
+    assert (st.bpm, st.depth, st.minutes) == (90, 70, 2) and st.pattern != "Welle"

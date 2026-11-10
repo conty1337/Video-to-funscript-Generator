@@ -3,17 +3,39 @@
 from __future__ import annotations
 
 import threading
+import time
 
-from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLayout,
-                               QLineEdit, QPushButton, QSlider, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QLineEdit,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..device import Device, DeviceError, SimulatedDevice
-from ..device.buttplug import DEFAULT_URL, ButtplugDevice
+from ..device.buttplug import DEFAULT_URL, VIBE_MODES, ButtplugDevice
+from ..device.tcode import DEFAULT_PORT as TCODE_PORT
+from ..device.tcode import AxisProxy, TCodeDevice
 from ..device.sync import ScriptSync, SyncSettings
+from ..safety import SafetyGuard, SafetySettings
 from . import theme
 
-KINDS = [("Simulation (ohne Gerät)", "sim"), ("Intiface Central (Bluetooth)", "intiface")]
+KINDS = [("Simulation (ohne Gerät)", "sim"), ("Intiface Central (Bluetooth)", "intiface"),
+         ("OSR2/SR6 u.a. (TCode, USB oder WLAN)", "tcode")]
+
+
+def default_address(kind: str) -> str:
+    return TCODE_PORT if kind == "tcode" else DEFAULT_URL
 
 
 class DeviceController(QObject):
@@ -27,11 +49,30 @@ class DeviceController(QObject):
         self.device: Device | None = None
         self.sync = ScriptSync(None, self._load_sync())
         self.dialog: DeviceDialog | None = None
+        self.axis_syncs: dict = {}
+        self._axis_actions: dict = {}
         self._connecting = False
         self.status = QLabel("Gerät · nicht verbunden")
         self.status.setFont(theme.mono_font(11))
         window.statusBar().addPermanentWidget(self.status)
         self.message.connect(self._on_message)
+        # safety timer: everything that moves the device registers as a source
+        self.sources: list = []
+        self._paused_by_safety: list = []
+        self.safety = SafetyGuard(self._load_safety())
+        self.safety.touch(self._ms())
+        self.safety_label = QLabel()
+        self.safety_label.setFont(theme.mono_font(11))
+        self.safety_label.hide()
+        window.statusBar().addPermanentWidget(self.safety_label)
+        self._safety_timer = QTimer(self)
+        self._safety_timer.setInterval(1000)
+        self._safety_timer.timeout.connect(self._safety_tick)
+        self._safety_timer.start()
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
     # ------------------------------------------------------------ settings
     def _load_sync(self) -> SyncSettings:
@@ -46,6 +87,66 @@ class DeviceController(QObject):
         s.invert = str(self.qs.value("device/invert", "false")).lower() == "true"
         return s
 
+    def _load_safety(self) -> SafetySettings:
+        s = SafetySettings()
+        for key in SafetySettings.KEYS:
+            v = self.qs.value(f"safety/{key}")
+            if v is None:
+                continue
+            if key == "enabled":
+                s.enabled = str(v).lower() == "true"
+            else:
+                try:
+                    setattr(s, key, max(0, int(v)))
+                except (TypeError, ValueError):
+                    pass
+        return s
+
+    def save_safety(self) -> None:
+        for key in SafetySettings.KEYS:
+            v = getattr(self.safety.settings, key)
+            self.qs.setValue(f"safety/{key}", ("true" if v else "false") if key == "enabled" else v)
+
+    # ------------------------------------------------------------ safety timer
+    @staticmethod
+    def _ms() -> float:
+        return time.monotonic() * 1000
+
+    def register_source(self, src) -> None:
+        """src: safety_active() -> bool, safety_pause() -> bool, safety_resume()."""
+        if src not in self.sources:
+            self.sources.append(src)
+
+    def touch(self) -> None:
+        self.safety.touch(self._ms())
+
+    def eventFilter(self, obj, ev):
+        if ev.type() in (QEvent.KeyPress, QEvent.MouseButtonPress, QEvent.Wheel):
+            self.safety.touch(self._ms())
+        return False
+
+    def _safety_tick(self) -> None:
+        now = self._ms()
+        active = any(_call(src, "safety_active") for src in self.sources)
+        ev = self.safety.update(now, active)
+        if ev is not None:
+            if ev[0] == "stop":
+                self._paused_by_safety = []
+                self.win.emergency_stop()
+                self.message.emit(ev[1])
+            elif ev[0] == "break":
+                self._paused_by_safety = [src for src in self.sources if _call(src, "safety_pause")]
+                self.sync.stop()
+                self.message.emit(f"Sicherheits-Timer: {ev[1]} s Pause, danach geht es weiter")
+            elif ev[0] == "resume":
+                for src in self._paused_by_safety:
+                    _call(src, "safety_resume")
+                self._paused_by_safety = []
+                self.message.emit("Pause vorbei, weiter geht's")
+        text = self.safety.status(now)
+        self.safety_label.setText(text)
+        self.safety_label.setVisible(bool(text))
+
     def save_sync(self) -> None:
         s = self.sync.settings
         for key in ("offset_ms", "pos_min", "pos_max", "max_speed", "invert"):
@@ -56,20 +157,28 @@ class DeviceController(QObject):
         if self._connecting:
             return
         self.disconnect_device()
-        dev: Device = SimulatedDevice() if kind == "sim" else ButtplugDevice(url or DEFAULT_URL)
+        if kind == "sim":
+            dev: Device = SimulatedDevice()
+        elif kind == "tcode":
+            dev = TCodeDevice(url or TCODE_PORT)
+            self.qs.setValue("device/tcode", url)
+        else:
+            dev = ButtplugDevice(url or DEFAULT_URL)
+            dev.vibe_mode = str(self.qs.value("device/vibe", "speed"))
+            self.qs.setValue("device/url", url)
         dev.add_listener(self.message.emit)
         self.qs.setValue("device/kind", kind)
-        self.qs.setValue("device/url", url)
         self._connecting = True
         self.message.emit("Verbinde…")
 
         def run():
             try:
                 dev.connect()
-                if isinstance(dev, ButtplugDevice) and not any(d.is_linear for d in dev.devices.values()):
+                if isinstance(dev, ButtplugDevice) and not any(d.usable for d in dev.devices.values()):
                     dev.start_scanning()
                 self.device = dev
                 self.sync.set_device(dev)
+                self._make_axis_syncs(dev)
             except DeviceError as e:
                 self.message.emit(f"Fehler: {e}")
             finally:
@@ -78,9 +187,28 @@ class DeviceController(QObject):
 
         threading.Thread(target=run, name="device-connect", daemon=True).start()
 
+    def _make_axis_syncs(self, dev) -> None:
+        """Multi-axis devices (TCode): one ScriptSync per extra axis."""
+        self.axis_syncs = {}
+        for ax in getattr(dev, "axes", ())[1:]:
+            self.axis_syncs[ax] = ScriptSync(AxisProxy(dev, ax), SyncSettings())
+            self.axis_syncs[ax].set_actions(self._axis_actions.get(ax, []))
+
+    def set_axes(self, axes: dict) -> None:
+        """All script axes (L1, R0, …) for multi-axis devices; the stroke goes through set_actions."""
+        self._axis_actions = {k: list(v) for k, v in axes.items() if k != "L0"}
+        for ax, sync in self.axis_syncs.items():
+            sync.set_actions(self._axis_actions.get(ax, []))
+
+    def set_vibe_mode(self, mode: str) -> None:
+        self.qs.setValue("device/vibe", mode)
+        if isinstance(self.device, ButtplugDevice):
+            self.device.vibe_mode = mode
+
     def disconnect_device(self) -> None:
         dev, self.device = self.device, None
         self.sync.set_device(None)
+        self.axis_syncs = {}
         if dev is not None:
             try:
                 dev.disconnect()
@@ -95,6 +223,10 @@ class DeviceController(QObject):
     def tick(self, media_ms: float, playing: bool) -> None:
         try:
             self.sync.tick(media_ms, playing)
+            main = self.sync.settings
+            for sync in self.axis_syncs.values():
+                sync.settings.offset_ms, sync.settings.max_speed = main.offset_ms, main.max_speed
+                sync.tick(media_ms, playing)
         except DeviceError as e:
             self.message.emit(f"Fehler: {e}")
 
@@ -103,6 +235,8 @@ class DeviceController(QObject):
 
     def emergency_stop(self) -> None:
         self.sync.stop()
+        for sync in self.axis_syncs.values():
+            sync.stop()
 
     def test_move(self, pos: float) -> None:
         if self.device is not None and self.device.connected:
@@ -128,6 +262,14 @@ class DeviceController(QObject):
             self.dialog.log(msg)
             self.dialog.refresh()
 
+    def open_wizard(self) -> None:
+        from .setup_wizard import SetupWizard
+
+        SetupWizard(self, self.win).exec()
+        if self.dialog is not None:
+            self.dialog.close()
+            self.dialog = None             # rebuilt with the new values next time
+
     def open_dialog(self) -> None:
         if self.dialog is None:
             self.dialog = DeviceDialog(self, self.win)
@@ -135,6 +277,14 @@ class DeviceController(QObject):
         self.dialog.refresh()
         self.dialog.show()
         self.dialog.raise_()
+
+
+def _call(obj, name: str):
+    fn = getattr(obj, name, None)
+    try:
+        return fn() if fn is not None else None
+    except Exception:
+        return None
 
 
 INPUT_H = 34
@@ -170,9 +320,11 @@ class DeviceDialog(QDialog):
         i = self.kind.findData(ctl.qs.value("device/kind", "sim"))
         self.kind.setCurrentIndex(max(0, i))
         f.addRow(self._label("Art"), self.kind)
-        self.url = QLineEdit(str(ctl.qs.value("device/url", DEFAULT_URL) or DEFAULT_URL))
+        self.url = QLineEdit(self._address_for(self.kind.currentData()))
         self.url.setFont(theme.mono_font(12))
-        f.addRow(self._label("Intiface-Adresse"), self.url)
+        self.url_label = self._label("Intiface-Adresse")
+        self._shown_kind = None
+        f.addRow(self.url_label, self.url)
         self.device_box = QComboBox()
         f.addRow(self._label("Gerät"), self.device_box)
         lay.addLayout(f)
@@ -185,6 +337,10 @@ class DeviceDialog(QDialog):
         row.addWidget(self.scan_btn)
         row.addWidget(self.disconnect_btn)
         lay.addLayout(row)
+        self.wizard_btn = QPushButton("Einrichtungs-Assistent…")
+        self.wizard_btn.setToolTip("Schritt für Schritt: Verbindung, Richtung, Hubbereich, Höchsttempo, Verzögerung")
+        self.wizard_btn.clicked.connect(ctl.open_wizard)
+        lay.addWidget(self.wizard_btn)
 
         lay.addSpacing(16)
         title = QLabel("Wiedergabe")
@@ -220,7 +376,48 @@ class DeviceDialog(QDialog):
         self.invert = QCheckBox("Richtung umkehren")
         self.invert.setChecked(s.invert)
         f.addRow(QLabel(), self.invert)
+        self.vibe = QComboBox()
+        for code, label in VIBE_MODES:
+            self.vibe.addItem(label, code)
+        self.vibe.setCurrentIndex(max(0, self.vibe.findData(ctl.qs.value("device/vibe", "speed"))))
+        self.vibe.setToolTip("Nur für Vibratoren und andere Geräte ohne Hub: woraus die Stärke wird")
+        self.vibe.currentIndexChanged.connect(lambda _i: ctl.set_vibe_mode(self.vibe.currentData()))
+        f.addRow(self._label("Vibration folgt"), self.vibe)
         lay.addLayout(f)
+
+        lay.addSpacing(16)
+        title = QLabel("Sicherheit")
+        title.setObjectName("section")
+        lay.addWidget(title)
+        g = ctl.safety.settings
+        self.safe_on = QCheckBox("Sicherheits-Timer an")
+        self.safe_on.setChecked(g.enabled)
+        lay.addWidget(self.safe_on)
+        f = QFormLayout()
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(8)
+        self.safe_max = self._minutes(g.max_minutes, 600)
+        self.safe_idle = self._minutes(g.idle_minutes, 240)
+        self.safe_every = self._minutes(g.break_every, 240)
+        self.safe_secs = QSpinBox()
+        self.safe_secs.setRange(5, 600)
+        self.safe_secs.setSuffix(" s")
+        self.safe_secs.setValue(max(5, g.break_seconds))
+        f.addRow(self._label("Höchstens"), self._row(self.safe_max, "am Stück, dann Stopp"))
+        f.addRow(self._label("Ohne Bedienung"), self._row(self.safe_idle, "dann Stopp"))
+        f.addRow(self._label("Pause alle"), self._row(self.safe_every, "für", self.safe_secs))
+        self.safe_form = QWidget()
+        self.safe_form.setLayout(f)
+        lay.addWidget(self.safe_form)
+        cap = QLabel("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, "
+                     "Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        lay.addWidget(cap)
+        for w in (self.safe_max, self.safe_idle, self.safe_every, self.safe_secs):
+            w.valueChanged.connect(self._apply_safety)
+        self.safe_on.toggled.connect(self._apply_safety)
+        self.safe_form.setEnabled(g.enabled)
 
         lay.addSpacing(16)
         title = QLabel("Test")
@@ -300,6 +497,43 @@ class DeviceDialog(QDialog):
         lay.addWidget(lbl)
         return box, s
 
+    @staticmethod
+    def _minutes(v: int, maximum: int) -> QSpinBox:
+        sp = QSpinBox()
+        sp.setRange(0, maximum)
+        sp.setSuffix(" min")
+        sp.setSpecialValueText("aus")
+        sp.setValue(v)
+        sp.setFixedHeight(INPUT_H)
+        return sp
+
+    @staticmethod
+    def _row(*items) -> QWidget:
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        for x in items:
+            if isinstance(x, str):
+                lb = QLabel(x)
+                lb.setObjectName("caption")
+                lay.addWidget(lb)
+            else:
+                lay.addWidget(x)
+        lay.addStretch(1)
+        return w
+
+    def _apply_safety(self):
+        g = self.ctl.safety.settings
+        g.enabled = self.safe_on.isChecked()
+        g.max_minutes = self.safe_max.value()
+        g.idle_minutes = self.safe_idle.value()
+        g.break_every = self.safe_every.value()
+        g.break_seconds = self.safe_secs.value()
+        self.safe_form.setEnabled(g.enabled)
+        self.ctl.touch()
+        self.ctl.save_safety()
+
     def _apply(self):
         s = self.ctl.sync.settings
         s.offset_ms = self.offset[1].value()
@@ -307,6 +541,10 @@ class DeviceDialog(QDialog):
         s.pos_min, s.pos_max = self.pmin.value(), self.pmax.value()
         s.invert = self.invert.isChecked()
         self.ctl.save_sync()
+
+    def _address_for(self, kind: str) -> str:
+        key = "device/tcode" if kind == "tcode" else "device/url"
+        return str(self.ctl.qs.value(key, "") or "") or default_address(kind)
 
     def _scan(self):
         dev = self.ctl.device
@@ -333,8 +571,12 @@ class DeviceDialog(QDialog):
     def refresh(self):
         dev = self.ctl.device
         connected = dev is not None and dev.connected
-        intiface = self.kind.currentData() == "intiface"
-        self.url.setEnabled(intiface and not connected)
+        kind = self.kind.currentData()
+        self.url.setEnabled(kind in ("intiface", "tcode") and not connected)
+        if not connected and kind != self._shown_kind:
+            self._shown_kind = kind
+            self.url.setText(self._address_for(kind))
+            self.url_label.setText("Port / Adresse" if kind == "tcode" else "Intiface-Adresse")
         self.kind.setEnabled(not connected)
         self.connect_btn.setEnabled(not connected)
         self.disconnect_btn.setEnabled(connected)
@@ -344,7 +586,8 @@ class DeviceDialog(QDialog):
         self.device_box.clear()
         if isinstance(dev, ButtplugDevice) and connected:
             for d in dev.devices.values():
-                self.device_box.addItem(d.name + ("" if d.is_linear else "  (keine Positionssteuerung)"), d.index)
+                self.device_box.addItem(d.name + ("" if d.is_linear else "  (Vibration)" if d.scalars
+                                                  else "  (nicht steuerbar)"), d.index)
             if dev.selected is not None:
                 self.device_box.setCurrentIndex(max(0, self.device_box.findData(dev.selected)))
         elif connected:

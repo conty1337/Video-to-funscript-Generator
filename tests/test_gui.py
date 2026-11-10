@@ -422,8 +422,8 @@ def test_tracking_sections_box(app):
 
 def test_tracking_sections_in_main_window(app, tmp_path):
     from PySide6.QtCore import QEventLoop
-
     from test_tracking import _video
+
     from vtf.gui.main_window import MainWindow
 
     path, a, b = _video(tmp_path / "t.avi", seconds=3.0, pan=False)
@@ -488,6 +488,7 @@ def test_tracking_rotate_and_correct(app):
 
 def test_tracking_preparation_saved_and_restored(app, tmp_path):
     from test_tracking import _video
+
     from vtf.gui.main_window import MainWindow
     from vtf.prep import prep_path
 
@@ -661,6 +662,7 @@ def test_close_video(app, tmp_path):
     from pathlib import Path
 
     from videogen import make_video
+
     from vtf.gui.main_window import MainWindow
 
     vid = tmp_path / "c.avi"
@@ -683,6 +685,7 @@ def test_bookmarks_rhythm_preview(app, tmp_path):
     from pathlib import Path
 
     from videogen import make_video
+
     from vtf.gui.main_window import MainWindow
     from vtf.prep import load_bookmarks
 
@@ -971,5 +974,276 @@ def test_pattern_control(app, tmp_path, monkeypatch):
     assert d.prunner.offset_depth == 0
     d.set_mode(0)                                        # switching mode stops
     assert not d.running
+
+    # random: rolls a new plan on every start, offsets and skipping work as in programs
+    d.set_mode(2)
+    assert d.right_stack.currentIndex() == 1 and d.ptitle.text().startswith("Zufall")
+    d.mood.setCurrentIndex(d.mood.findData("intensiv"))
+    assert (d.r_bpm0.value(), d.r_bpm1.value()) == (70, 150)
+    d.start()
+    first = d.random_prog
+    d._tick()
+    assert d.prunner.running and "nächster Wechsel" in d.pnow.text()
+    d.step_pattern(1)
+    assert d.prunner.index == 1
+    d.stop()
+    d.start()
+    assert d.random_prog is not first
+    # live: only the current and the next step exist, the next is rolled when a step starts
+    pr = d.random_prog
+    assert len(pr.steps) == 2
+    d.prunner.start_ms -= pr.steps[0].minutes * 60_000 + 10
+    d._tick()
+    assert d.prunner.index == 1 and len(pr.steps) == 3
+    assert len(d.pview.program.steps) == 2               # the view shows this step and the next
+    # ranges changed while playing: the running step moves into them, the next is rolled anew
+    d.r_bpm0.setValue(200)
+    d.r_bpm1.setValue(210)
+    assert 200 <= pr.steps[d.prunner.index].bpm <= 210 and 200 <= pr.steps[-1].bpm <= 210
+    # a new mood switches to a new step right away
+    i = d.prunner.index
+    d.mood.setCurrentIndex(d.mood.findData("alles"))
+    assert d.prunner.index == i + 1 and d.running
+    for _ in range(4):
+        d.step_pattern(1)                                # skipping ahead rolls as needed
+    assert d.prunner.index == i + 5 and len(pr.steps) == i + 7
+    d.stop()
+    d.set_mode(0)
     d.close()
+    w.close()
+
+
+def test_setup_wizard(app):
+    import time
+
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.setup_wizard import (
+        SPEED_LEVELS,
+        SetupWizard,
+        metronome_actions,
+        speed_for,
+    )
+
+    acts = metronome_actions(0, 3)
+    assert [(a.at, a.pos) for a in acts[:3]] == [(0, 0), (500, 100), (1000, 0)]
+    assert speed_for(200) == 500
+    w = MainWindow()
+    s = w.devices.sync.settings
+    old = (s.invert, s.pos_min, s.pos_max, s.max_speed, s.offset_ms)
+    wz = SetupWizard(w.devices, w)
+    assert not wz.next_btn.isEnabled()                   # first connect
+    w.devices.connect_device("sim", "")
+    for _ in range(50):
+        app.processEvents()
+        if w.devices.device is not None:
+            break
+        time.sleep(0.02)
+    wz._refresh()
+    assert wz.next_btn.isEnabled()
+    wz.go(1)
+    wz.invert.setChecked(not old[0])
+    assert s.invert != old[0]
+    wz.go(2)
+    wz.r_lo.setValue(10)
+    wz.r_hi.setValue(90)
+    assert (s.pos_min, s.pos_max) == (10, 90)
+    wz.go(3)
+    wz.level = SPEED_LEVELS.index(250)
+    wz.try_speed()
+    assert len(wz._strokes) == 9 and wz.timer.isActive()
+    wz.take_speed()
+    assert s.max_speed == 400
+    wz.go(4)
+    assert wz._strokes == []                             # leaving a page stops the motion
+    wz.toggle_metro()
+    assert wz._metro is not None
+    wz.offset.setValue(120)
+    assert s.offset_ms == 120
+    wz._metro_start -= 2000
+    wz._tick()
+    wz.toggle_metro()
+    assert wz._metro is None
+    wz.go(5)
+    assert "400 /s" in wz.summary.text()
+    wz.reject()
+    s.invert, s.pos_min, s.pos_max, s.max_speed, s.offset_ms = old
+    w.devices.save_sync()
+    w.devices.disconnect_device()
+    w.close()
+
+
+def test_remote_commands(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    rc = w.remote
+    rc.set_enabled(False)
+    rc._handle({"cmd": "mode", "mode": 0})
+    d = w.pattern_dialog
+    rc._handle({"cmd": "select", "name": "Welle"})
+    rc._handle({"cmd": "set", "bpm": 77, "depth": 66})
+    assert d.current().name == "Welle" and (d.bpm.value(), d.depth.value()) == (77, 66)
+    rc._handle({"cmd": "toggle"})
+    assert d.running and rc._state["running"] and rc._state["name"] == "Welle"
+    rc._handle({"cmd": "estop"})
+    assert not d.running
+    rc._handle({"cmd": "mode", "mode": 1})
+    rc._handle({"cmd": "select", "name": "Eine Stunde"})
+    rc._handle({"cmd": "start"})
+    rc._handle({"cmd": "set", "bpm": rc._state["bpm"] + 10})
+    assert d.prunner.offset_bpm == 10
+    rc._handle({"cmd": "step", "d": 1})
+    assert d.prunner.index == 1
+    rc._handle({"cmd": "stop"})
+    assert not d.running and "Eine Stunde" in rc._state["programs"]
+    d.reset_offsets()
+    d.set_mode(0)
+    w.close()
+
+
+def test_music_mode_and_script(app, sine_video, tmp_path, monkeypatch):
+    import sys
+    import time
+
+    import numpy as np
+
+    from vtf import music
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    d = w.ensure_patterns()
+    d.set_mode(3)
+    assert d.right_stack.currentIndex() == 2
+    # fake recorder: a click track at 120 per minute
+    x = np.zeros(int(4 * music.RATE), np.float32)
+    n = int(0.03 * music.RATE)
+    hit = np.sin(2 * np.pi * 80 * np.arange(n) / music.RATE) * np.exp(-np.arange(n) / (0.008 * music.RATE))
+    for k in range(8):
+        i = int((0.2 + 0.5 * k) * music.RATE)
+        x[i:i + n] += 0.8 * hit
+    raw = tmp_path / "s.raw"
+    raw.write_bytes((x * 32767).astype(np.int16).tobytes())
+    script = (f"import sys,time; d=open({str(raw)!r},'rb').read()\n"
+              "for i in range(0,len(d),4410): sys.stdout.buffer.write(d[i:i+4410]); sys.stdout.flush(); time.sleep(0.05)")
+    d._start_music([sys.executable, "-c", script])
+    assert d.running and d.music.running
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 6 and not d._music_error:
+        app.processEvents()
+        d._tick()
+        time.sleep(0.02)
+    assert d.music.count >= 5
+    d._tick()                                            # recorder ended: stops with a message
+    assert not d.running and "Aufnahme beendet" in d.m_info.text()
+    assert w.remote is not None and d.remote_state()["mode"] == 3
+    d.set_mode(0)
+
+    # script from music (beats faked, the test video has no sound track)
+    w.open_video(str(sine_video))
+    monkeypatch.setattr(music, "beats_from_file", lambda *a, **k: [1.0, 1.5, 2.0, 2.5, 3.0])
+    w.curve.actions = []
+    w.apply_music_script(0, 4000, every=1, lo=10, hi=90)
+    assert [a.at for a in w.curve.actions if a.pos == 10] == [1000, 1500, 2000, 2500, 3000]
+    w.undo()
+    assert w.curve.actions == []
+    w.close()
+
+
+def test_external_player_sync(app, tmp_path):
+    import time
+
+    from test_players import _fake_mpv
+
+    from vtf.funscript import Action, Funscript
+    from vtf.gui.main_window import MainWindow
+
+    video = tmp_path / "film.mp4"
+    video.write_bytes(b"")
+    Funscript([Action(0, 0), Action(500, 100), Action(1000, 0), Action(60_000, 100)]).save(
+        tmp_path / "film.funscript")
+    sock = str(tmp_path / "mpv.sock")
+    state = {"time-pos": 0.2, "pause": False, "path": str(video), "duration": 60.0}
+    srv = _fake_mpv(sock, state)
+    w = MainWindow()
+    w.devices.connect_device("sim", "")
+    for _ in range(50):
+        app.processEvents()
+        if w.devices.device is not None:
+            break
+        time.sleep(0.02)
+    ext = w.external
+    ext.connect_player("mpv", mpv_socket=sock)
+    assert ext.running
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < 2 and not ext.script:
+        app.processEvents()
+        ext._tick()
+        time.sleep(0.02)
+    assert ext.points == 4 and "Script gefunden" in ext.status
+    assert ext.safety_active()
+    for _ in range(20):
+        ext._tick()
+        time.sleep(0.02)
+    assert w.devices.device.commands                   # the device got moves
+    w.emergency_stop()                                 # Esc disconnects from the player
+    assert not ext.running and "Not-Aus" in ext.status
+    srv.close()
+    w.devices.disconnect_device()
+    w.close()
+
+
+def test_multi_axis_tcode(app):
+    import os
+    import time
+
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    master, slave = os.openpty()
+    w = MainWindow()
+    ctl = w.devices
+    ctl.connect_device("tcode", os.ttyname(slave))
+    for _ in range(50):
+        app.processEvents()
+        if ctl.device is not None:
+            break
+        time.sleep(0.02)
+    assert set(ctl.axis_syncs) == {"L1", "L2", "R0", "R1", "R2"}
+    ctl.set_actions([Action(0, 0), Action(1000, 100), Action(2000, 0)])
+    ctl.set_axes({"L0": [], "R1": [Action(0, 50), Action(1000, 90), Action(2000, 10)]})
+    for t in range(0, 1600, 20):
+        ctl.tick(t, True)
+    ctl.tick(0, False)
+    os.set_blocking(master, False)
+    text = b""
+    try:
+        while True:
+            text += os.read(master, 4096)
+    except (BlockingIOError, OSError):
+        pass
+    text = text.decode()
+    assert "L0" in text and "R1" in text and "DSTOP" in text
+    ctl.disconnect_device()
+    assert ctl.axis_syncs == {}
+    os.close(master)
+    os.close(slave)
+    w.close()
+
+
+def test_remote_random_mood(app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    rc = w.remote
+    rc._handle({"cmd": "mode", "mode": 2})
+    d = w.pattern_dialog
+    rc._handle({"cmd": "start"})
+    i = d.prunner.index
+    rc._handle({"cmd": "mood", "mood": "intensiv"})
+    assert d.mood.currentData() == "intensiv" and d.prunner.index == i + 1
+    assert rc._state["mood"] == "intensiv" and ["alles", "Alles"] in rc._state["moods"]
+    rc._handle({"cmd": "stop"})
+    d.set_mode(0)
     w.close()

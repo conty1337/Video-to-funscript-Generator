@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from collections import deque
+
 from PySide6.QtCore import QElapsedTimer, QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -29,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import gamepad as G
+from .. import music as M
 from .. import patterns as P
 from ..device.sync import ScriptSync
 from . import theme
@@ -112,6 +116,8 @@ class PatternDialog(QDialog):
         self.timer.setInterval(self.TICK_MS)
         self.timer.timeout.connect(self._tick)
         ctl.changed.connect(self._device_changed)
+        ctl.register_source(self)
+        self._resume = None
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -127,7 +133,8 @@ class PatternDialog(QDialog):
         mode_row = QHBoxLayout()
         mode_row.setSpacing(4)
         self.mode_btns = []
-        for i, text in enumerate(("Muster", "Abläufe")):
+        self._mode = 0
+        for i, text in enumerate(("Muster", "Abläufe", "Zufall", "Musik")):
             b = QPushButton(text)
             b.setObjectName("segment")
             b.setCheckable(True)
@@ -193,6 +200,97 @@ class PatternDialog(QDialog):
         self.pedit_btn.clicked.connect(self.edit_program)
         self.pdel_btn.clicked.connect(self.delete_program)
         self.left_stack.addWidget(page)
+
+        page = QWidget()
+        rl = QVBoxLayout(page)
+        rl.setContentsMargins(0, 8, 0, 0)
+        rl.setSpacing(8)
+        cap = QLabel("Wechselt Muster, Tempo und Tiefe von selbst. Jeder Abschnitt wird erst gewürfelt, wenn er "
+                     "drankommt. Alles hier wirkt sofort, auch beim Abspielen.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        rl.addWidget(cap)
+        rf = QFormLayout()
+        rf.setHorizontalSpacing(8)
+        rf.setVerticalSpacing(8)
+        self.mood = QComboBox()
+        for code, (label, *_rest) in P.MOODS.items():
+            self.mood.addItem(label, code)
+        rf.addRow(self._label("Stimmung"), self.mood)
+        self.r_bpm0, self.r_bpm1 = QSpinBox(), QSpinBox()
+        for sp in (self.r_bpm0, self.r_bpm1):
+            sp.setRange(10, 240)
+            sp.setSingleStep(5)
+        rf.addRow(self._label("Tempo"), _hrow(self.r_bpm0, "bis", self.r_bpm1))
+        self.r_d0, self.r_d1 = QSpinBox(), QSpinBox()
+        for sp in (self.r_d0, self.r_d1):
+            sp.setRange(10, 100)
+            sp.setSingleStep(5)
+            sp.setSuffix(" %")
+        rf.addRow(self._label("Tiefe"), _hrow(self.r_d0, "bis", self.r_d1))
+        self.r_m0, self.r_m1 = QDoubleSpinBox(), QDoubleSpinBox()
+        for sp in (self.r_m0, self.r_m1):
+            sp.setRange(0.25, 30)
+            sp.setDecimals(2)
+            sp.setSingleStep(0.5)
+            sp.setSuffix(" min")
+        rf.addRow(self._label("Wechsel"), _hrow(self.r_m0, "bis", self.r_m1))
+        rl.addLayout(rf)
+        self.r_own = QCheckBox("Eigene Muster mit einbeziehen")
+        rl.addWidget(self.r_own)
+        self.reroll_btn = QPushButton(theme.icon("shuffle"), "Neu würfeln")
+        self.reroll_btn.clicked.connect(lambda: self.reroll(restart=True))
+        rl.addWidget(self.reroll_btn)
+        rl.addStretch(1)
+        self.left_stack.addWidget(page)
+
+        page = QWidget()
+        ml = QVBoxLayout(page)
+        ml.setContentsMargins(0, 8, 0, 0)
+        ml.setSpacing(8)
+        cap = QLabel("Das Gerät folgt dem Takt der Musik, die gerade auf dem PC läuft (Spotify, YouTube, …) "
+                     "oder die das Mikrofon hört.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        ml.addWidget(cap)
+        mf = QFormLayout()
+        mf.setHorizontalSpacing(8)
+        mf.setVerticalSpacing(8)
+        self.m_source = QComboBox()
+        for code, label in M.SOURCES:
+            self.m_source.addItem(label, code)
+        self.m_source.setCurrentIndex(max(0, self.m_source.findData(str(self._setting("m_source", "system")))))
+        mf.addRow(self._label("Quelle"), self.m_source)
+        self.m_every = QComboBox()
+        for n, label in ((1, "Jeder Schlag"), (2, "Jeder 2. Schlag"), (4, "Jeder 4. Schlag")):
+            self.m_every.addItem(label, n)
+        self.m_every.setCurrentIndex(max(0, self.m_every.findData(int(self._setting("m_every", 1)))))
+        mf.addRow(self._label("Hub auf"), self.m_every)
+        self.m_sens = QSlider(Qt.Horizontal)
+        self.m_sens.setRange(0, 100)
+        self.m_sens.setValue(int(self._setting("m_sens", 50)))
+        mf.addRow(self._label("Empfindlich"), self.m_sens)
+        ml.addLayout(mf)
+        self.m_level = QCheckBox("Tiefe folgt der Lautstärke")
+        self.m_level.setChecked(str(self.qs.value("pattern/m_level", "true")).lower() == "true")
+        ml.addWidget(self.m_level)
+        ml.addStretch(1)
+        self.left_stack.addWidget(page)
+        for w in (self.m_source, self.m_every):
+            w.currentIndexChanged.connect(self._music_settings)
+        self.m_sens.valueChanged.connect(self._music_settings)
+        self.m_level.toggled.connect(self._music_settings)
+        self.random_prog: P.Program | None = None
+        r = self._random_settings()
+        self.mood.setCurrentIndex(max(0, self.mood.findData(r["mood"])))
+        for sp, v in ((self.r_bpm0, r["bpm0"]), (self.r_bpm1, r["bpm1"]), (self.r_d0, r["d0"]),
+                      (self.r_d1, r["d1"]), (self.r_m0, r["m0"]), (self.r_m1, r["m1"])):
+            sp.setValue(v)
+        self.r_own.setChecked(r["own"])
+        self.mood.currentIndexChanged.connect(self._mood_changed)
+        for w in (self.r_bpm0, self.r_bpm1, self.r_d0, self.r_d1, self.r_m0, self.r_m1):
+            w.valueChanged.connect(self._random_changed)
+        self.r_own.toggled.connect(self._random_changed)
         root.addWidget(left)
 
         # ---- preview and control
@@ -282,6 +380,48 @@ class PatternDialog(QDialog):
         cap.setWordWrap(True)
         pr.addWidget(cap)
         self.right_stack.addWidget(page)
+
+        page = QWidget()
+        mr = QVBoxLayout(page)
+        mr.setContentsMargins(0, 0, 0, 0)
+        mr.setSpacing(10)
+        t = QLabel("Musik")
+        t.setObjectName("section")
+        mr.addWidget(t)
+        from .setup_wizard import Flash
+        self.m_flash = Flash()
+        mr.addWidget(self.m_flash, 1)
+        self.m_info = QLabel("Start drücken und Musik abspielen.")
+        self.m_info.setObjectName("value")
+        self.m_info.setFont(theme.mono_font(13))
+        self.m_info.setAlignment(Qt.AlignCenter)
+        mr.addWidget(self.m_info)
+        mform = QFormLayout()
+        mform.setHorizontalSpacing(12)
+        self.m_depth = QSlider(Qt.Horizontal)
+        self.m_depth.setRange(10, 100)
+        self.m_depth.setValue(int(self._setting("m_depth", 100)))
+        self.m_depth_val = QLabel()
+        self.m_depth_val.setObjectName("value")
+        self.m_depth_val.setFont(theme.mono_font(12))
+        self.m_depth_val.setMinimumWidth(96)
+        mform.addRow(self._label("Tiefe"), _hrow(self.m_depth, self.m_depth_val))
+        mr.addLayout(mform)
+        cap = QLabel("Das Gerät ist auf den vorhergesagten Schlägen unten. Passt der Takt nicht genau, im Fenster "
+                     "„Gerät“ den Zeitversatz ändern. ↑/↓ ändert die Tiefe.")
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        mr.addWidget(cap)
+        self.right_stack.addWidget(page)
+        self.m_depth.valueChanged.connect(self._music_settings)
+        self.music = M.MusicDriver(self.sync)
+        self.capture: M.AudioCapture | None = None
+        self.tracker: M.BeatTracker | None = None
+        self._beats: deque = deque()
+        self._stream_base: float | None = None
+        self._stream_samples = 0
+        self._music_error = ""
+        self._last_flash = -1e9
         right = outer
 
         self.pad_label = QLabel()
@@ -371,18 +511,101 @@ class PatternDialog(QDialog):
 
     @property
     def mode(self) -> int:
-        """0 = single pattern, 1 = program (Ablauf)."""
-        return self.right_stack.currentIndex()
+        """0 = single pattern, 1 = program (Ablauf), 2 = random."""
+        return self._mode
 
     def set_mode(self, mode: int):
-        mode = 1 if mode == 1 else 0
+        mode = mode if mode in (0, 1, 2, 3) else 0
         if mode != self.mode and self.running:
             self.stop()
+        self._mode = mode
         for i, b in enumerate(self.mode_btns):
             b.setChecked(i == mode)
         self.left_stack.setCurrentIndex(mode)
-        self.right_stack.setCurrentIndex(mode)
+        self.right_stack.setCurrentIndex({0: 0, 1: 1, 2: 1, 3: 2}[mode])
         self.qs.setValue("pattern/mode", mode)
+        if mode == 2:
+            if self.random_prog is None:
+                self.reroll()
+            self._show_program(self.random_prog)
+        elif mode == 1:
+            self._prog_selected()
+
+    def active_program(self) -> P.Program | None:
+        return self.random_prog if self.mode == 2 else self.current_program()
+
+    # ------------------------------------------------------------ random
+    def _random_settings(self) -> dict:
+        mood = str(self._setting("r_mood", "gemischt"))
+        _l, _c, (b0, b1), (d0, d1) = P.MOODS.get(mood, P.MOODS["gemischt"])
+        return {"mood": mood, "bpm0": int(self._setting("r_bpm0", b0)), "bpm1": int(self._setting("r_bpm1", b1)),
+                "d0": int(self._setting("r_d0", d0)), "d1": int(self._setting("r_d1", d1)),
+                "m0": float(self._setting("r_m0", 1.0)), "m1": float(self._setting("r_m1", 3.0)),
+                "own": str(self.qs.value("pattern/r_own", "false")).lower() == "true"}
+
+    def _mood_changed(self, *_):
+        _l, _c, (b0, b1), (d0, d1) = P.MOODS[self.mood.currentData()]
+        for sp, v in ((self.r_bpm0, b0), (self.r_bpm1, b1), (self.r_d0, d0), (self.r_d1, d1)):
+            sp.blockSignals(True)
+            sp.setValue(v)
+            sp.blockSignals(False)
+        self._save_random()
+        self.reroll(restart=True)                  # a new mood is felt right away
+
+    def _save_random(self):
+        for k, v in (("r_mood", self.mood.currentData()), ("r_bpm0", self.r_bpm0.value()),
+                     ("r_bpm1", self.r_bpm1.value()), ("r_d0", self.r_d0.value()), ("r_d1", self.r_d1.value()),
+                     ("r_m0", self.r_m0.value()), ("r_m1", self.r_m1.value()),
+                     ("r_own", "true" if self.r_own.isChecked() else "false")):
+            self.qs.setValue(f"pattern/{k}", v)
+
+    def _random_changed(self, *_):
+        """Ranges changed: the running step moves into them now, the next step is rolled anew."""
+        self._save_random()
+        if not (self.mode == 2 and self.prunner.running and self.random_prog is not None):
+            self.reroll()
+            return
+        pr, i = self.random_prog, self.prunner.index
+        if 0 <= i < len(pr.steps):
+            st = pr.steps[i]
+            b0, b1 = sorted((self.r_bpm0.value(), self.r_bpm1.value()))
+            d0, d1 = sorted((self.r_d0.value(), self.r_d1.value()))
+            st.bpm = int(min(b1, max(b0, st.bpm)))
+            st.depth = int(min(d1, max(d0, st.depth)))
+        del pr.steps[i + 1:]
+        self._roll_next()
+        self._show_program(pr)
+
+    def _roll(self, last: str | None) -> P.Step:
+        return P.random_step(self._rng, self.mood.currentData(), (self.r_bpm0.value(), self.r_bpm1.value()),
+                             (self.r_d0.value(), self.r_d1.value()), (self.r_m0.value(), self.r_m1.value()),
+                             last, self.user if self.r_own.isChecked() else None)
+
+    def _roll_next(self):
+        pr = self.random_prog
+        pr.steps.append(self._roll(pr.steps[-1].pattern if pr.steps else None))
+
+    def reroll(self, restart: bool = False):
+        """Live random: a program that only knows the current and the next step;
+        each further step is rolled when the previous one starts."""
+        import random
+
+        if not hasattr(self, "_rng"):
+            self._rng = random.Random()
+        running = self.mode == 2 and self.prunner.running and self.random_prog is not None
+        if running:
+            pr, i = self.random_prog, self.prunner.index
+            del pr.steps[i + 1:]
+            self._roll_next()
+            if restart:
+                self.prunner.skip(self._now(), 1)  # straight into the new step
+                self._roll_next()
+        else:
+            self.random_prog = P.Program("Zufall", [], loop=False, smooth=True)
+            self._roll_next()
+            self._roll_next()
+        if self.mode == 2:
+            self._show_program(self.random_prog)
 
     def current(self) -> P.Pattern | None:
         it = self.list.currentItem()
@@ -482,7 +705,11 @@ class PatternDialog(QDialog):
         self.runner.configure(self._now(), bpm=self.bpm.value(), lo=lo, hi=hi)
 
     def nudge(self, depth: float = 0, tempo: float = 0):
-        if self.mode == 1:
+        if self.mode == 3:
+            if depth:
+                self.m_depth.setValue(int(round(self.m_depth.value() + depth)))
+            return
+        if self.mode >= 1:
             self._offset_f[0] += tempo
             self._offset_f[1] += depth
             self._update_offsets()
@@ -493,8 +720,15 @@ class PatternDialog(QDialog):
             self.bpm.setValue(int(round(self.bpm.value() + tempo)))
 
     def step_pattern(self, d: int):
-        if self.mode == 1:
+        if self.mode == 3:
+            return
+        if self.mode >= 1:
             if self.prunner.running:
+                if self.mode == 2:                             # random: no wrapping around
+                    if d < 0 and self.prunner.index == 0:
+                        return
+                    while self.prunner.index + d >= len(self.random_prog.steps):
+                        self._roll_next()
                 self.prunner.skip(self._now(), d)
                 self._tick()
             return
@@ -504,6 +738,200 @@ class PatternDialog(QDialog):
         cur = self.list.currentRow()
         pos = rows.index(cur) if cur in rows else -1
         self.list.setCurrentRow(rows[(pos + d) % len(rows)])
+
+    # ------------------------------------------------------------ music
+    def _music_settings(self, *_):
+        self.qs.setValue("pattern/m_source", self.m_source.currentData())
+        self.qs.setValue("pattern/m_every", self.m_every.currentData())
+        self.qs.setValue("pattern/m_sens", self.m_sens.value())
+        self.qs.setValue("pattern/m_level", "true" if self.m_level.isChecked() else "false")
+        self.qs.setValue("pattern/m_depth", self.m_depth.value())
+        self.m_depth_val.setText(f"{self.m_depth.value()} %")
+        self.music.every = self.m_every.currentData()
+        self.music.lo, self.music.hi = 100 - self.m_depth.value(), 100
+        self.music.follow_level = self.m_level.isChecked()
+        if self.tracker is not None:
+            self.tracker.sensitivity = self.m_sens.value() / 100
+
+    def _on_samples(self, samples, arrival_ms: float):
+        """Capture thread: find beats, remember them with their wall-clock time."""
+        tr = self.tracker
+        if tr is None:
+            return
+        self._stream_samples += len(samples)
+        base = arrival_ms - self._stream_samples / M.RATE * 1000
+        self._stream_base = base if self._stream_base is None else min(self._stream_base, base)
+        for b in tr.feed(samples):
+            self._beats.append((self._stream_base + b * 1000, tr.level))
+
+    def _on_capture_error(self, msg: str):
+        self._music_error = msg
+
+    def _start_music(self, command=None):
+        win = self.parent()
+        if win is not None and getattr(win, "timer", None) is not None and win.timer.isActive():
+            win.pause()
+        self.runner.stop()
+        self.prunner.stop()
+        self._music_settings()
+        self.tracker = M.BeatTracker(self.m_sens.value() / 100)
+        self._beats.clear()
+        self._stream_base, self._stream_samples, self._music_error = None, 0, ""
+        cmd = command if command is not None else M.capture_command(self.m_source.currentData())
+        self.capture = M.AudioCapture(self._on_samples, cmd, self._on_capture_error)
+        try:
+            self.capture.start()
+        except (RuntimeError, OSError) as e:
+            self.capture = None
+            self.m_info.setText(str(e))
+            return
+        self.music.start()
+        self.timer.start()
+        self.play_btn.setIcon(theme.icon("pause", theme.ON_ACCENT))
+        self.play_btn.setText("Stopp")
+        self.m_info.setText("Höre zu…")
+
+    def _stop_music(self):
+        if self.capture is not None:
+            self.capture.stop()
+            self.capture = None
+        self.tracker = None
+        self.music.stop()
+        if hasattr(self, "m_flash"):
+            self.m_flash.set_on(False)
+
+    def _music_tick(self):
+        now = time.monotonic() * 1000
+        while self._beats:
+            t, level = self._beats.popleft()
+            self.music.beat(t, level)
+            self._last_flash = t
+        self.music.tick(now)
+        self.m_flash.set_on(now - self._last_flash < 120)
+        if self._music_error and (self.capture is None or not self.capture.running):
+            msg = self._music_error
+            self.stop()
+            self.m_info.setText(f"Aufnahme beendet: {msg[:120]}")
+            return
+        bpm = self.music.bpm()
+        lvl = self.tracker.level if self.tracker is not None else 0.0
+        bar = "▮" * int(round(lvl * 10)) + "▯" * (10 - int(round(lvl * 10)))
+        self.m_info.setText(f"{bar}   " + (f"≈ {bpm:.0f} Schläge/min" if bpm else "suche den Takt…"))
+        win = self.parent()
+        if win is not None and hasattr(win, "rail"):
+            pos = self.ctl.device_position()
+            win.rail.set_device_position(pos if pos is not None else
+                                         (M.position_at(self.music.acts, now) if self.music.acts else None))
+
+    # ------------------------------------------------------------ phone remote
+    def remote_state(self) -> dict:
+        now = self._now()
+        cur = self.prunner.current(now) if self.prunner.running else None
+        if self.mode == 0:
+            p = self.current()
+            name = p.name if p else ""
+            bpm, depth = self.bpm.value(), self.depth.value()
+        else:
+            pr = self.active_program()
+            name = pr.name if pr else ""
+            if cur is not None:
+                bpm, depth = cur
+            else:
+                bpm, depth = self.bpm.value(), self.depth.value()
+        titles = {0: "Muster", 1: "Ablauf", 2: "Zufall", 3: "Musik"}
+        curve, sub = self._remote_curve(now)
+        if self.mode == 3:
+            return {"running": self.running, "mode": 3, "name": "", "title": "Musik",
+                    "bpm": self.music.bpm() or 0, "depth": self.m_depth.value(), "now": self.m_info.text(),
+                    "curve": [], "sub": "", "step": "", "time": "",
+                    "patterns": [p.name for p in self.all_patterns()],
+                    "programs": [p.name for p in self.all_programs()]}
+        return {"running": self.running, "mode": self.mode, "name": name,
+                "title": f"{titles[self.mode]}: {name}" if self.mode < 2 else "Zufall · " + self.mood.currentText(),
+                "bpm": bpm, "depth": depth, "now": self.pnow.text() if self.mode else "",
+                "curve": curve, "sub": sub, **self._remote_progress(now),
+                "mood": self.mood.currentData(), "moods": [[k, v[0]] for k, v in P.MOODS.items()],
+                "patterns": [p.name for p in self.all_patterns()],
+                "programs": [p.name for p in self.all_programs()]}
+
+    def _remote_progress(self, now: float) -> dict:
+        """Step and time of a running program, short, for the phone."""
+        if self.mode == 0 or not self.prunner.running or self.prunner.index < 0:
+            return {"step": "", "time": ""}
+        pr = self.prunner.program
+        el = self.prunner.elapsed(now)
+        if self.mode == 2:
+            st = pr.steps[self.prunner.index]
+            left = pr.starts()[self.prunner.index] + st.minutes * 60_000 - el
+            return {"step": f"Abschnitt {self.prunner.index + 1}", "time": f"Wechsel in {_fmt_min(left)}"}
+        return {"step": f"Schritt {self.prunner.index + 1} von {len(pr.steps)}",
+                "time": f"{_fmt_min(el)} / {_fmt_min(pr.total_ms)}"}
+
+    def _remote_curve(self, now: float) -> tuple[list, str]:
+        """What plays now as points (x 0..1, position 0..1 within the depth), for the phone."""
+        if self.mode == 0:
+            p, bpm, depth = self.current(), self.bpm.value(), self.depth.value()
+        else:
+            pr = self.active_program()
+            if pr is None or not pr.steps:
+                return [], ""
+            i = self.prunner.index if self.prunner.running and self.prunner.index >= 0 else 0
+            st = pr.steps[i]
+            base = self.find_pattern(st.pattern)
+            p = st.part(base) if base is not None and base.blocks else None
+            cur = self.prunner.current(now) if self.prunner.running else None
+            bpm, depth = cur if cur is not None else (st.bpm, st.depth)
+            if p is None:
+                return [], ""
+        if p is None:
+            return [], ""
+        one = P.cycle_ms(p, bpm)
+        pts = P.preview(p, bpm, max(1, min(6, int(6000 / one))) if one > 0 else 1)
+        if len(pts) < 2:
+            return [], ""
+        end = pts[-1][0] or 1.0
+        lo = (100 - depth) / 100
+        curve = [[round(t / end, 4), round(lo + f * (1 - lo), 4)] for t, f in pts[:400]]
+        return curve, f"{p.name} · {one / 1000:.1f} s pro Durchlauf".replace(".", ",")
+
+    def remote_command(self, c: dict) -> None:
+        cmd = c.get("cmd")
+        try:
+            if cmd == "toggle":
+                self.toggle()
+            elif cmd == "start" and not self.running:
+                self.start()
+            elif cmd == "stop":
+                self.stop()
+            elif cmd == "nudge":
+                self.nudge(depth=float(c.get("depth", 0)), tempo=float(c.get("tempo", 0)))
+            elif cmd == "set":
+                if self.mode == 0:
+                    if "bpm" in c:
+                        self.bpm.setValue(int(c["bpm"]))
+                    if "depth" in c:
+                        self.depth.setValue(int(c["depth"]))
+                elif self.prunner.running:          # programs: move the plan by the difference
+                    bpm, depth = self.prunner.current(self._now())
+                    self.nudge(tempo=float(c.get("bpm", bpm)) - bpm, depth=float(c.get("depth", depth)) - depth)
+            elif cmd == "mode":
+                self.set_mode(int(c.get("mode", 0)))
+            elif cmd == "select":
+                name = str(c.get("name", ""))
+                if self.mode == 0:
+                    if not self._select_name(name):
+                        self.filter.setCurrentIndex(0)
+                        self._select_name(name)
+                elif self.mode == 1:
+                    self._select_program(name)
+            elif cmd == "step":
+                self.step_pattern(int(c.get("d", 1)))
+            elif cmd == "mood":
+                i = self.mood.findData(str(c.get("mood", "")))
+                if i >= 0:
+                    self.mood.setCurrentIndex(i)
+        except (TypeError, ValueError):
+            pass
 
     # ------------------------------------------------------------ controller
     def pad_state(self, name):
@@ -522,6 +950,8 @@ class PatternDialog(QDialog):
     _pad_was_used = False
 
     def pad_event(self, ev):
+        if not ev.init:
+            self.ctl.touch()
         if ev.kind == "axis":
             if ev.number == G.AX_DY and not ev.init and ev.value and self._axes.get(ev.number, 0) == 0:
                 self.nudge(depth=self.STEP_DEPTH if ev.value < 0 else -self.STEP_DEPTH)
@@ -550,7 +980,12 @@ class PatternDialog(QDialog):
     def _pad_tick(self):
         dt = self.pad_timer.interval() / 1000
         ly, ry = self._stick(G.AX_LY), self._stick(G.AX_RY)
-        if self.mode == 1 and (ly or ry):           # program: the sticks move the offsets
+        if self.mode == 3:
+            if ly:
+                self._pad_was_used = True
+                self.m_depth.setValue(int(round(self.m_depth.value() - ly * self.STICK_DEPTH * dt)))
+            return
+        if self.mode >= 1 and (ly or ry):           # program: the sticks move the offsets
             self._pad_was_used = True
             self._offset_f[0] -= ry * self.STICK_TEMPO * dt
             self._offset_f[1] -= ly * self.STICK_DEPTH * dt
@@ -657,13 +1092,26 @@ class PatternDialog(QDialog):
         self.pedit_btn.setText("Als Kopie ändern" if pr is not None and pr.builtin else "Bearbeiten")
         if pr is None:
             return
-        if self.prunner.running and pr is not self.prunner.program:
+        if self.mode == 1 and self.prunner.running and pr is not self.prunner.program:
             self.stop()
         self.qs.setValue("pattern/last_program", pr.name)
-        self.ptitle.setText(pr.name)
-        end = "fängt dann von vorne an" if pr.loop else "stoppt dann"
-        self.pinfo.setText(f"{'Vorlage' if pr.builtin else 'Eigener Ablauf'} · {len(pr.steps)} Schritte · "
-                           f"{_fmt_min(pr.total_ms)} · {end}")
+        if self.mode == 1:
+            self._show_program(pr)
+
+    def _show_program(self, pr: P.Program | None):
+        if pr is None:
+            return
+        if self.mode == 2:
+            self.ptitle.setText("Zufall · " + self.mood.currentText())
+            self.pinfo.setText(f"wechselt alle {self.r_m0.value():g}–{self.r_m1.value():g} min · "
+                               f"Tempo {self.r_bpm0.value()}–{self.r_bpm1.value()} · "
+                               f"Tiefe {self.r_d0.value()}–{self.r_d1.value()} % · würfelt jeden Abschnitt neu"
+                               .replace(".", ","))
+        else:
+            self.ptitle.setText(pr.name)
+            end = "fängt dann von vorne an" if pr.loop else "stoppt dann"
+            self.pinfo.setText(f"{'Vorlage' if pr.builtin else 'Eigener Ablauf'} · {len(pr.steps)} Schritte · "
+                               f"{_fmt_min(pr.total_ms)} · {end}")
         self.pview.set_program(pr)
 
     def _update_offsets(self):
@@ -744,7 +1192,29 @@ class PatternDialog(QDialog):
 
     @property
     def running(self) -> bool:
-        return self.runner.running or self.prunner.running
+        return self.runner.running or self.prunner.running or self.music.running
+
+    # safety timer source
+    def safety_active(self) -> bool:
+        return self.running
+
+    def safety_pause(self) -> bool:
+        if not self.running:
+            return False
+        now = self._now()
+        self._resume = (self.mode, self.prunner.elapsed(now) if self.prunner.running else None)
+        self.stop()
+        return True
+
+    def safety_resume(self) -> None:
+        if self._resume is None:
+            return
+        mode, elapsed = self._resume
+        self._resume = None
+        self.set_mode(mode)
+        self.start(reroll=False)
+        if elapsed is not None and self.prunner.running:
+            self.prunner.start_ms = self._now() - elapsed
 
     def toggle(self):
         if self.running:
@@ -752,9 +1222,14 @@ class PatternDialog(QDialog):
         else:
             self.start()
 
-    def start(self):
-        if self.mode == 1:
-            pr = self.current_program()
+    def start(self, reroll: bool = True):
+        if self.mode == 3:
+            self._start_music()
+            return
+        if self.mode == 2 and reroll:
+            self.reroll()
+        if self.mode >= 1:
+            pr = self.active_program()
             if pr is None or not pr.steps:
                 return
         else:
@@ -765,7 +1240,7 @@ class PatternDialog(QDialog):
         if win is not None and hasattr(win, "pause") and getattr(win, "timer", None) is not None \
                 and win.timer.isActive():
             win.pause()                    # the video and a pattern never drive the device together
-        if self.mode == 1:
+        if self.mode >= 1:
             self.runner.stop()
             self.prunner.start(self._now(), pr)
         else:
@@ -780,6 +1255,7 @@ class PatternDialog(QDialog):
     def stop(self):
         self.runner.stop()
         self.prunner.stop()
+        self._stop_music()
         self.timer.stop()
         self.view.set_phase(None)
         self.pview.set_elapsed(None)
@@ -789,7 +1265,13 @@ class PatternDialog(QDialog):
 
     def _tick(self):
         now = self._now()
+        if self.music.running:
+            self._music_tick()
+            return
         if self.prunner.running or self.prunner.finished:
+            if self.mode == 2 and self.prunner.running and self.random_prog is not None:
+                if self.prunner.step_at(self.prunner.elapsed(now)) >= len(self.random_prog.steps) - 1:
+                    self._roll_next()                          # live: roll the step after this one
             self.prunner.tick(now)
             if self.prunner.finished:
                 self.prunner.finished = False
@@ -798,12 +1280,22 @@ class PatternDialog(QDialog):
                 return
             pr = self.prunner.program
             el = self.prunner.elapsed(now)
-            self.pview.set_elapsed(el)
             st = pr.steps[self.prunner.index]
+            if self.mode == 2:                                 # show only this step and the next
+                i = self.prunner.index
+                self.pview.set_program(P.Program("Zufall", pr.steps[i:i + 2]))
+                self.pview.set_elapsed(el - pr.starts()[i])
+            else:
+                self.pview.set_elapsed(el)
             bpm, depth = self.prunner.current(now)
-            self.pnow.setText(f"Schritt {self.prunner.index + 1}/{len(pr.steps)} · {st.pattern} · "
-                              f"{round(bpm)} Hübe/min · Tiefe {round(depth)} % · "
-                              f"{_fmt_min(el)} von {_fmt_min(pr.total_ms)}, noch {_fmt_min(pr.total_ms - el)}")
+            if self.mode == 2:
+                left = pr.starts()[self.prunner.index] + st.minutes * 60_000 - el
+                self.pnow.setText(f"{st.pattern} · {round(bpm)} Hübe/min · Tiefe {round(depth)} % · "
+                                  f"nächster Wechsel in {_fmt_min(left)}")
+            else:
+                self.pnow.setText(f"Schritt {self.prunner.index + 1}/{len(pr.steps)} · {st.pattern} · "
+                                  f"{round(bpm)} Hübe/min · Tiefe {round(depth)} % · {_fmt_min(el)} von "
+                                  f"{_fmt_min(pr.total_ms)}, noch {_fmt_min(pr.total_ms - el)}")
             runner = self.prunner.runner
         else:
             self.runner.tick(now)

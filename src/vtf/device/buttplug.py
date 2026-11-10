@@ -28,18 +28,43 @@ class RemoteDevice:
     linear_features: int = 0          # number of LinearCmd actuators
     step_count: int = 0
     messages: dict = field(default_factory=dict)
+    scalars: list = field(default_factory=list)    # ActuatorType per ScalarCmd feature (Vibrate, …)
 
     @property
     def is_linear(self) -> bool:
         return self.linear_features > 0
+
+    @property
+    def is_vibe(self) -> bool:
+        return not self.is_linear and bool(self.scalars)
+
+    @property
+    def usable(self) -> bool:
+        return self.is_linear or bool(self.scalars)
 
 
 def _parse_device(d: dict) -> RemoteDevice:
     msgs = d.get("DeviceMessages") or {}
     linear = msgs.get("LinearCmd") or []
     steps = int(linear[0].get("StepCount", 0)) if linear else 0
+    scalars = [str(x.get("ActuatorType") or "Vibrate") for x in (msgs.get("ScalarCmd") or [])]
     return RemoteDevice(int(d["DeviceIndex"]), str(d.get("DeviceDisplayName") or d.get("DeviceName") or "?"),
-                        len(linear), steps, msgs)
+                        len(linear), steps, msgs, scalars)
+
+
+#: how a vibrating (or rotating) device follows the script
+VIBE_MODES = (("speed", "Tempo (schnelle Hübe = stark)"), ("depth", "Tiefe (tief = stark)"))
+VIBE_FULL_SPEED = 400.0               # positions per second that mean full strength
+
+
+def vibe_strength(mode: str, last_pos: float | None, pos: float, duration_ms: int) -> float:
+    """0..1 strength for a stroke from last_pos to pos in duration_ms."""
+    if mode == "depth":
+        return max(0.0, min(1.0, 1 - pos / 100))
+    if last_pos is None or duration_ms <= 0:
+        return 0.3
+    speed = abs(pos - last_pos) / duration_ms * 1000
+    return max(0.0, min(1.0, speed / VIBE_FULL_SPEED))
 
 
 class ButtplugDevice(Device):
@@ -60,6 +85,9 @@ class ButtplugDevice(Device):
         self._reader: threading.Thread | None = None
         self._pinger: threading.Thread | None = None
         self.server_name = ""
+        self.vibe_mode = "speed"
+        self._vibe_last: float | None = None
+        self._vibe_sent = -1.0
 
     # ------------------------------------------------------------ connection
     @property
@@ -133,13 +161,26 @@ class ButtplugDevice(Device):
         dev = self._device()
         if dev is None:
             return
+        if not dev.is_linear:
+            self._vibrate(dev, float(position), duration_ms)
+            return
         pos = max(0.0, min(100.0, float(position))) / 100
         vectors = [{"Index": i, "Duration": max(0, int(duration_ms)), "Position": round(pos, 4)}
                    for i in range(dev.linear_features)]
         # fire and forget: waiting for "Ok" would add a full round trip of latency
         self._send({"LinearCmd": {"DeviceIndex": dev.index, "Vectors": vectors}})
 
+    def _vibrate(self, dev: RemoteDevice, position: float, duration_ms: int) -> None:
+        v = round(vibe_strength(self.vibe_mode, self._vibe_last, position, duration_ms), 2)
+        self._vibe_last = position
+        if abs(v - self._vibe_sent) < 0.02:
+            return
+        self._vibe_sent = v
+        scalars = [{"Index": i, "Scalar": v, "ActuatorType": t} for i, t in enumerate(dev.scalars)]
+        self._send({"ScalarCmd": {"DeviceIndex": dev.index, "Scalars": scalars}})
+
     def stop(self) -> None:
+        self._vibe_last, self._vibe_sent = None, -1.0
         if not self.connected:
             return
         dev = self._device()
@@ -157,9 +198,13 @@ class ButtplugDevice(Device):
     def _add_device(self, d: dict) -> None:
         dev = _parse_device(d)
         self.devices[dev.index] = dev
-        if dev.is_linear and (self.selected is None or self.selected not in self.devices):
+        current = self.devices.get(self.selected) if self.selected is not None else None
+        if dev.is_linear and (current is None or not current.is_linear):
+            self.selected = dev.index         # a stroker wins over a vibrator
+        elif dev.usable and current is None:
             self.selected = dev.index
-        kind = "Hub-Gerät" if dev.is_linear else "ohne Positionssteuerung"
+        kind = ("Hub-Gerät" if dev.is_linear else "Vibration/Drehung" if dev.scalars
+                else "ohne Steuerung")
         self._emit(f"Gefunden: {dev.name} ({kind})")
 
     def _send(self, msg: dict) -> int:
@@ -234,7 +279,8 @@ class ButtplugDevice(Device):
             dev = self.devices.pop(int(body.get("DeviceIndex", -1)), None)
             if dev:
                 if self.selected == dev.index:
-                    self.selected = next((d.index for d in self.devices.values() if d.is_linear), None)
+                    self.selected = next((d.index for d in self.devices.values() if d.is_linear),
+                                         next((d.index for d in self.devices.values() if d.usable), None))
                 self._emit(f"Gerät getrennt: {dev.name}")
         elif name == "ScanningFinished":
             self._emit("Suche beendet")

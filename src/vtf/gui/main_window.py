@@ -11,32 +11,53 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSlider,
-                               QSplitter, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .. import __version__, gpu
-from .. import editing
+from .. import __version__, editing, gpu
 from ..analysis import MotionData
 from ..batch import VIDEO_EXTS, make_metadata
-from ..funscript import AXES, Action, Funscript, funscript_path_for, load_axes, position_at
+from ..editing import rhythm
+from ..funscript import (
+    AXES,
+    Action,
+    Funscript,
+    funscript_path_for,
+    load_axes,
+    position_at,
+)
 from ..generator import generate, generate_axes
 from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
-from ..editing import rhythm
 from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
+from .curve_widget import CurveWidget
+from .device_ui import DeviceController
 from .heatbar import HeatBar
 from .player_panel import PlayerPanel
-from .curve_widget import CurveWidget
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
 from .timeline import TimelineSlider
-from .video_view import VideoView
-from .device_ui import DeviceController
 from .update_ui import UpdateController
+from .video_view import VideoView
 from .workers import AnalysisWorker
 
 
@@ -255,7 +276,12 @@ class MainWindow(QMainWindow):
 
         self.updates = UpdateController(self, self.qsettings)
         self.devices = DeviceController(self, self.qsettings)
+        self.devices.register_source(self)
         self.pattern_dialog = None
+        from .remote_ui import RemoteController
+        self.remote = RemoteController(self, self.qsettings)
+        from .players_ui import ExternalSync
+        self.external = ExternalSync(self, self.devices, self.qsettings)
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
@@ -344,6 +370,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
         self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
         self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
+        self._act(m, "Script aus Musik…", self.music_script)
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -389,9 +416,12 @@ class MainWindow(QMainWindow):
         self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
+        self._act(m, "Einrichtungs-Assistent…", lambda: self.devices.open_wizard())
         self._act(m, "Trennen", lambda: self.devices.disconnect_device())
         m.addSeparator()
         self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
+        self._act(m, "Handy-Fernbedienung…", self.open_remote)
+        self._act(m, "Andere Player (mpv, VLC, VR)…", self.open_players)
         m.addSeparator()
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
         m = self.menuBar().addMenu("&Hilfe")
@@ -678,14 +708,47 @@ class MainWindow(QMainWindow):
             self._bookmark_items.append(a)
 
     # ------------------------------------------------------------ patterns
-    def open_patterns(self):
+    def ensure_patterns(self):
+        """The pattern control (created on first use, also for the phone remote)."""
         from .pattern_dialog import PatternDialog
 
         if self.pattern_dialog is None:
             self.pattern_dialog = PatternDialog(self.devices, self)
+        return self.pattern_dialog
+
+    def open_players(self):
+        from .players_ui import PlayersDialog
+
+        if getattr(self, "_players_dialog", None) is None:
+            self._players_dialog = PlayersDialog(self.external, self)
+        self._players_dialog.show()
+        self._players_dialog.raise_()
+
+    def open_remote(self):
+        from .remote_ui import RemoteDialog
+
+        RemoteDialog(self.remote, self).exec()
+
+    def open_patterns(self):
+        self.ensure_patterns()
         self.pattern_dialog.show()
         self.pattern_dialog.raise_()
         self.pattern_dialog.activateWindow()
+
+    # safety timer source: the video drives the device while it plays
+    def safety_active(self) -> bool:
+        dev = self.devices.device
+        return self.timer.isActive() and dev is not None and dev.connected
+
+    def safety_pause(self) -> bool:
+        if self.timer.isActive():
+            self.pause()
+            return True
+        return False
+
+    def safety_resume(self) -> None:
+        if not self.timer.isActive():
+            self.toggle_play()
 
     def _stop_patterns(self):
         if self.pattern_dialog is not None and self.pattern_dialog.running:
@@ -708,6 +771,45 @@ class MainWindow(QMainWindow):
         dlg = RhythmDialog(a, b, self.curve.duration_ms, self)
         if dlg.exec():
             self.apply_rhythm(**dlg.values())
+
+    def music_script(self):
+        if not self.cap or not self.curve.editable or not self.video_path:
+            self._status("Script aus Musik geht im Modus „Bearbeiten“ mit geladenem Video")
+            return
+        from .music_dialog import MusicScriptDialog
+
+        sel = sorted(self.curve.selection)
+        acts = self.curve.actions
+        a, b = (acts[sel[0]].at, acts[sel[-1]].at) if len(sel) >= 2 else (0, self.curve.duration_ms)
+        dlg = MusicScriptDialog(a, b, self.curve.duration_ms, self)
+        if dlg.exec():
+            self.apply_music_script(**dlg.values())
+
+    def apply_music_script(self, start_ms, end_ms, every=1, sensitivity=0.5, lo=0, hi=100, offset_ms=0):
+        from .. import music
+
+        start_ms, end_ms = sorted((start_ms, end_ms))
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            beats = music.beats_from_file(self.video_path, sensitivity, start_ms / 1000,
+                                          (end_ms - start_ms) / 1000)
+        except (RuntimeError, OSError) as e:
+            self._status(f"Tonspur nicht lesbar: {e}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+        new = [x for x in music.script_from_beats(beats, every, lo, hi, offset_ms) if start_ms <= x.at <= end_ms]
+        if not new:
+            self._status("Keine Schläge gefunden (keine Tonspur oder zu leise). Empfindlicher stellen?")
+            return
+        self.curve.editStarted.emit()
+        keep = [x for x in self.curve.actions if not start_ms <= x.at <= end_ms]
+        self.curve.actions = sorted(keep + new, key=lambda x: x.at)
+        ids = {id(x) for x in new}
+        self.curve.actionsEdited.emit()
+        self.curve.set_selection({i for i, x in enumerate(self.curve.actions) if id(x) in ids})
+        bpm = music.tempo(beats)
+        self._status(f"Script aus Musik: {len(beats)} Schläge" + (f", ≈ {bpm:.0f} pro Minute" if bpm else ""))
 
     def apply_rhythm(self, start_ms, end_ms, bpm, lo, hi, pattern):
         self.curve.editStarted.emit()
@@ -786,11 +888,14 @@ class MainWindow(QMainWindow):
         else:
             self.curve.follow = True
             self._stop_patterns()
+            if self.external.running:
+                self.external.disconnect_player()
             if self._cur_idx >= self.frame_count - 1:
                 self.seek_frame(0)
             self._play_origin_ms = max(0, self._cur_idx) / self.fps * 1000
             self._clock.start()
             self.devices.set_actions(self.stroke_actions())
+            self.devices.set_axes(self.all_axes())
             self.timer.start(10)
             self.audio.play(self._play_origin_ms)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
@@ -1076,6 +1181,7 @@ class MainWindow(QMainWindow):
     def emergency_stop(self):
         """Esc: stop the device immediately and pause playback."""
         self._stop_patterns()
+        self.external.emergency_stop()
         self.devices.emergency_stop()
         if self.timer.isActive():
             self.pause()
@@ -1308,6 +1414,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_position(self):
         self.devices.set_actions(self.stroke_actions())
+        self.devices.set_axes(self.all_axes())
         self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))
         self._update_heat()
         self._update_meta()
@@ -1478,7 +1585,9 @@ class MainWindow(QMainWindow):
             "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
             "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
             "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
-            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"
+            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"            "Zufall wechselt selbst, Musik folgt dem Takt der Musik am PC.\n\n"
+            "Gerät-Menü: Einrichtungs-Assistent, Handy-Fernbedienung, Andere Player (mpv, VLC, VR).\n"
+            "Im Fenster „Gerät“: Sicherheits-Timer (abschaltbar), Vibration folgt Tempo/Tiefe.\n"
             "Eigene Muster gibt es auch bei Strg+T.\n\n"
             "Esc = Not-Aus (Gerät stoppen)."))
 
@@ -1541,6 +1650,8 @@ class MainWindow(QMainWindow):
         self.cancel_analysis()
         self.updates.shutdown()
         self._stop_patterns()
+        self.remote.shutdown()
+        self.external.shutdown()
         self.devices.shutdown()
         self.audio.shutdown()
         self.player.save()

@@ -15,7 +15,7 @@ Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
 Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
 Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 
-## Funktionen (Stand 0.9)
+## Funktionen (Stand 0.10)
 
 | | Funktion | Status |
 |---|---|---|
@@ -44,6 +44,9 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
 | 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
 | 25 | Muster-Steuerung: über 50 Muster, eigene aus Bausteinen, Abläufe (z.B. 1 Stunde), Controller | ✅ |
+| 26 | Zufallsgenerator, Musik-Modus (Gerät folgt dem Takt), Script aus Musik | ✅ |
+| 27 | Handy-Fernbedienung im Browser, Einrichtungs-Assistent, Sicherheits-Timer | ✅ |
+| 28 | Andere Player (mpv, VLC, DeoVR, HereSphere), Vibratoren, TCode-Geräte (OSR2/SR6) mit allen Achsen | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -257,6 +260,14 @@ Bluetooth-Verbindung übernimmt **[Intiface Central](https://intiface.com/centra
    **Verbinden**. Die App startet die Gerätesuche, und das Gerät erscheint in der Liste.
 4. Mit **Oben/Unten** testen, dann das Video abspielen: Das Gerät folgt dem Script.
 
+**Am einfachsten beim ersten Mal:** Gerät → **Einrichtungs-Assistent**. Er führt
+durch Verbinden, Richtung, Hubbereich, Höchsttempo (4 Hübe zum Ausprobieren
+pro Stufe) und Verzögerung. Für die Verzögerung leuchtet ein Kreis im Takt auf
+und klickt, das Gerät soll genau dann unten sein. Den Regler schiebst du, bis
+es passt.
+
+![Einrichtungs-Assistent](docs/wizard.png)
+
 Ohne Gerät: Art **„Simulation“**. Die Hubschiene neben dem Video zeigt mit
 einer weißen Umrandung, wo das Gerät gerade wäre. Die Simulation bildet den
 F21S nach: 16 Positionen, voller Hub frühestens in etwa 200 ms.
@@ -273,6 +284,51 @@ Einstellungen im Geräte-Dialog:
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen
 Script-Position und folgt erst dann.
+
+**Sicherheits-Timer** (im Fenster „Gerät“, standardmäßig aus): stoppt nach
+einer Höchstdauer am Stück, stoppt, wenn so lange nichts bedient wurde
+(Taste, Maus, Controller, Handy), und macht auf Wunsch alle paar Minuten eine
+kurze Pause, danach geht es von selbst weiter. Jeder Wert ist einzeln
+abschaltbar (0 = aus). Gezählt wird nur, solange sich das Gerät bewegt.
+
+### Andere Geräte
+
+- **Vibratoren und andere Geräte ohne Hub** über Intiface (Lovense, We-Vibe und
+  hunderte mehr): Die Stärke kommt aus dem Script. Unter „Vibration folgt“
+  stellst du ein, ob schnelle Hübe stark sind (**Tempo**) oder tiefe Stellen
+  (**Tiefe**).
+- **OSR2, SR6 und andere TCode-Geräte**: Art „OSR2/SR6 u.a. (TCode)“, als
+  Adresse den USB-Port (`/dev/ttyUSB0` oder `/dev/ttyACM0`) oder
+  `udp://IP:Port` für WLAN. Alle Achsen werden genutzt: Hub, Surge, Sway,
+  Twist, Roll und Pitch, also auch die, die die App selbst erzeugt. Wenn der
+  USB-Port nicht aufgeht: `sudo usermod -aG dialout $USER`, dann neu anmelden.
+
+### Andere Player
+
+Gerät → **Andere Player (mpv, VLC, VR)**: Das Gerät folgt dem Script, während du
+das Video in einem anderen Player schaust. Das Script wird neben dem Video
+gesucht (gleicher Name, `.funscript`) oder in einem Script-Ordner, der auch
+Unterordner durchsucht.
+
+| Player | So einschalten |
+|---|---|
+| mpv (am genauesten) | `mpv --input-ipc-server=/tmp/mpvsocket video.mp4` oder `input-ipc-server=/tmp/mpvsocket` in `~/.config/mpv/mpv.conf` |
+| VLC | Einstellungen → Alle → Schnittstellen → Hauptschnittstellen → „Web“, unter Lua ein Passwort setzen, VLC neu starten |
+| DeoVR | Einstellungen → Remote control an, Adresse = IP der Brille |
+| HereSphere | Einstellungen → DeoVR Remote an, Adresse = IP der Brille |
+
+### Handy-Fernbedienung
+
+Gerät → **Handy-Fernbedienung** → „Fernbedienung an“. Am Handy (gleiches WLAN)
+öffnest du die angezeigte Adresse im Browser, zum Beispiel
+`http://192.168.0.20:8765`, und gibst die PIN ein. Eine App ist nicht nötig. Das
+Handy kann Start/Stopp, **Not-Aus**, Muster/Ablauf/Zufall wählen, Tiefe und
+Tempo einstellen und Schritte springen. Die PIN lässt sich jederzeit neu
+erzeugen, falsche PINs sperren das Handy kurz. Klappt die Verbindung nicht,
+blockiert die Firewall den Port:
+`sudo firewall-cmd --add-port=8765/tcp --permanent && sudo firewall-cmd --reload`.
+
+<img src="docs/remote.png" alt="Handy-Fernbedienung" width="300">
 
 ### Muster-Steuerung (ohne Video)
 
@@ -357,6 +413,30 @@ Muster, eine **Dauer** in Minuten und ein eigenes **Tempo** und eine eigene
 Eigene Abläufe liegen in `~/.config/video-to-funscript/programs.json`.
 
 ![Ablauf bauen](docs/program-editor.png)
+
+### Zufall und Musik
+
+- **Zufall**: wechselt Muster, Tempo und Tiefe von selbst, nie zweimal dasselbe
+  Muster hintereinander, manchmal nur ein Stück davon. Jeder Abschnitt wird
+  **live gewürfelt**, wenn er drankommt. Alles lässt sich beim Abspielen ändern:
+  - Eine neue **Stimmung** (Ruhig, Gemischt, Intensiv oder **Alles** mit allen
+    Mustern) wechselt sofort in einen neuen Abschnitt.
+  - Neue **Bereiche** für Tempo und Tiefe ziehen den laufenden Abschnitt gleich
+    mit hinein.
+  - Die **Wechselzeit** (z.B. alle 1–3 Minuten) gilt ab dem nächsten Abschnitt.
+  - „Neu würfeln“ bzw. Bild↓/RB springt sofort weiter.
+
+  Auch vom Handy aus lässt sich die Stimmung wechseln.
+- **Musik**: Das Gerät folgt dem Takt der Musik, die gerade auf dem PC läuft
+  (Spotify, YouTube, …), oder dem, was das Mikrofon hört. Die App erkennt die
+  Schläge, schätzt das Tempo und sagt die nächsten Schläge voraus, so ist das
+  Gerät trotz Verzögerung pünktlich unten. Einstellbar: Hub auf jeden, jeden
+  2. oder 4. Schlag, Empfindlichkeit, Tiefe und ob die Tiefe der Lautstärke
+  folgt. Aufgenommen wird mit `parec` oder `pw-record`, die unter Nobara
+  normalerweise schon installiert sind.
+- **Script aus Musik** (Bearbeiten → Script aus Musik): Für Videos, bei denen
+  Musik den Takt vorgibt. Setzt auf jeden Schlag in der Tonspur einen Hub,
+  für das ganze Video oder die markierten Punkte, mit Rückgängig.
 
 ## Kommandozeile
 
