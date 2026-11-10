@@ -5,6 +5,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-22.04
+    timeout-minutes: 15        # a hanging test must not block the PR for hours
     strategy:
       fail-fast: false
       matrix:
