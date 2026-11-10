@@ -796,16 +796,59 @@ class PatternDialog(QDialog):
             else:
                 bpm, depth = self.bpm.value(), self.depth.value()
         titles = {0: "Muster", 1: "Ablauf", 2: "Zufall", 3: "Musik"}
+        curve, sub = self._remote_curve(now)
         if self.mode == 3:
             return {"running": self.running, "mode": 3, "name": "", "title": "Musik",
                     "bpm": self.music.bpm() or 0, "depth": self.m_depth.value(), "now": self.m_info.text(),
+                    "curve": [], "sub": "", "step": "", "time": "",
                     "patterns": [p.name for p in self.all_patterns()],
                     "programs": [p.name for p in self.all_programs()]}
         return {"running": self.running, "mode": self.mode, "name": name,
                 "title": f"{titles[self.mode]}: {name}" if self.mode < 2 else "Zufall · " + self.mood.currentText(),
                 "bpm": bpm, "depth": depth, "now": self.pnow.text() if self.mode else "",
+                "curve": curve, "sub": sub, **self._remote_progress(now),
                 "patterns": [p.name for p in self.all_patterns()],
                 "programs": [p.name for p in self.all_programs()]}
+
+    def _remote_progress(self, now: float) -> dict:
+        """Step and time of a running program, short, for the phone."""
+        if self.mode == 0 or not self.prunner.running or self.prunner.index < 0:
+            return {"step": "", "time": ""}
+        pr = self.prunner.program
+        el = self.prunner.elapsed(now)
+        if self.mode == 2:
+            st = pr.steps[self.prunner.index]
+            left = pr.starts()[self.prunner.index] + st.minutes * 60_000 - el
+            return {"step": "Zufall", "time": f"Wechsel in {_fmt_min(left)}"}
+        return {"step": f"Schritt {self.prunner.index + 1} von {len(pr.steps)}",
+                "time": f"{_fmt_min(el)} / {_fmt_min(pr.total_ms)}"}
+
+    def _remote_curve(self, now: float) -> tuple[list, str]:
+        """What plays now as points (x 0..1, position 0..1 within the depth), for the phone."""
+        if self.mode == 0:
+            p, bpm, depth = self.current(), self.bpm.value(), self.depth.value()
+        else:
+            pr = self.active_program()
+            if pr is None or not pr.steps:
+                return [], ""
+            i = self.prunner.index if self.prunner.running and self.prunner.index >= 0 else 0
+            st = pr.steps[i]
+            base = self.find_pattern(st.pattern)
+            p = st.part(base) if base is not None and base.blocks else None
+            cur = self.prunner.current(now) if self.prunner.running else None
+            bpm, depth = cur if cur is not None else (st.bpm, st.depth)
+            if p is None:
+                return [], ""
+        if p is None:
+            return [], ""
+        one = P.cycle_ms(p, bpm)
+        pts = P.preview(p, bpm, max(1, min(6, int(6000 / one))) if one > 0 else 1)
+        if len(pts) < 2:
+            return [], ""
+        end = pts[-1][0] or 1.0
+        lo = (100 - depth) / 100
+        curve = [[round(t / end, 4), round(lo + f * (1 - lo), 4)] for t, f in pts[:400]]
+        return curve, f"{p.name} · {one / 1000:.1f} s pro Durchlauf".replace(".", ",")
 
     def remote_command(self, c: dict) -> None:
         cmd = c.get("cmd")

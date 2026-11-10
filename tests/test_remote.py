@@ -30,7 +30,7 @@ def test_server_pin_state_commands():
     try:
         base = f"http://127.0.0.1:{srv.port}"
         code, body = _get(base + "/")
-        assert code == 200 and b"NOT-AUS" in body
+        assert code == 200 and b"Not-Aus" in body
         assert _get(base + "/api/state?pin=000000")[0] == 401
         code, body = _get(base + "/api/state?pin=123456")
         assert code == 200 and json.loads(body)["bpm"] == 60
