@@ -434,3 +434,22 @@ def test_match_finds_position_between_pixels():
         moved = cv2.warpAffine(img, m, (200, 200), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
         score, off = t._match(moved, t.templates[0], 0.5)
         assert score > 0.9 and abs(off[1] - shift) < 0.12 and abs(off[0]) < 0.12
+
+
+def test_search_starts_where_the_last_move_points():
+    """Fast strokes move further between two frames than the point search reaches; started at
+    the predicted place (the last move) the points are found again."""
+    import cv2
+
+    from vtf.tracking import _features, _lk
+    rng = np.random.default_rng(5)
+    tex = cv2.GaussianBlur(rng.random((700, 300)).astype(np.float32), (0, 0), 2.0)
+    img = (40 + 200 * (tex - tex.min()) / np.ptp(tex)).astype(np.uint8)
+    a, b = img[100:400], img[250:550]          # the same content, 150 px further up
+    pts = _features(a, None, 40, rect=(100, 100, 200, 250))
+    _nxt, alone = _lk(a, b, pts)
+    nxt, good = _lk(a, b, pts, np.array([0.0, -150.0]))
+    assert alone.mean() < 0.3                  # too far for the search alone
+    assert good.mean() > 0.6                   # found again from the predicted place
+    off = np.abs((nxt - pts)[good].reshape(-1, 2) - [0, -150]).max(axis=1)
+    assert np.median(off) < 0.1 and (off < 1.0).mean() > 0.9

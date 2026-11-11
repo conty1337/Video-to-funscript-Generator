@@ -71,6 +71,8 @@ SCENARIOS = [
     Scenario("groß/klein im Wechsel, 1080p", (1920, 1080), 16.0, _mixed),
     Scenario("wenig Muster (Haut), 1080p", (1920, 1080), 16.0, _mixed, contrast=25.0),
     Scenario("mit Pausen, 720p", (1280, 720), 20.0, _pauses),
+    Scenario("schnell (3 Hz, ±150 px), 1080p", (1920, 1080), 10.0,
+             lambda t: 100.0 * np.sin(2 * np.pi * 3.0 * t)),
 ]
 SHUTTER = 0.5          # part of a frame the shutter is open: motion blur
 SUB = 6                # sub-frames averaged for the blur
@@ -83,10 +85,10 @@ def _texture(rng, h, w, blur):
     return tex
 
 
-def render(sc: Scenario, path: Path) -> tuple[np.ndarray, tuple]:
+def render(sc: Scenario, path: Path, seed: int = 1) -> tuple[np.ndarray, tuple]:
     """Write the video, return (truth y of the object centre per frame in px, box normalized)."""
     w, h = sc.size
-    rng = np.random.default_rng(1)
+    rng = np.random.default_rng(seed)
     k = h / 720
     bg = (40 + 80 * _texture(rng, h, w, 3 * k)).astype(np.float32)
     ow, oh = int(150 * k), int(150 * k)
@@ -136,11 +138,12 @@ def _true_turns(ts: np.ndarray, y: np.ndarray) -> list[tuple[float, float]]:
     return out
 
 
-def measure(sc: Scenario, workdir: Path, width: int, gen: GeneratorSettings, shake: float = 0.0) -> dict:
+def measure(sc: Scenario, workdir: Path, width: int, gen: GeneratorSettings, shake: float = 0.0,
+            seed: int = 1) -> dict:
     """shake: extra random jitter (px of the analysis frame) on the tracked motion, like a
     tracker that wobbles on a real video."""
     path = workdir / f"scene{SCENARIOS.index(sc)}_{sc.size[1]}p.avi"
-    ys, box = render(sc, path)
+    ys, box = render(sc, path, seed)
     h = sc.size[1]
     sec = TrackSection(0, (box,))
     s = AnalysisSettings(mode="track", track_sections=(sec,), width=width, hwaccel="none")

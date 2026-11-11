@@ -48,12 +48,31 @@ def _features(gray: np.ndarray, mask: np.ndarray | None, n: int,
     return pts
 
 
-def _lk(prev: np.ndarray, cur: np.ndarray, pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Track points prev -> cur; returns new points and a mask of the reliable ones."""
+def _shifted(img: np.ndarray, gx: int, gy: int) -> np.ndarray:
+    """The image moved by (-gx, -gy): what is at (x+gx, y+gy) comes to (x, y); edges repeat."""
+    h, w = img.shape[:2]
+    pad = max(abs(gx), abs(gy))
+    big = np.pad(img, pad, mode="edge")
+    return np.ascontiguousarray(big[pad + gy:pad + gy + h, pad + gx:pad + gx + w])
+
+
+def _lk(prev: np.ndarray, cur: np.ndarray, pts: np.ndarray,
+        guess: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Track points prev -> cur; returns new points and a mask of the reliable ones.
+    ``guess``: where the points probably moved (px). Fast motion goes beyond the search
+    window; the current frame is moved back by the guess first, so the plain search only
+    has to find the rest (the guess is added again afterwards)."""
+    g = np.zeros(2, np.int64)
+    if guess is not None:
+        g = np.round(np.asarray(guess, np.float64)).astype(np.int64)
+    if g.any():
+        cur = _shifted(cur, int(g[0]), int(g[1]))
     nxt, st, _ = cv2.calcOpticalFlowPyrLK(prev, cur, pts, None, **LK_PARAMS)
     back, st2, _ = cv2.calcOpticalFlowPyrLK(cur, prev, nxt, None, **LK_PARAMS)
     err = np.linalg.norm((pts - back).reshape(-1, 2), axis=1)
     good = (st.ravel() == 1) & (st2.ravel() == 1) & (err < FB_MAX_ERR)
+    if g.any():
+        nxt = (nxt + g.astype(np.float32).reshape(1, 1, 2)).astype(np.float32)
     return nxt, good
 
 
@@ -88,6 +107,7 @@ class AreaTracker:
     GOOD_SCORE = 0.6              # still looks like itself
     COVERED_SCORE = 0.35          # looks like something else: covered (twice in a row)
     MAX_TEMPLATES = 6
+    PREDICT = 1.0                 # part of the last move where the search in the next frame starts
 
     def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None,
                  turn: bool = True):
@@ -99,6 +119,7 @@ class AreaTracker:
         self.center = np.array([x + bw / 2, y + bh / 2], np.float64)
         self.angle = float(box[4]) if len(box) > 4 else 0.0
         self.scale = 1.0
+        self.vel = np.zeros(2)          # last move per frame: where to look first in the next one
         self.pts: np.ndarray | None = None
         self.lost = False
         self.frames = 0
@@ -296,6 +317,8 @@ class AreaTracker:
         """Move the area from prev to cur; returns its displacement (px).
         Sets ``lost`` when the area could not be followed in this frame."""
         d = self._step(prev, cur)
+        # predict the next move from this one (strokes change speed smoothly); unknown when lost
+        self.vel = np.zeros(2) if self.lost else self.PREDICT * np.asarray(d, np.float64)
         if self.lost:
             self.lost_frames += 1
         else:
@@ -333,7 +356,7 @@ class AreaTracker:
         if self.pts is None or len(self.pts) < 3:
             self.lost = True
             return np.zeros(2)
-        nxt, good = _lk(prev, cur, self.pts)
+        nxt, good = _lk(prev, cur, self.pts, self.vel)
         if good.sum() < 3:
             self.pts = None
             self.lost = True
