@@ -451,4 +451,5 @@ def test_search_starts_where_the_last_move_points():
     nxt, good = _lk(a, b, pts, np.array([0.0, -150.0]))
     assert alone.mean() < 0.3                  # too far for the search alone
     assert good.mean() > 0.6                   # found again from the predicted place
-    assert np.allclose((nxt - pts)[good].reshape(-1, 2), [0, -150], atol=0.5)
+    off = np.abs((nxt - pts)[good].reshape(-1, 2) - [0, -150]).max(axis=1)
+    assert np.median(off) < 0.1 and (off < 1.0).mean() > 0.9

@@ -48,22 +48,31 @@ def _features(gray: np.ndarray, mask: np.ndarray | None, n: int,
     return pts
 
 
+def _shifted(img: np.ndarray, gx: int, gy: int) -> np.ndarray:
+    """The image moved by (-gx, -gy): what is at (x+gx, y+gy) comes to (x, y); edges repeat."""
+    h, w = img.shape[:2]
+    pad = max(abs(gx), abs(gy))
+    big = np.pad(img, pad, mode="edge")
+    return np.ascontiguousarray(big[pad + gy:pad + gy + h, pad + gx:pad + gx + w])
+
+
 def _lk(prev: np.ndarray, cur: np.ndarray, pts: np.ndarray,
         guess: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Track points prev -> cur; returns new points and a mask of the reliable ones.
-    ``guess``: where the points probably moved (px), the search starts there. Fast motion
-    goes beyond the search window; started at the predicted place it is found again."""
-    if guess is not None and np.any(guess):
-        start = (pts + np.asarray(guess, np.float32).reshape(1, 1, 2)).astype(np.float32)
-        nxt, st, _ = cv2.calcOpticalFlowPyrLK(prev, cur, pts, start.copy(),
-                                              flags=cv2.OPTFLOW_USE_INITIAL_FLOW, **LK_PARAMS)
-        back, st2, _ = cv2.calcOpticalFlowPyrLK(cur, prev, nxt, pts.copy(),
-                                                flags=cv2.OPTFLOW_USE_INITIAL_FLOW, **LK_PARAMS)
-    else:
-        nxt, st, _ = cv2.calcOpticalFlowPyrLK(prev, cur, pts, None, **LK_PARAMS)
-        back, st2, _ = cv2.calcOpticalFlowPyrLK(cur, prev, nxt, None, **LK_PARAMS)
+    ``guess``: where the points probably moved (px). Fast motion goes beyond the search
+    window; the current frame is moved back by the guess first, so the plain search only
+    has to find the rest (the guess is added again afterwards)."""
+    g = np.zeros(2, np.int64)
+    if guess is not None:
+        g = np.round(np.asarray(guess, np.float64)).astype(np.int64)
+    if g.any():
+        cur = _shifted(cur, int(g[0]), int(g[1]))
+    nxt, st, _ = cv2.calcOpticalFlowPyrLK(prev, cur, pts, None, **LK_PARAMS)
+    back, st2, _ = cv2.calcOpticalFlowPyrLK(cur, prev, nxt, None, **LK_PARAMS)
     err = np.linalg.norm((pts - back).reshape(-1, 2), axis=1)
     good = (st.ravel() == 1) & (st2.ravel() == 1) & (err < FB_MAX_ERR)
+    if g.any():
+        nxt = (nxt + g.astype(np.float32).reshape(1, 1, 2)).astype(np.float32)
     return nxt, good
 
 

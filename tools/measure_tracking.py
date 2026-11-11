@@ -85,10 +85,10 @@ def _texture(rng, h, w, blur):
     return tex
 
 
-def render(sc: Scenario, path: Path) -> tuple[np.ndarray, tuple]:
+def render(sc: Scenario, path: Path, seed: int = 1) -> tuple[np.ndarray, tuple]:
     """Write the video, return (truth y of the object centre per frame in px, box normalized)."""
     w, h = sc.size
-    rng = np.random.default_rng(1)
+    rng = np.random.default_rng(seed)
     k = h / 720
     bg = (40 + 80 * _texture(rng, h, w, 3 * k)).astype(np.float32)
     ow, oh = int(150 * k), int(150 * k)
@@ -138,11 +138,12 @@ def _true_turns(ts: np.ndarray, y: np.ndarray) -> list[tuple[float, float]]:
     return out
 
 
-def measure(sc: Scenario, workdir: Path, width: int, gen: GeneratorSettings, shake: float = 0.0) -> dict:
+def measure(sc: Scenario, workdir: Path, width: int, gen: GeneratorSettings, shake: float = 0.0,
+            seed: int = 1) -> dict:
     """shake: extra random jitter (px of the analysis frame) on the tracked motion, like a
     tracker that wobbles on a real video."""
     path = workdir / f"scene{SCENARIOS.index(sc)}_{sc.size[1]}p.avi"
-    ys, box = render(sc, path)
+    ys, box = render(sc, path, seed)
     h = sc.size[1]
     sec = TrackSection(0, (box,))
     s = AnalysisSettings(mode="track", track_sections=(sec,), width=width, hwaccel="none")
