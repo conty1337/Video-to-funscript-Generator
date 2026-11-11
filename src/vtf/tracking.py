@@ -23,6 +23,10 @@ LK_PARAMS = {"winSize": (21, 21), "maxLevel": 3,
              "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.03)}
 MAX_POINTS = 60
 MIN_POINTS = 12          # fewer left -> search new points in the area
+LOOK_CHECK_POINTS = 20   # fewer points than this: every frame also check by its look
+LOOK_MARGIN = 0.1        # ... and go there when the look is this much more sure
+LOOK_CHECK_OFF = 0.1     # ... but only when the points moved this far (box sizes) from the expected move
+FEW_POINTS = 6           # fewer than this: follow the area by its look (template), not by points
 FB_MAX_ERR = 1.0         # px, forward-backward consistency
 MAX_AREAS = 3
 
@@ -368,6 +372,43 @@ class AreaTracker:
                     self.recent = t
         return d
 
+    def _look_tpls(self) -> list:
+        return ([self.recent] if self.recent is not None else []) + self.templates
+
+    def _find_by_look(self, cur: np.ndarray, start: np.ndarray) -> tuple[float, np.ndarray, float]:
+        """Best place by its look around `start` (and the size it has there):
+        (score, centre, scale). Leaves the area as it was."""
+        old_c, base = self.center.copy(), self.scale
+        box = float(np.max(self.size * self.scale))
+        reach = min(2.0, 0.6 + float(np.hypot(*self.vel)) / max(box, 1.0))
+        self.center = np.asarray(start, np.float64)
+        best = (-1.0, self.center.copy(), base)
+        # it may grow or shrink from frame to frame (coming closer to the camera)
+        for f in ((1.0, 1.08, 1 / 1.08) if self.turn else (1.0,)):
+            self.scale = float(np.clip(base * f, 0.4, 2.5))
+            score, off = self._best(cur, self._look_tpls(), reach)
+            if score > best[0]:
+                best = (score, self.center + off, self.scale)
+        self.center, self.scale = old_c, base
+        return best
+
+    def _step_by_look(self, cur: np.ndarray) -> np.ndarray:
+        """Too few corner points to follow (a small or plain area, e.g. a dark ring on a
+        toy): find it by its look instead, around where the last move points."""
+        old = self.center.copy()
+        if not self._look_tpls():
+            self.lost = True
+            return np.zeros(2)
+        score, c, sc = self._find_by_look(cur, old + self.vel)
+        if score < self.GOOD_SCORE or np.hypot(*(c - old - self.vel)) > self.max_jump():
+            self.lost = True
+            return np.zeros(2)
+        self.scale = sc
+        self.center = self._keep_near(c)
+        self.lost = False
+        self.last_score = score
+        return self.center - old
+
     def _leave(self) -> None:
         """The area has left the frame. It waits at the edge, moved inside so that a
         comparison sees all of it, until it comes back."""
@@ -420,10 +461,15 @@ class AreaTracker:
             return np.zeros(2)
         if self.pts is None or len(self.pts) < MIN_POINTS:
             self._refill(prev)
-        if self.pts is None or len(self.pts) < 3:
-            self.lost = True
-            return np.zeros(2)
+        if self.pts is None or len(self.pts) < FEW_POINTS:
+            return self._step_by_look(cur)
         nxt, good = _lk(prev, cur, self.pts, self.vel)
+        if good.sum() < 3 and len(self.pts) < MIN_POINTS:
+            # the few points did not hold (fast, blurred): try by its look before giving up
+            self.pts = None
+            d = self._step_by_look(cur)
+            if not self.lost or self.visible() >= self.EDGE_VISIBLE:
+                return d
         if good.sum() < 3:
             self.pts = None
             self.lost = True
@@ -467,8 +513,20 @@ class AreaTracker:
                 moved = True
         if not moved:
             self.center = self.center + np.median(p1 - p0, axis=0)
+        if (len(p0) < LOOK_CHECK_POINTS and self._look_tpls() and self.frames > 1
+                and np.hypot(*(self.center - old - self.vel)) > LOOK_CHECK_OFF * float(np.max(self.size * self.scale))):
+            # few points (often on its edge) and a move other than expected: they may have
+            # stuck to the background next to it. Its look decides when it is clearly
+            # better somewhere else.
+            here = self._best(cur, self._look_tpls(), 0.15)[0]
+            score, c, sc = self._find_by_look(cur, old + self.vel)
+            if score >= self.GOOD_SCORE and score > here + LOOK_MARGIN:
+                self.center, self.scale = c, sc
+                p1 = p1[:0]                     # points start anew around the found place
         d = self.center - old
-        if np.hypot(*d) > self.max_jump():                   # impossible jump: do not believe it
+        # impossible jump: do not believe it. Measured against the expected move, so a
+        # fast stroke that keeps its speed is no jump
+        if np.hypot(*(d - self.vel)) > self.max_jump():
             self.center = old
             self.pts = None
             self.lost = True

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pytest
 
-from vtf.analysis import AnalysisSettings, MotionData, analyze_motion
+from vtf.analysis import AnalysisSettings, MotionData, TrackSection, analyze_motion
 from vtf.generator import GeneratorSettings, generate
 
 W, H, FPS = 480, 270, 30
@@ -540,3 +540,41 @@ def test_long_cover_is_bridged_through_places_seen_meanwhile():
         assert (not any(lo[0] for lo in losts)) == expect
         if expect:
             assert np.abs(got - true).max() < 3
+
+
+def _ring_video(path, n=120):
+    """A plain dark ring on a pink toy, pushed fast along a diagonal and growing/shrinking
+    as it comes closer (like a fucking machine seen from the side), over a textured,
+    still background. Returns the true ring centre per frame (px)."""
+    rng = np.random.default_rng(5)
+    W, H = 480, 270
+    bg = cv2.GaussianBlur(rng.integers(60, 200, (H, W)).astype(np.uint8), (0, 0), 2)
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 30, (W, H))
+    truth = []
+    for i in range(n):
+        ph = np.sin(2 * np.pi * 2.5 * i / 30)                 # 2.5 strokes per second
+        cx, cy = 300 + 70 * ph, 150 + 38 * ph
+        s = 1.0 + 0.25 * ph                                    # nearer = bigger
+        f = bg.copy()
+        # the toy: a light bar ending in the ring
+        cv2.line(f, (int(cx - 90 * s), int(cy - 48 * s)), (int(cx), int(cy)), 175, int(30 * s))
+        cv2.circle(f, (int(cx), int(cy)), int(11 * s), 25, -1)
+        cv2.line(f, (int(cx), int(cy)), (int(cx + 120), int(cy + 64)), 140, int(8 * s))   # rod
+        vw.write(cv2.cvtColor(f, cv2.COLOR_GRAY2BGR))
+        truth.append((cx, cy))
+    vw.release()
+    return np.array(truth), (W, H)
+
+
+def test_small_plain_box_follows_a_fast_ring(tmp_path):
+    """A small box on a plain ring (few corner points, faster than its own size per frame)
+    stays on it: it is followed by its look and fast strokes are no 'impossible jump'."""
+    path = tmp_path / "ring.avi"
+    truth, (W, H) = _ring_video(path)
+    cx, cy = truth[0]
+    box = ((cx - 14) / W, (cy - 14) / H, 28 / W, 28 / H)
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(TrackSection(0, (box,)),),
+                                              width=W, hwaccel="none"))
+    tr = m.tracks[:, 0] * [W, H]
+    err = np.hypot(*(tr - truth[:len(tr)]).T)
+    assert np.nanpercentile(err, 90) < 8, np.nanpercentile(err, 90)
