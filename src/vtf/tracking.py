@@ -26,6 +26,7 @@ MIN_POINTS = 12          # fewer left -> search new points in the area
 LOOK_CHECK_POINTS = 20   # fewer points than this: every frame also check by its look
 LOOK_MARGIN = 0.1        # ... and go there when the look is this much more sure
 LOOK_CHECK_OFF = 0.1     # ... but only when the points moved this far (box sizes) from the expected move
+LOST_REACH_FRAC = 0.1    # after a loss look at least this part of the picture width around
 FEW_POINTS = 6           # fewer than this: follow the area by its look (template), not by points
 FB_MAX_ERR = 1.0         # px, forward-backward consistency
 MAX_AREAS = 3
@@ -264,6 +265,13 @@ class AreaTracker:
                 best = r
         return best
 
+    def _lost_reach(self) -> float:
+        """How far (box sizes) to look after losing it: 1.5 boxes, but a small box on
+        something fast (a machine) can be several of its sizes away by then, so at least
+        a tenth of the picture."""
+        box = float(np.max(self.size * self.scale))
+        return min(4.0, max(1.5, LOST_REACH_FRAC * self.w / max(box, 1.0)))
+
     def _reacquire(self, gray: np.ndarray, reach: float = 1.5) -> bool:
         """After a loss: look for a known appearance around the last position."""
         tpls = ([self.recent] if self.recent is not None else []) + self.templates
@@ -300,9 +308,17 @@ class AreaTracker:
         score, off = self._best(gray, self.templates, 0.5)
         if score < self.TEMPLATE_MIN_SCORE:
             return score
-        if 1.0 < np.hypot(*off) < 0.5 * float(np.max(self.size * self.scale)):
+        dist = float(np.hypot(*off))
+        if 1.0 < dist < 0.5 * float(np.max(self.size * self.scale)):
             pull = 1.0 if score > 0.8 else 0.5                # very sure: all the way
             self.center = self._keep_near(self.center + pull * off)
+        elif dist >= 0.5 * float(np.max(self.size * self.scale)):
+            if score > 0.8:
+                # clearly there, a good bit away (the points slid off it): go there
+                self.center = self._keep_near(self.center + off)
+            else:
+                # it looks right only somewhere else: that says nothing good about here
+                return min(score, self.GOOD_SCORE - 0.05)
         return score
 
     def cover(self) -> None:
@@ -453,7 +469,7 @@ class AreaTracker:
             return np.zeros(2)
         if self.outside:
             return self._wait_outside(cur)
-        if self.lost_frames >= 2 and self._reacquire(cur):
+        if self.lost_frames >= 2 and self._reacquire(cur, self._lost_reach()):
             # found again: position fixed, but no motion from this frame (unknown path)
             self.lost_frames = 0
             self.lost = False
