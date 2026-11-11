@@ -71,6 +71,8 @@ SCENARIOS = [
     Scenario("groß/klein im Wechsel, 1080p", (1920, 1080), 16.0, _mixed),
     Scenario("wenig Muster (Haut), 1080p", (1920, 1080), 16.0, _mixed, contrast=25.0),
     Scenario("mit Pausen, 720p", (1280, 720), 20.0, _pauses),
+    Scenario("schnell (3 Hz, ±150 px), 1080p", (1920, 1080), 10.0,
+             lambda t: 100.0 * np.sin(2 * np.pi * 3.0 * t)),
 ]
 SHUTTER = 0.5          # part of a frame the shutter is open: motion blur
 SUB = 6                # sub-frames averaged for the blur

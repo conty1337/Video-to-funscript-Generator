@@ -505,7 +505,9 @@ aktualisieren sich daraufhin selbst.
 Beim **Tracking** ersetzt Schritt 2 der optische Fluss nur innerhalb der
 markierten Bereiche: Bis zu 60 Merkmalspunkte je Bereich werden mit
 Lucas-Kanade verfolgt, eine Vorwärts-Rückwärts-Prüfung verwirft abgerutschte
-Punkte, und der Bereich bewegt sich um den Median der übrigen. Alle paar
+Punkte, und der Bereich bewegt sich um den Median der übrigen. Bei schnellen
+Hüben beginnt die Suche dort, wohin die letzte Bewegung zeigt (Vorhersage), so
+bleibt das Kästchen auch bei großen Sprüngen zwischen zwei Bildern dran. Alle paar
 Bilder wird das Aussehen verglichen und der Bereich (mit Zwischenpixeln)
 zurückgezogen, falls er weggedriftet ist.
 
@@ -526,7 +528,7 @@ ein Bernstein-Akzent nur für das Script). Details und Quellen stehen in
 
 Wie genau das Tracking ist, misst `python tools/measure_tracking.py`: künstliche
 Videos mit bekannter Bewegung (schneller werdend, kleine Hübe, groß/klein im
-Wechsel, wenig Muster, Pausen), dazu Fehler beim Verfolgen in Pixeln, Abweichung
+Wechsel, wenig Muster, Pausen, schnelle Hübe), dazu Fehler beim Verfolgen in Pixeln, Abweichung
 der Wendepunkte in ms, Hubhöhe, verpasste und falsche Punkte. `--shake 0.5`
 fügt Zittern hinzu, `--width` ändert die Analysebreite.
 
