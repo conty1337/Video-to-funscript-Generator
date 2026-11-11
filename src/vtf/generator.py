@@ -119,11 +119,12 @@ def build_signal(motion: MotionData, s: GeneratorSettings) -> tuple[np.ndarray, 
     return t_ms, np.clip(sig, 0.0, 1.0)
 
 
-def find_extrema(signal: np.ndarray, delta: float) -> list[int]:
-    """Alternating peak/valley indices with hysteresis ``delta``."""
+def find_extrema(signal: np.ndarray, delta) -> list[int]:
+    """Alternating peak/valley indices with hysteresis ``delta`` (a number, or one per sample)."""
     n = len(signal)
     if n == 0:
         return []
+    dl = np.broadcast_to(np.asarray(delta, np.float64), (n,))
     out: list[int] = []
     mn_i = mx_i = 0
     mn = mx = signal[0]
@@ -134,13 +135,13 @@ def find_extrema(signal: np.ndarray, delta: float) -> list[int]:
             mx, mx_i = v, i
         if v < mn:
             mn, mn_i = v, i
-        if looking_for_max is not False and v < mx - delta:
+        if looking_for_max is not False and v < mx - dl[mx_i]:
             if looking_for_max is None and mn_i < mx_i:
                 out.append(mn_i)
             out.append(mx_i)
             looking_for_max = False
             mn, mn_i = v, i
-        elif looking_for_max is not True and v > mn + delta:
+        elif looking_for_max is not True and v > mn + dl[mn_i]:
             if looking_for_max is None and mx_i < mn_i:
                 out.append(mx_i)
             out.append(mn_i)
@@ -152,6 +153,36 @@ def find_extrema(signal: np.ndarray, delta: float) -> list[int]:
     elif looking_for_max is False and (not out or mn_i > out[-1]):
         out.append(mn_i)
     return out
+
+
+LOCAL_MS = 1000          # how far back and ahead "recent strokes" reach for the threshold
+LOCAL_FLOOR = 0.35       # the threshold never drops below this part (quiet passages stay quiet)
+
+
+def local_delta(t_ms: np.ndarray, signal: np.ndarray, delta: float) -> np.ndarray:
+    """Threshold per sample that follows the size of the strokes around it: right after big
+    strokes the curve is scaled to them, so small strokes look tiny; measured against what
+    happens within about a second they still count."""
+    n = len(signal)
+    if n < 3:
+        return np.full(n, delta)
+    dt = float(t_ms[1] - t_ms[0]) or 1.0
+    k = max(3, int(round(LOCAL_MS / dt)))
+    span = _rolling(signal, k, np.max) - _rolling(signal, k, np.min)
+    return delta * np.clip(span, LOCAL_FLOOR, 1.0)
+
+
+def turn_time(t_ms: np.ndarray, signal: np.ndarray, i: int) -> float:
+    """Time of the turning point at sample i, between frames: the top of a parabola through
+    the sample and its neighbours (a turn rarely falls exactly on a frame)."""
+    if not 0 < i < len(signal) - 1:
+        return float(t_ms[i])
+    a, b, c = float(signal[i - 1]), float(signal[i]), float(signal[i + 1])
+    den = a - 2 * b + c
+    if den == 0:
+        return float(t_ms[i])
+    f = max(-0.5, min(0.5, 0.5 * (a - c) / den))
+    return float(t_ms[i]) + f * float(t_ms[i + 1] - t_ms[i])
 
 
 def enforce_min_interval(idx: list[int], t_ms: np.ndarray, signal: np.ndarray,
@@ -180,7 +211,7 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
                     delta_scale: float = 1.0) -> list[Action]:
     sens = float(np.clip(s.sensitivity, 0, 100)) / 100.0
     delta = (0.02 + (1.0 - sens) * 0.5) * delta_scale
-    idx = find_extrema(signal, delta)
+    idx = find_extrema(signal, local_delta(t_ms, signal, delta))
     idx = enforce_min_interval(idx, t_ms, signal, s.min_interval_ms)
     lo, hi = sorted((int(s.pos_min), int(s.pos_max)))
     actions: list[Action] = []
@@ -190,7 +221,7 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
             nb = signal[idx[k + 1]] if k + 1 < len(idx) else signal[idx[k - 1]]
             v = 1.0 if v >= nb else 0.0
         pos = int(round(lo + v * (hi - lo)))
-        at = int(round(t_ms[i]))
+        at = int(round(turn_time(t_ms, signal, i)))
         if actions and at <= actions[-1].at:
             continue
         actions.append(Action(at, max(0, min(100, pos))))

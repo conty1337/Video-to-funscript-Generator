@@ -57,6 +57,19 @@ def _lk(prev: np.ndarray, cur: np.ndarray, pts: np.ndarray) -> tuple[np.ndarray,
     return nxt, good
 
 
+def _subpixel(res: np.ndarray, x: int, y: int) -> tuple[float, float]:
+    """Where between the pixels the best match really is: the top of a parabola through the
+    best score and its neighbours, per direction (0 at the border)."""
+    def peak(a: float, b: float, c: float) -> float:
+        den = a - 2 * b + c
+        return max(-0.5, min(0.5, 0.5 * (a - c) / den)) if den < 0 else 0.0
+
+    h, w = res.shape
+    fx = peak(res[y, x - 1], res[y, x], res[y, x + 1]) if 0 < x < w - 1 else 0.0
+    fy = peak(res[y - 1, x], res[y, x], res[y + 1, x]) if 0 < y < h - 1 else 0.0
+    return float(fx), float(fy)
+
+
 def box_corners(cx: float, cy: float, w: float, h: float, angle_deg: float) -> np.ndarray:
     """The 4 corners of a rotated rectangle (px)."""
     a = np.radians(angle_deg)
@@ -184,7 +197,8 @@ class AreaTracker:
             return -1.0, np.zeros(2)
         res = cv2.matchTemplate(area, patch, cv2.TM_CCOEFF_NORMED)
         _mn, score, _ml, (bx, by) = cv2.minMaxLoc(res)
-        local = np.array([bx + tw / 2 - area.shape[1] / 2, by + th / 2 - area.shape[0] / 2])
+        fx, fy = _subpixel(res, bx, by)
+        local = np.array([bx + fx + tw / 2 - area.shape[1] / 2, by + fy + th / 2 - area.shape[0] / 2])
         a = np.radians(self.angle + off)
         c, s = np.cos(a), np.sin(a)
         return float(score), per_px * (np.array([[c, -s], [s, c]]) @ local)

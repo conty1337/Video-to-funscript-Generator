@@ -98,3 +98,28 @@ def test_position_at():
     assert position_at(acts, 500) == 50
     assert position_at(acts, 1500) == 75
     assert position_at(acts, 9999) == 50
+
+
+def test_turn_time_between_frames():
+    from vtf.generator import turn_time
+    t = np.arange(10) * 33.3
+    true_t = 4.3 * 33.3                                  # a peak between frame 4 and 5
+    sig = 1 - ((t - true_t) / 100) ** 2
+    i = int(np.argmax(sig))
+    assert abs(turn_time(t, sig, i) - true_t) < 1.0       # within 1 ms, a frame is 33 ms
+    assert turn_time(t, sig, 0) == t[0]                   # at the edge: the frame itself
+
+
+def test_small_strokes_right_after_big_ones_are_found():
+    """The curve is scaled to the big strokes around; small strokes next to them still count."""
+    from vtf.generator import extract_actions
+    fps = 30
+    t = np.arange(int(8 * fps)) / fps
+    amp = np.where(t < 4, 1.0, 0.2)
+    sig = 0.5 + 0.5 * amp * np.sin(2 * np.pi * 1.4 * t)    # big, then strokes a fifth as big
+    acts = extract_actions(t * 1000, sig, GeneratorSettings())
+    small = [a for a in acts if a.at > 4300]
+    assert len(small) >= 9                                 # ~2.8 strokes/s * 3.7 s, both turns
+    # still: tiny wobble on a quiet curve is not taken for strokes
+    quiet = 0.5 + 0.01 * np.sin(2 * np.pi * 7 * t)
+    assert len(extract_actions(t * 1000, quiet, GeneratorSettings())) <= 2

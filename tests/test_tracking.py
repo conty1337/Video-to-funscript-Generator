@@ -418,3 +418,19 @@ def test_anchored_areas_stay_put(tmp_path):
     assert all(any(abs(p - e) <= 150 for p in peaks) for e in (750, 1750, 2750)), peaks
     s = AnalysisSettings(mode="track", track_boxes=(a, b))
     assert s.cache_key() != AnalysisSettings(mode="track", track_boxes=(a, b), track_anchor=True).cache_key()
+
+
+def test_match_finds_position_between_pixels():
+    """The drift correction compares appearances; it must find a shift of less than a pixel."""
+    import cv2
+
+    from vtf.tracking import AreaTracker
+    rng = np.random.default_rng(3)
+    tex = cv2.GaussianBlur(rng.random((200, 200)).astype(np.float32), (0, 0), 3)
+    img = (60 + 150 * (tex - tex.min()) / np.ptp(tex)).astype(np.uint8)
+    t = AreaTracker((70, 70, 60, 60), img.shape, img, turn=False)
+    for shift in (0.3, -0.4):
+        m = np.float32([[1, 0, 0], [0, 1, shift]])
+        moved = cv2.warpAffine(img, m, (200, 200), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
+        score, off = t._match(moved, t.templates[0], 0.5)
+        assert score > 0.9 and abs(off[1] - shift) < 0.12 and abs(off[0]) < 0.12
