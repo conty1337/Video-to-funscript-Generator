@@ -936,19 +936,39 @@ class MainWindow(QMainWindow):
             self._status("KI-Vorschlag: erst ein Video öffnen und „Tracking“ als Methode wählen")
             return
         if self._pose_worker is not None and self._pose_worker.isRunning():
+            self._status("KI-Vorschlag: die KI sucht noch, einen Moment …")
             return
         if not pose_ui.ensure_models(self):
             return
         self.pause()
         frame, ms = self._frame.copy(), self._cur_ms()
-        self._status("KI-Vorschlag: suche Körperteile …")
+        first = not pose_ui.PoseWorker.loaded()
+        self._status("KI-Vorschlag: KI wird gestartet (beim ersten Mal ein paar Sekunden) und sucht "
+                     "Körperteile …" if first else "KI-Vorschlag: suche Körperteile …")
+        btn = self.panel.tracking.ai_btn
+        btn.setEnabled(False)
+        btn.setText("KI startet …" if first else "KI sucht …")
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        self._pose_busy = True
         w = pose_ui.PoseWorker(frame)
         w.done.connect(lambda people: self._show_suggestions(people, frame.shape, ms))
-        w.failed.connect(lambda e: self._status(f"KI-Vorschlag fehlgeschlagen: {e}"))
+        w.failed.connect(lambda e: (self._pose_search_ended(),
+                                    self._status(f"KI-Vorschlag fehlgeschlagen: {e}")))
+        w.finished.connect(self._pose_search_ended)      # also when neither signal came
         self._pose_worker = w
         w.start()
 
+    def _pose_search_ended(self):
+        if not getattr(self, "_pose_busy", False):
+            return
+        self._pose_busy = False
+        btn = self.panel.tracking.ai_btn
+        btn.setEnabled(True)
+        btn.setText("KI-Vorschlag")
+        QApplication.restoreOverrideCursor()
+
     def _show_suggestions(self, people, shape, ms: float):
+        self._pose_search_ended()            # before the menu opens: normal cursor, button back
         if abs(self._cur_ms() - ms) > 1:
             self._status("KI-Vorschlag verworfen: das Video ist inzwischen weitergelaufen")
             return

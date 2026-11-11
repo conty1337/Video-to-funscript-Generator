@@ -1497,3 +1497,42 @@ def test_ai_suggestion_and_check(app, sine_video, tmp_path, monkeypatch):
     p.deleteLater()
     w.dirty = False
     w.close()
+
+
+def test_ai_suggestion_shows_that_it_is_working(app, sine_video, tmp_path, monkeypatch):
+    """While the KI starts and searches, the button says so and is locked; afterwards
+    it is back to normal (and the first start says it takes a few seconds)."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    import threading
+
+    from vtf.gui import pose_ui
+    from vtf.gui.main_window import MainWindow
+
+    release = threading.Event()
+
+    class Slow:
+        def people(self, img, reuse=False):
+            release.wait(10)
+            return []
+
+    monkeypatch.setattr(pose_ui, "ensure_models", lambda parent: True)
+    monkeypatch.setattr(pose_ui.PoseWorker, "_estimator", None)
+    monkeypatch.setattr(pose_ui.pose, "PoseEstimator", Slow)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(sine_video))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    app.processEvents()
+    btn = w.panel.tracking.ai_btn
+    w.suggest_boxes()
+    assert not btn.isEnabled() and btn.text() == "KI startet …"
+    assert "ersten Mal" in w.status_label.text()
+    w.suggest_boxes()                                   # second press while busy: just a note
+    assert "sucht noch" in w.status_label.text()
+    release.set()
+    w._pose_worker.wait(5000)
+    for _ in range(20):
+        app.processEvents()
+    assert btn.isEnabled() and btn.text() == "KI-Vorschlag"
+    assert "keine Person" in w.status_label.text()
+    w.close()

@@ -83,7 +83,7 @@ class TrackingBox(QWidget):
         self.ai_btn = QPushButton("KI-Vorschlag")
         self.ai_btn.setToolTip("Körperteile im aktuellen Bild erkennen (Becken, Mund, Hände, …) und "
                                "als Kästchen vorschlagen (K). Beim ersten Mal werden die KI-Modelle "
-                               "geladen (etwa 310 MB, einmalig)")
+                               "geladen (etwa 330 MB, einmalig)")
         self.ai_btn.setStyleSheet("padding: 0 8px;")
         self.ai_check = QCheckBox("KI-Kontrolle beim Verfolgen")
         self.ai_check.setToolTip(
