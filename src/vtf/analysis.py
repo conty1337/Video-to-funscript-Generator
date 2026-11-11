@@ -112,10 +112,11 @@ class AnalysisSettings:
 
 
 #: bumped when tracking results change (new cache entries for tracked videos)
-TRACKER_VERSION = 7
+TRACKER_VERSION = 8
 #: frames kept (compressed) for following an area backwards from a correction,
 #: as image pixels: ~10 min at 320 px width
 BACK_BUDGET_PX = 18000 * 320 * 180
+BRIDGE_MAX_S = 2.5          # an area out of the frame for longer is not bridged (unknown path)
 
 
 @dataclass
@@ -286,6 +287,60 @@ def _spread_corrections(events, centers, owner, plan, dx, dy, k) -> None:
         dy[j0 + 1:i + 1] += steps[:, 1]
 
 
+def _hermite(p0, v0, p1, v1, n: int) -> np.ndarray:
+    """Points 1..n-1 of a cubic from p0 (slope v0 per step) to p1 (slope v1) over n steps."""
+    t = (np.arange(1, n) / n)[:, None]
+    h00, h10 = 2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t
+    h01, h11 = -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2
+    return h00 * p0 + h10 * n * v0 + h01 * p1 + h11 * n * v1
+
+
+def _bridge_outside(centers, outs, losts, owner, dx, dy, k: int, fps: float) -> None:
+    """An area that went over the edge of the frame and came back: its path out
+    there is continued smoothly from how it left and how it came back (a cubic with
+    the speeds at both ends), so the turning point outside the frame is in the script
+    too instead of a flat stretch. Only short trips, both ends followed, same section."""
+    n = len(centers)
+    max_len = int(BRIDGE_MAX_S * fps)
+
+    def ok(j, area):
+        return (0 <= j < n and centers[j] is not None and not losts[j][area]
+                and not np.isnan(centers[j][area][0]))
+
+    for area in range(k):
+        j = 0
+        while j < n:
+            if outs[j] is None or not outs[j][area]:
+                j += 1
+                continue
+            a = j                                       # first frame out
+            while j < n and outs[j] is not None and outs[j][area]:
+                j += 1
+            b = j                                       # first frame back (found again)
+            last = a - 1
+            if (b - a > max_len or not ok(last, area) or not ok(b, area)
+                    or owner[last] != owner[b] or owner[last] < 0):
+                continue
+            p0, p1 = centers[last][area], centers[b][area]
+            v0 = p0 - centers[last - 1][area] if ok(last - 1, area) else np.zeros(2)
+            v1 = centers[b + 1][area] - p1 if ok(b + 1, area) else np.zeros(2)
+            path = _hermite(p0, v0, p1, v1, b - last)
+            for i, c in enumerate(path, start=a):
+                centers[i][area] = c
+                losts[i][area] = False
+            # the motion for the script over the bridge (camera motion is not known there)
+            for i in range(a, b + 1):
+                cur = [c for c in range(k) if ok(i, c) and ok(i - 1, c)]
+                if area not in cur and not (area == 0 or 0 in cur):
+                    continue
+                if 0 not in cur:
+                    continue
+                d0 = centers[i][0] - centers[i - 1][0]
+                rest = [centers[i][c] - centers[i - 1][c] for c in cur if c != 0]
+                d = d0 - np.mean(rest, axis=0) if rest else d0
+                dx[i], dy[i] = float(d[0]), float(d[1])
+
+
 def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: bool = True) -> np.ndarray:
     """Follow one area backwards from frame b (where the user put it) to frame a.
     Returns its centre per frame a..b (NaN where it was lost)."""
@@ -335,6 +390,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     centers: list[np.ndarray | None] = []
     geoms: list[np.ndarray | None] = []
     losts: list[np.ndarray | None] = []
+    outs: list[np.ndarray | None] = []
     owner: list[int] = []
     # corrections by frame index: {i: [(area, box), ...]}
     key_at: dict[int, list] = {}
@@ -379,6 +435,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             centers.append(None)
             geoms.append(None)
             losts.append(None)
+            outs.append(None)
             owner.append(-1)
         else:
             cur = cv2.GaussianBlur(np.ascontiguousarray(frame), (3, 3), 0)
@@ -419,6 +476,10 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             ls = tracker.lost()
             lo[:len(ls)] = ls
             losts.append(lo)
+            ou = np.zeros(k, bool)
+            os_ = [a.outside for a in tracker.areas]
+            ou[:len(os_)] = os_
+            outs.append(ou)
             owner.append(sec)
             prev = cur
         for j in free_at.pop(i, ()):
@@ -432,6 +493,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     dx_a = np.asarray(dx, np.float64)
     dy_a = np.asarray(dy, np.float64)
     _spread_corrections(events, centers, owner, plan, dx_a, dy_a, k)
+    _bridge_outside(centers, outs, losts, owner, dx_a, dy_a, k, info.fps / step)
     dx, dy = dx_a, dy_a
     nan = np.full((k, 2), np.nan)
     tracks = np.array([nan if c is None else c for c in centers], np.float32) / np.array([w, h], np.float32)

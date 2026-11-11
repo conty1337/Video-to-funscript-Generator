@@ -45,6 +45,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    mitlaufen.
    - **Rot** in der Kurve: Hier war ein Bereich verdeckt oder verloren, dort
      entstehen keine Hübe.
+   - Geht etwas kurz **aus dem Bild**, ist das kein Problem: Das Kästchen
+     wartet am Rand, und die Bewegung draußen wird weitergerechnet.
    - Ein Kästchen liegt daneben: an der Stelle **anpacken und richtig
      hinschieben**, dann neu analysieren. Die Zeit davor wird mit ausgeglichen.
 8. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video.

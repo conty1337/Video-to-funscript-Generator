@@ -453,3 +453,64 @@ def test_search_starts_where_the_last_move_points():
     assert good.mean() > 0.6                   # found again from the predicted place
     off = np.abs((nxt - pts)[good].reshape(-1, 2) - [0, -150]).max(axis=1)
     assert np.median(off) < 0.1 and (off < 1.0).mean() > 0.9
+
+
+def _edge_frames(ys, size=(320, 240), obj=60, seed=4):
+    """A textured square in front of a textured background, centre at height ys[i]."""
+    rng = np.random.default_rng(seed)
+    w, h = size
+
+    def tex(hh, ww, lo, span):
+        t = cv2.GaussianBlur(rng.random((hh, ww)).astype(np.float32), (0, 0), 1.5)
+        return lo + span * (t - t.min()) / np.ptp(t)
+
+    bg = tex(h, w, 40, 70)
+    o = tex(obj, obj, 110, 140)
+    mask = np.ones((obj, obj), np.float32)
+    out = []
+    for y in ys:
+        m = np.float32([[1, 0, w / 2 - obj / 2], [0, 1, y - obj / 2]])
+        a = cv2.warpAffine(mask, m, (w, h))
+        f = bg * (1 - a) + cv2.warpAffine(o, m, (w, h)) * a
+        out.append(np.clip(f, 0, 255).astype(np.uint8))
+    return out
+
+
+def test_area_leaving_the_frame_waits_and_comes_back():
+    """Over the edge the area is not followed (and not pulled somewhere wrong); when the
+    object is back it is found again at the right place."""
+    from vtf.tracking import AreaTracker
+    ys = 120 - 150 * np.sin(np.linspace(0, np.pi, 40))       # up, out of the frame, back
+    frames = _edge_frames(ys)
+    t = AreaTracker((160 - 24, 120 - 24, 48, 48), frames[0].shape, frames[0])
+    seen_out = False
+    for i in range(1, len(frames)):
+        t.step(frames[i - 1], frames[i])
+        seen_out |= t.outside
+        if t.outside:
+            assert t.lost and t.visible() > 0.99     # waits fully inside, at the edge
+    assert seen_out
+    assert not t.outside and not t.lost
+    assert abs(t.center[1] - ys[-1]) < 2
+
+
+def test_trip_out_of_the_frame_is_bridged():
+    """The path outside the frame continues how the area left and came back: the turning
+    point out there is in the motion, not a flat stretch."""
+    from vtf.analysis import _bridge_outside
+    n, k = 21, 1
+    true = -40.0 * np.sin(np.linspace(0, np.pi, n)) + 10          # peak at -30 (outside)
+    centers = [np.array([[0.0, y]]) for y in true]
+    out = (true < 0)
+    losts = [np.array([o]) for o in out]
+    outs = [np.array([o]) for o in out]
+    for i in np.nonzero(out)[0]:
+        centers[i][0] = (0.0, 5.0)                                # waiting at the edge
+    dy = np.r_[0, np.diff([c[0, 1] for c in centers])]
+    dx = np.zeros(n)
+    _bridge_outside(centers, outs, losts, [0] * n, dx, dy, k, 30.0)
+    got = np.array([c[0, 1] for c in centers])
+    assert not any(lo[0] for lo in losts)
+    assert got.min() < -20 and abs(int(np.argmin(got)) - n // 2) <= 1
+    np.testing.assert_allclose(np.cumsum(dy)[-1], got[-1] - got[0], atol=1e-6)
+    np.testing.assert_allclose(dy[1:], np.diff(got), atol=1e-6)

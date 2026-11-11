@@ -43,6 +43,7 @@ class Scenario:
     seconds: float
     motion: object                      # t (s, array) -> vertical offset in px (positive = up)
     contrast: float = 150.0             # grey levels of the object texture (skin: little)
+    cy: float = 0.5                     # rest position of the object centre, part of the height
 
 
 def _chirp(t, a=80.0):
@@ -73,6 +74,16 @@ SCENARIOS = [
     Scenario("mit Pausen, 720p", (1280, 720), 20.0, _pauses),
     Scenario("schnell (3 Hz, ±150 px), 1080p", (1920, 1080), 10.0,
              lambda t: 100.0 * np.sin(2 * np.pi * 3.0 * t)),
+    Scenario("schnell, wenig Muster, 1080p", (1920, 1080), 10.0,
+             lambda t: 80.0 * np.sin(2 * np.pi * 2.5 * t), contrast=25.0),
+    # the object reaches over the upper edge: a third of it leaves the frame on each stroke
+    Scenario("halb aus dem Bild (oben), 720p", (1280, 720), 12.0,
+             lambda t: 80.0 * np.sin(2 * np.pi * 1.4 * t), cy=0.16),
+    # the object leaves the frame completely for a moment on each stroke
+    Scenario("ganz aus dem Bild (oben), 720p", (1280, 720), 12.0,
+             lambda t: 240.0 * np.sin(2 * np.pi * 0.9 * t), cy=0.2),
+    Scenario("halb aus dem Bild, wenig Muster, 720p", (1280, 720), 12.0,
+             lambda t: 80.0 * np.sin(2 * np.pi * 1.4 * t), contrast=25.0, cy=0.16),
 ]
 SHUTTER = 0.5          # part of a frame the shutter is open: motion blur
 SUB = 6                # sub-frames averaged for the blur
@@ -93,7 +104,7 @@ def render(sc: Scenario, path: Path, seed: int = 1) -> tuple[np.ndarray, tuple]:
     bg = (40 + 80 * _texture(rng, h, w, 3 * k)).astype(np.float32)
     ow, oh = int(150 * k), int(150 * k)
     obj = (110 + sc.contrast * _texture(rng, oh, ow, 3 * k)).astype(np.float32)
-    cx, cy = w * 0.5, h * 0.5
+    cx, cy = w * 0.5, h * sc.cy
     n = int(sc.seconds * FPS)
     t = np.arange(n) / FPS
     off = np.asarray(sc.motion(t), np.float64) * k
@@ -197,6 +208,8 @@ def main(argv=None) -> int:
     ap.add_argument("--width", type=int, default=640, help="analysis width (as in the app)")
     ap.add_argument("--keep", type=Path, help="keep the rendered videos here")
     ap.add_argument("--shake", type=float, default=0.0, help="extra tracker jitter in px (analysis frame)")
+    ap.add_argument("--only", help="run only scenarios whose name contains this text")
+    ap.add_argument("--seed", type=int, default=1, help="texture and noise seed")
     args = ap.parse_args(argv)
     gen = GeneratorSettings(axis="vertical")
     with tempfile.TemporaryDirectory() as tmp:
@@ -205,7 +218,9 @@ def main(argv=None) -> int:
         print(f"{'Szenario':32} {'Track px':>9} {'Zittern':>8} {'Timing ms':>10} {'Höhe':>6} "
               f"{'verpasst':>9} {'falsch':>7} {'Zeit s':>7}")
         for sc in SCENARIOS:
-            r = measure(sc, wd, args.width, gen, args.shake)
+            if args.only and args.only not in sc.name:
+                continue
+            r = measure(sc, wd, args.width, gen, args.shake, args.seed)
             print(f"{sc.name:32} {r['track_rms']:9.2f} {r['jitter']:8.2f} {r['timing']:10.1f} "
                   f"{r['height']:6.1f} {r['missed']:4d}/{r['turns']:<4d} {r['extra']:7d} {r['secs']:7.1f}")
     return 0

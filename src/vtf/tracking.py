@@ -108,6 +108,9 @@ class AreaTracker:
     COVERED_SCORE = 0.35          # looks like something else: covered (twice in a row)
     MAX_TEMPLATES = 6
     PREDICT = 1.0                 # part of the last move where the search in the next frame starts
+    OUT_VISIBLE = 0.4             # less of the area than this in the frame: it has left the frame
+    BLUR_SPEED = 0.12             # faster (part of the area per frame): its look is blurred
+    EDGE_VISIBLE = 0.85           # less than this: partly out, its look cannot be compared
 
     def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None,
                  turn: bool = True):
@@ -122,6 +125,7 @@ class AreaTracker:
         self.vel = np.zeros(2)          # last move per frame: where to look first in the next one
         self.pts: np.ndarray | None = None
         self.lost = False
+        self.outside = False            # mostly out of the frame: not followed, waiting at the edge
         self.frames = 0
         self.lost_frames = 0
         # appearances to compare with: (upright patch, scale then, angle offset). The patch
@@ -166,6 +170,22 @@ class AreaTracker:
         x0, y0 = np.floor(c.min(axis=0)).astype(int)
         x1, y1 = np.ceil(c.max(axis=0)).astype(int)
         return max(0, x0), max(0, y0), min(self.w, x1), min(self.h, y1)
+
+    def _keep_near(self, c: np.ndarray) -> np.ndarray:
+        """The centre may leave the frame by up to half the area (the visible rest is
+        still followed), not further."""
+        half = self.size * self.scale / 2
+        return np.clip(c, -half, [self.w - 1 + half[0], self.h - 1 + half[1]])
+
+    def visible(self) -> float:
+        """Part of the area that lies inside the frame (0..1)."""
+        c = self.corners().astype(np.float32)
+        full = float(np.prod(self.size * self.scale))
+        if full <= 0:
+            return 0.0
+        frame = np.float32([[0, 0], [self.w, 0], [self.w, self.h], [0, self.h]])
+        inter, _poly = cv2.intersectConvexConvex(c, frame)
+        return float(np.clip(inter / full, 0.0, 1.0))
 
     def _local_mask(self, rect) -> np.ndarray:
         x0, y0, x1, y1 = rect
@@ -255,7 +275,7 @@ class AreaTracker:
         if score < self.GOOD_SCORE:
             return False
         self.angle, self.scale = ang, sc
-        self.center = np.clip(self.center + off, [0, 0], [self.w - 1, self.h - 1])
+        self.center = self._keep_near(self.center + off)
         self.pts = None
         return True
 
@@ -270,7 +290,7 @@ class AreaTracker:
             return score
         if 1.0 < np.hypot(*off) < 0.5 * float(np.max(self.size * self.scale)):
             pull = 1.0 if score > 0.8 else 0.5                # very sure: all the way
-            self.center = np.clip(self.center + pull * off, [0, 0], [self.w - 1, self.h - 1])
+            self.center = self._keep_near(self.center + pull * off)
         return score
 
     def _check_covered(self, score: float | None) -> bool:
@@ -282,6 +302,9 @@ class AreaTracker:
             self.bad_checks = 0
             self.unsure_checks = 0
             self.good = (self.center.copy(), self.scale, self.angle)
+            return False
+        if float(np.hypot(*self.vel)) > self.BLUR_SPEED * float(np.max(self.size * self.scale)):
+            # moving fast: motion blur makes it look different, that says nothing about covering
             return False
         self.unsure_checks += 1
         # something partly in front (a hand) can drag the points along slowly: not looking
@@ -330,6 +353,32 @@ class AreaTracker:
                     self.recent = t
         return d
 
+    def _leave(self) -> None:
+        """The area has left the frame. It waits at the edge, moved inside so that a
+        comparison sees all of it, until it comes back."""
+        self.outside = True
+        self.lost = True
+        self.covered = False
+        self.pts = None
+        half = self.size * self.scale / 2
+        lo = half + 1
+        hi = np.array([self.w - 1, self.h - 1]) - half - 1
+        self.center = np.where(lo <= hi, np.clip(self.center, lo, np.maximum(lo, hi)), self.center)
+
+    def _wait_outside(self, cur: np.ndarray) -> np.ndarray:
+        """Out of the frame: look for it at the edge, a bit around where it left."""
+        if self._reacquire(cur, 1.0):
+            self.outside = False
+            self.lost = False
+            self.lost_frames = 0
+            self.bad_checks = 0
+            self.unsure_checks = 0
+            self.good = (self.center.copy(), self.scale, self.angle)
+            self._refill(cur)
+        else:
+            self.lost = True
+        return np.zeros(2)
+
     def _step(self, prev: np.ndarray, cur: np.ndarray) -> np.ndarray:
         self.frames += 1
         if self.covered:
@@ -345,6 +394,8 @@ class AreaTracker:
             else:
                 self.lost = True
             return np.zeros(2)
+        if self.outside:
+            return self._wait_outside(cur)
         if self.lost_frames >= 2 and self._reacquire(cur):
             # found again: position fixed, but no motion from this frame (unknown path)
             self.lost_frames = 0
@@ -360,6 +411,8 @@ class AreaTracker:
         if good.sum() < 3:
             self.pts = None
             self.lost = True
+            if self.visible() < self.EDGE_VISIBLE:
+                self._leave()
             return np.zeros(2)
         p0 = self.pts[good].reshape(-1, 2)
         p1 = nxt[good].reshape(-1, 2)
@@ -404,10 +457,16 @@ class AreaTracker:
             self.pts = None
             self.lost = True
             return np.zeros(2)
-        self.center = np.clip(self.center, [0, 0], [self.w - 1, self.h - 1])
+        self.center = self._keep_near(self.center)
         d = self.center - old
         self.lost = False
-        if self.frames % self.TEMPLATE_EVERY == 0:
+        vis = self.visible()
+        if vis < self.OUT_VISIBLE:
+            # gone over the edge: what is left is too little to follow
+            self._leave()
+            return np.zeros(2)
+        # partly out of the frame: its look cannot be compared (half of it is missing)
+        if self.frames % self.TEMPLATE_EVERY == 0 and vis >= self.EDGE_VISIBLE:
             before = self.center.copy()
             score = self._drift_correction(cur)
             if score is not None and score < self.GOOD_SCORE and self.recent is not None:
