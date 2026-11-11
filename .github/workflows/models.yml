@@ -1,0 +1,44 @@
+name: ki-modelle
+# Legt die KI-Modelle als Kopie in das Release "ki-modelle" (Vorabversion, damit der
+# App-Updater es nie als neueste Version sieht). Die App lädt von dort, weil
+# download.openmmlab.com aus Europa oft sehr langsam ist. Nach einem Modellwechsel
+# in src/vtf/pose.py erneut von Hand starten.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Modelle von OpenMMLab holen und prüfen
+        run: |
+          python -m pip install --quiet numpy opencv-python-headless
+          python tools/mirror_models.py out
+          curl -fsSL --retry 5 -o out/LICENSE-mmpose.txt https://raw.githubusercontent.com/open-mmlab/mmpose/main/LICENSE
+          ls -l out
+      - name: Release ki-modelle anlegen oder auffrischen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'NOTES'
+          KI-Modelle für die Körpererkennung, unverändert übernommen von OpenMMLab (MMPose), Lizenz Apache-2.0 (siehe LICENSE-mmpose.txt).
+
+          * `yolox-m-humanart.onnx`: YOLOX-m Human-Art, aus https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/yolox_m_8xb8-300e_humanart-c2c7a14a.zip
+          * `rtmw-l-wholebody-384x288.onnx`: RTMW-l, aus https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip
+
+          Die App lädt diese Dateien selbst und prüft ihre SHA-256-Summen. Kein App-Release.
+          NOTES
+          if ! gh release view ki-modelle >/dev/null 2>&1; then
+            gh release create ki-modelle --title "KI-Modelle" --notes-file notes.md --prerelease --latest=false --target "$GITHUB_SHA"
+          else
+            gh release edit ki-modelle --notes-file notes.md --prerelease --latest=false
+          fi
+          gh release upload ki-modelle out/*.onnx out/LICENSE-mmpose.txt --clobber

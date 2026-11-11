@@ -143,7 +143,7 @@ Muster-Steuerung für einen Bereich ein.
 
 Statt Kästchen selbst aufzuziehen, kann die KI die Körperteile finden. Sie
 läuft auf deinem Rechner. Beim ersten Mal fragt die App, ob sie die Modelle
-laden darf (etwa 310 MB, einmalig), danach geht es ohne Internet.
+laden darf (etwa 330 MB, einmalig; ein abgebrochener Download geht beim nächsten Mal weiter), danach geht es ohne Internet.
 
 **1. KI-Vorschlag drücken** (oder Taste K). Vorher „Tracking“ als Methode
 wählen und zu einer Stelle spulen, wo die Person gut zu sehen ist. Es
