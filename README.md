@@ -233,10 +233,14 @@ Schritt für Schritt mit Bildern in der [Anleitung](docs/anleitung.md#kästchen-
   brauchen etwa ein Drittel davon. Im Härtefall (10 s Hand auf dem Becken)
   bleibt der Fehler unter 10 px statt 200 px, fast alle Hübe sind im Script.
 - **Modelle**: YOLOX-m (findet Personen) und RTMW-l (133 Körperpunkte mit Händen,
-  Füßen und Gesicht) von OpenMMLab, Lizenz Apache-2.0, zusammen etwa 310 MB
-  Download (330 MB auf der Platte). Sie werden beim ersten Benutzen nach
-  Rückfrage geladen, die Prüfsummen werden kontrolliert, und sie liegen danach
-  unter `~/.local/share/video-to-funscript/models`. Sie laufen über OpenCV, das
+  Füßen und Gesicht) von OpenMMLab, Lizenz Apache-2.0, zusammen etwa 330 MB.
+  Sie werden beim ersten Benutzen nach Rückfrage geladen, zuerst aus der Kopie
+  im Release [ki-modelle](https://github.com/conty1337/Video-to-funscript-Generator/releases/tag/ki-modelle)
+  hier auf GitHub (schnell), sonst direkt von OpenMMLab. Ein abgebrochener
+  Download wird beim nächsten Mal fortgesetzt, die Prüfsummen werden
+  kontrolliert, und sie liegen danach unter `~/.local/share/video-to-funscript/models`.
+  Bringt ein App-Update neuere Modelle mit, fragt die App erneut und löscht die
+  alten danach. Sie laufen über OpenCV, das
   schon in der App steckt, das AppImage wird dadurch nicht größer.
 - Gut bei ganzen Körpern und halbnahen Einstellungen. Bei sehr nahen
   Ausschnitten, in denen kaum Körperpunkte zu sehen sind, findet die KI nichts.

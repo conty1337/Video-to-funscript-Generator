@@ -18,10 +18,9 @@ Together about 330 MB, downloaded once on first use. Used for two things:
 from __future__ import annotations
 
 import hashlib
-import io
 import os
 import shutil
-import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
@@ -32,27 +31,38 @@ import cv2
 import numpy as np
 
 _BASE = "https://download.openmmlab.com/mmpose/v1/projects"
+# Copies of the ONNX files on this project's GitHub (release "ki-modelle", uploaded by
+# .github/workflows/models.yml). Much faster than OpenMMLab from Europe; OpenMMLab
+# stays as the second source.
+MIRROR = "https://github.com/conty1337/Video-to-funscript-Generator/releases/download/ki-modelle"
 
 
 @dataclass(frozen=True)
 class ModelFile:
-    name: str            # file name in the models folder
-    url: str
+    """One model. When a newer model is used, give it a new *name*: an installed app
+    then sees the model as missing and offers the download again (old files are
+    removed after it)."""
+    name: str            # file name in the models folder (and on the mirror)
+    url: str             # OpenMMLab zip
     member: str          # path of the ONNX file inside the zip (suffix)
-    sha256: str
-    mb: int              # download size
+    sha256: str          # of the ONNX file
+    mb: int              # size of the ONNX file
+
+    @property
+    def mirror_url(self) -> str:
+        return f"{MIRROR}/{self.name}"
 
 
 DETECTOR = ModelFile(
     "yolox-m-humanart.onnx",
     f"{_BASE}/rtmposev1/onnx_sdk/yolox_m_8xb8-300e_humanart-c2c7a14a.zip",
     "end2end.onnx",
-    "3dea6513388889f0fff4b77bf7a26013600321b9eb9ceb0e9a400a82572f5f23", 94)
+    "3dea6513388889f0fff4b77bf7a26013600321b9eb9ceb0e9a400a82572f5f23", 101)
 POSE = ModelFile(
     "rtmw-l-wholebody-384x288.onnx",
     f"{_BASE}/rtmw/onnx_sdk/rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip",
     "end2end.onnx",
-    "bd033156e5104c4f5d2edfe0453e02661e30a2f3da453ec93c8764d561b83054", 213)
+    "bd033156e5104c4f5d2edfe0453e02661e30a2f3da453ec93c8764d561b83054", 229)
 MODELS = (DETECTOR, POSE)
 
 DET_SIZE = 640
@@ -100,47 +110,121 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+TRIES = 4                # per source; an interrupted download continues where it stopped
+CHUNK = 1 << 18
+
+
+def _fetch(url: str, dest: Path, opener, cancel, on_bytes) -> None:
+    """Download *url* into *dest*, continuing a partial *dest* (HTTP Range)."""
+    have = dest.stat().st_size if dest.exists() else 0
+    headers = {"User-Agent": "video-to-funscript"}
+    if have:
+        headers["Range"] = f"bytes={have}-"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        resp = opener(req)
+    except urllib.error.HTTPError as e:
+        if e.code == 416 and have:              # already complete
+            return
+        raise
+    with resp:
+        status = getattr(resp, "status", None) or getattr(resp, "code", None) or 200
+        if have and status != 206:              # server ignored the range: start over
+            have = 0
+        on_bytes(have)
+        with open(dest, "ab" if have else "wb") as f:
+            while True:
+                if cancel and cancel():
+                    raise DownloadCancelled()
+                chunk = resp.read(CHUNK)
+                if not chunk:
+                    break
+                f.write(chunk)
+                on_bytes(len(chunk))
+
+
+def _from_zip(zip_path: Path, member: str, dest: Path) -> None:
+    with zipfile.ZipFile(zip_path) as z:
+        name = next((n for n in z.namelist() if n.endswith(member)), None)
+        if name is None:
+            raise RuntimeError("Modell nicht im Archiv gefunden")
+        with z.open(name) as src, open(dest, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+
+
 def download(progress: Callable[[float, str], None] | None = None,
-             cancel: Callable[[], bool] | None = None, opener=None) -> None:
-    """Fetch the missing models (zip from OpenMMLab, the ONNX file is kept and checked)."""
+             cancel: Callable[[], bool] | None = None, opener=None,
+             mirror: bool = True, folder: Path | None = None) -> None:
+    """Fetch the missing models: first from the GitHub copy, else from OpenMMLab (zip).
+    Each file is checked against its sha256. Dropped connections are retried and
+    continue where they stopped; a cancelled download continues on the next call."""
     from .updater import ssl_context
 
-    folder = models_dir()
+    if opener is None:
+        def opener(req):
+            return urllib.request.urlopen(req, timeout=60, context=ssl_context())
+    folder = folder or models_dir()
     folder.mkdir(parents=True, exist_ok=True)
     todo = [m for m in MODELS if not (folder / m.name).is_file()]
     total = sum(m.mb for m in todo) * 1e6 or 1.0
     done = 0.0
     for m in todo:
-        req = urllib.request.Request(m.url, headers={"User-Agent": "video-to-funscript"})
-        if opener is None:
-            resp = urllib.request.urlopen(req, timeout=60, context=ssl_context())
-        else:
-            resp = opener(req)
-        with resp, tempfile.TemporaryFile() as tmp:
-            while True:
-                if cancel and cancel():
-                    raise DownloadCancelled()
-                chunk = resp.read(1 << 18)
-                if not chunk:
-                    break
-                tmp.write(chunk)
-                done += len(chunk)
+        start = done
+        sources = ([(m.mirror_url, folder / (m.name + ".part"), False)] if mirror else []) + \
+                  [(m.url, folder / (m.name + ".zip.part"), True)]
+        errors: list[str] = []
+        for url, part, is_zip in sources:
+            def on_bytes(_n, _part=part, _start=start, _name=m.name):
+                done = _start + (_part.stat().st_size if _part.exists() else 0)
                 if progress:
-                    progress(min(0.99, done / total), m.name)
-            tmp.seek(0)
-            with zipfile.ZipFile(io.BufferedReader(tmp)) as z:
-                member = next((n for n in z.namelist() if n.endswith(m.member)), None)
-                if member is None:
-                    raise RuntimeError(f"{m.name}: Modell nicht im Archiv gefunden")
-                part = folder / (m.name + ".part")
-                with z.open(member) as src, open(part, "wb") as dst:
-                    shutil.copyfileobj(src, dst, 1 << 20)
-        if _sha256(part) != m.sha256:
-            part.unlink(missing_ok=True)
-            raise RuntimeError(f"{m.name}: Prüfsumme stimmt nicht, Download beschädigt")
-        part.replace(folder / m.name)
+                    progress(min(0.99, done / total), _name)
+            ok = False
+            for _ in range(TRIES):
+                try:
+                    _fetch(url, part, opener, cancel, on_bytes)
+                    ok = True
+                    break
+                except DownloadCancelled:
+                    raise
+                except urllib.error.HTTPError as e:
+                    errors.append(f"{url.split('/')[2]}: HTTP {e.code}")
+                    part.unlink(missing_ok=True)
+                    break                       # not there: next source
+                except (OSError, urllib.error.URLError) as e:    # timeout, reset, ...
+                    errors.append(f"{url.split('/')[2]}: {getattr(e, 'reason', e)}")
+            if not ok:
+                continue
+            onnx = part
+            if is_zip:
+                onnx = folder / (m.name + ".part")
+                try:
+                    _from_zip(part, m.member, onnx)
+                except (zipfile.BadZipFile, RuntimeError) as e:
+                    errors.append(f"{m.name}: {e}")
+                    part.unlink(missing_ok=True)
+                    onnx.unlink(missing_ok=True)
+                    continue
+                part.unlink(missing_ok=True)
+            if _sha256(onnx) != m.sha256:
+                onnx.unlink(missing_ok=True)
+                errors.append(f"{m.name}: Prüfsumme stimmt nicht, Download beschädigt")
+                continue
+            onnx.replace(folder / m.name)
+            break
+        else:
+            raise RuntimeError(errors[-1] if errors else f"{m.name}: Laden fehlgeschlagen")
+        done = start + m.mb * 1e6
+    _remove_old(folder)
     if progress:
         progress(1.0, "")
+
+
+def _remove_old(folder: Path) -> None:
+    """Delete models from earlier app versions that are no longer used."""
+    keep = {m.name for m in MODELS}
+    for f in folder.glob("*.onnx"):
+        if f.name not in keep:
+            f.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------- recognition

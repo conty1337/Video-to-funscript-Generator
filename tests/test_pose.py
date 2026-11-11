@@ -2,6 +2,7 @@
 The real models are not needed: a stand-in finds the bright object in the frame."""
 import hashlib
 import io
+import urllib.error
 import zipfile
 
 import cv2
@@ -64,24 +65,118 @@ def _zip(data: bytes) -> bytes:
     return buf.getvalue()
 
 
-def test_download_checks_and_keeps_the_model(tmp_path, monkeypatch):
+class _Resp(io.BytesIO):
+    def __init__(self, data, status=200):
+        super().__init__(data)
+        self.status = status
+
+
+class _Server:
+    """Stand-in for the network: url -> bytes, honours Range, can fail."""
+    def __init__(self, files, fail_after=None, missing=()):
+        self.files, self.fail_after, self.missing = files, dict(fail_after or {}), set(missing)
+        self.calls = []
+
+    def __call__(self, req):
+        url = req.full_url
+        self.calls.append((url, req.headers.get("Range")))
+        if url in self.missing or url not in self.files:
+            raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+        data = self.files[url]
+        start = 0
+        rng = req.headers.get("Range")
+        if rng:
+            start = int(rng.split("=")[1].rstrip("-"))
+        n = self.fail_after.pop(url, None)
+        if n is not None:                      # deliver n bytes, then time out
+            class Broken(_Resp):
+                def read(self, size=-1):
+                    if self.tell() >= n:
+                        raise TimeoutError("The read operation timed out")
+                    return super().read(min(size, n - self.tell()))
+            return Broken(data[start:], 206 if start else 200)
+        return _Resp(data[start:], 206 if start else 200)
+
+
+def _model(name, data, mb=1):
+    return pose.ModelFile(name, f"https://mm.invalid/{name}.zip", "end2end.onnx",
+                          hashlib.sha256(data).hexdigest(), mb)
+
+
+def test_download_from_mirror_checks_and_keeps_the_model(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     good = b"onnx" * 100
-    m = pose.ModelFile("a.onnx", "https://example.invalid/a.zip", "end2end.onnx",
-                       hashlib.sha256(good).hexdigest(), 1)
-    bad = pose.ModelFile("b.onnx", "https://example.invalid/b.zip", "end2end.onnx", "0" * 64, 1)
+    m = _model("a.onnx", good)
     monkeypatch.setattr(pose, "MODELS", (m,))
+    server = _Server({m.mirror_url: good})
     seen = []
-    pose.download(lambda p, n: seen.append(p), opener=lambda req: io.BytesIO(_zip(good)))
+    pose.download(lambda p, n: seen.append(p), opener=server)
     assert (pose.models_dir() / "a.onnx").read_bytes() == good and seen[-1] == 1.0
-    assert pose.installed()
-    monkeypatch.setattr(pose, "MODELS", (m, bad))
+    assert pose.installed() and server.calls == [(m.mirror_url, None)]
+    assert not list(pose.models_dir().glob("*.part"))
+
+
+def test_download_falls_back_to_openmmlab_zip(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    good = b"onnx" * 100
+    m = _model("a.onnx", good)
+    monkeypatch.setattr(pose, "MODELS", (m,))
+    pose.download(opener=_Server({m.url: _zip(good)}))
+    assert (pose.models_dir() / "a.onnx").read_bytes() == good
+    assert not list(pose.models_dir().glob("*.part"))
+
+
+def test_download_continues_after_a_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    good = bytes(range(256)) * 4000
+    m = _model("a.onnx", good)
+    monkeypatch.setattr(pose, "MODELS", (m,))
+    monkeypatch.setattr(pose, "CHUNK", 1000)
+    server = _Server({m.mirror_url: good}, fail_after={m.mirror_url: 300_000})
+    pose.download(opener=server)
+    assert (pose.models_dir() / "a.onnx").read_bytes() == good
+    assert server.calls == [(m.mirror_url, None), (m.mirror_url, "bytes=300000-")]
+
+
+def test_cancelled_download_continues_next_time(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    good = bytes(range(256)) * 4000
+    m = _model("a.onnx", good)
+    monkeypatch.setattr(pose, "MODELS", (m,))
+    monkeypatch.setattr(pose, "CHUNK", 1000)
+    reads = []
+    with pytest.raises(pose.DownloadCancelled):
+        pose.download(cancel=lambda: reads.append(1) or len(reads) > 50,
+                      opener=_Server({m.mirror_url: good}))
+    assert (pose.models_dir() / "a.onnx.part").stat().st_size == 50_000
+    server = _Server({m.mirror_url: good})
+    pose.download(opener=server)
+    assert (pose.models_dir() / "a.onnx").read_bytes() == good
+    assert server.calls == [(m.mirror_url, "bytes=50000-")]
+
+
+def test_bad_checksum_everywhere_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    good = b"onnx" * 100
+    bad = pose.ModelFile("b.onnx", "https://mm.invalid/b.zip", "end2end.onnx", "0" * 64, 1)
+    monkeypatch.setattr(pose, "MODELS", (bad,))
     with pytest.raises(RuntimeError, match="Prüfsumme"):
-        pose.download(opener=lambda req: io.BytesIO(_zip(good)))
+        pose.download(opener=_Server({bad.mirror_url: good, bad.url: _zip(good)}))
     assert not (pose.models_dir() / "b.onnx").exists()
     assert not list(pose.models_dir().glob("*.part"))
-    with pytest.raises(pose.DownloadCancelled):
-        pose.download(cancel=lambda: True, opener=lambda req: io.BytesIO(_zip(good)))
+
+
+def test_new_model_version_replaces_the_old_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    folder = pose.models_dir()
+    folder.mkdir(parents=True)
+    (folder / "old-model.onnx").write_bytes(b"old")
+    new = b"new" * 10
+    m = _model("new-model.onnx", new)
+    monkeypatch.setattr(pose, "MODELS", (m,))
+    assert not pose.installed()
+    pose.download(opener=_Server({m.mirror_url: new}))
+    assert pose.installed() and not (folder / "old-model.onnx").exists()
 
 
 # ---------------------------------------------------------------- AI check in the analysis
