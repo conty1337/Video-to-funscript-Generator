@@ -578,3 +578,28 @@ def test_small_plain_box_follows_a_fast_ring(tmp_path):
     tr = m.tracks[:, 0] * [W, H]
     err = np.hypot(*(tr - truth[:len(tr)]).T)
     assert np.nanpercentile(err, 90) < 8, np.nanpercentile(err, 90)
+
+
+def test_drift_check_goes_to_a_clear_match_further_away():
+    """The points slid off the area (onto the plain toy next to it): when the original
+    look is clearly found a good bit away, the area goes there - and a match only
+    somewhere else does not count as 'looks right here' (which would make the wrong
+    place the new good one)."""
+    from vtf.tracking import AreaTracker
+
+    rng = np.random.default_rng(2)
+    H, W = 240, 320
+    f0 = np.full((H, W), 150, np.uint8)
+    f0[100:140, 100:140] = rng.integers(0, 255, (40, 40)).astype(np.uint8)
+    f0 = cv2.GaussianBlur(f0, (3, 3), 0)
+    a = AreaTracker((100, 100, 40, 40), (H, W), first=f0)
+    a.center = a.center + np.array([16.0, 16.0])             # slid off, over half a box (diagonal)
+    score = a._drift_correction(f0)
+    assert score > 0.8 and np.hypot(*(a.center - (120, 120))) < 2
+    b = AreaTracker((100, 100, 40, 40), (H, W), first=f0)
+    b.center = b.center + np.array([16.0, 16.0])
+    f1 = f0.copy()
+    f1[100:140, 100:140] = cv2.GaussianBlur(rng.integers(0, 255, (40, 40)).astype(np.uint8), (3, 3), 0)
+    f1[100:140, 100:140] = (0.5 * f1[100:140, 100:140] + 0.5 * f0[100:140, 100:140]).astype(np.uint8)
+    s1 = b._drift_correction(f1)                             # half like it, and away: not good here
+    assert s1 < b.GOOD_SCORE
