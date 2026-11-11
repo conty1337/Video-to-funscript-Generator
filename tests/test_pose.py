@@ -240,6 +240,26 @@ def test_ai_check_keeps_the_area_on_its_body_part(tmp_path, monkeypatch):
     assert errs[True] < errs[False]
 
 
+class _FailsLater(_SeesTheSquare):
+    def people(self, img, reuse=False):
+        if _SeesTheSquare.calls >= 3:
+            raise RuntimeError("gather: indices out of range")
+        return super().people(img, reuse)
+
+
+def test_failing_ai_does_not_end_the_analysis(tmp_path, monkeypatch):
+    path = tmp_path / "cover.avi"
+    ys = _cover_video(path)
+    box = ((W / 2 - 25) / W, (ys[0] - 25) / H, 50 / W, 50 / H)
+    monkeypatch.setattr(pose, "installed", lambda: True)
+    monkeypatch.setattr(pose, "PoseEstimator", _FailsLater)
+    _SeesTheSquare.calls = 0
+    m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(TrackSection(0, (box,)),),
+                                              width=W, hwaccel="none", ai_check=True))
+    assert len(m.tracks) > 100
+    assert any("ausgefallen" in n for n in m.meta["notes"])
+
+
 def test_ai_check_is_part_of_the_cache_key_only_when_on():
     a = AnalysisSettings(mode="track", track_boxes=((0.1, 0.1, 0.2, 0.2),))
     assert "ai_check" not in a.cache_key()
@@ -292,3 +312,61 @@ def test_pick_box_for_point_and_line():
     assert pose.point_name(pose.L_KNEE) == "Knie links"
     assert pose.line_name(pose.L_HIP, pose.L_KNEE) == "Oberschenkel links"
     assert all(0 <= a < pose.N_POINTS and 0 <= b < pose.N_POINTS for a, b in pose.LINKS)
+
+
+def _tiny_onnx() -> bytes:
+    """x -> Relu -> r -> Neg -> n -> Gather(bad index) -> out: the last step fails like
+    the detector's NMS part does in OpenCV."""
+    ld, enc = pose._ld, pose._enc
+
+    def node(op, ins, outs, name, extra=b""):
+        return pose._ld(1, b"".join(ld(1, i.encode()) for i in ins)
+                        + b"".join(ld(2, o.encode()) for o in outs)
+                        + ld(3, name.encode()) + ld(4, op.encode()) + extra)
+
+    def vinfo(field, name, dims):
+        shape = b"".join(ld(1, b"\x08" + enc(d)) for d in dims)
+        return ld(field, ld(1, name.encode()) + ld(2, ld(1, b"\x08\x01" + ld(2, shape))))
+
+    # initializer "idx": int64 tensor [1] = 99 (out of range)
+    idx = b"\x08\x01\x10\x07" + ld(8, b"idx") + ld(9, (99).to_bytes(8, "little"))
+    graph = (node("Relu", ["x"], ["r"], "relu") + node("Neg", ["r"], ["n"], "neg")
+             + node("Gather", ["n", "idx"], ["out"], "gather", ld(5, ld(1, b"axis") + b"\x18\x01" + b"\xa0\x01\x02"))
+             + ld(2, b"g") + ld(5, idx) + vinfo(11, "x", (1, 4)) + vinfo(12, "out", (1, 1)))
+    return b"\x08\x07" + ld(8, b"\x10\x0d") + ld(7, graph)
+
+
+def test_detector_graph_cut_before_the_failing_part():
+    import cv2
+    x = np.array([[-1.0, 2.0, -3.0, 4.0]], np.float32)
+    cut = pose._cut_onnx(_tiny_onnx(), [("n", (1, 4))])
+    net = cv2.dnn.readNetFromONNX(np.frombuffer(cut, np.uint8))
+    net.setInput(x)
+    (out,) = net.forward(net.getUnconnectedOutLayersNames())
+    assert np.allclose(np.asarray(out).reshape(1, 4), [[0, -2, 0, -4]])
+    with pytest.raises(ValueError, match="fehlt"):
+        pose._cut_onnx(_tiny_onnx(), [("nothing", (1, 4))])
+
+
+def test_detector_nms_keeps_separate_people():
+    """Several people: one box each after NMS (OpenCV's own NMS layer failed here)."""
+    boxes = np.zeros((pose.DET_ANCHORS, 4), np.float32)
+    scores = np.zeros((pose.DET_ANCHORS, pose.DET_CLASSES), np.float32)
+    for k, (x, sc) in enumerate([(10, 0.9), (12, 0.8), (300, 0.7), (500, 0.3)]):
+        boxes[k] = (x, 20, x + 100, 300)
+        scores[k, 0] = sc
+
+    class Net:
+        def setInput(self, blob):
+            pass
+
+        def getUnconnectedOutLayersNames(self):
+            return (pose.DET_BOXES, pose.DET_SCORES)
+
+        def forward(self, names):
+            return boxes[None], scores[None]
+
+    est = pose.PoseEstimator(det_net=Net(), pose_net=object())
+    found = est.detect(np.zeros((640, 640, 3), np.uint8))
+    assert [round(s, 1) for _b, s in found] == [0.9, 0.7]      # overlap merged, weak one dropped
+    assert abs(found[1][0][0] - 300) < 1e-3

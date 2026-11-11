@@ -78,6 +78,10 @@ class PoseWorker(QThread):
         super().__init__()
         self.frame = frame
 
+    @staticmethod
+    def loaded() -> bool:
+        return PoseWorker._estimator is not None
+
     def run(self):
         try:
             if PoseWorker._estimator is None:

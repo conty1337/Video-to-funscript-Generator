@@ -936,19 +936,39 @@ class MainWindow(QMainWindow):
             self._status("KI-Vorschlag: erst ein Video öffnen und „Tracking“ als Methode wählen")
             return
         if self._pose_worker is not None and self._pose_worker.isRunning():
+            self._status("KI-Vorschlag: die KI sucht noch, einen Moment …")
             return
         if not pose_ui.ensure_models(self):
             return
         self.pause()
         frame, ms = self._frame.copy(), self._cur_ms()
-        self._status("KI-Vorschlag: suche Körperteile …")
+        first = not pose_ui.PoseWorker.loaded()
+        self._status("KI-Vorschlag: KI wird gestartet (beim ersten Mal ein paar Sekunden) und sucht "
+                     "Körperteile …" if first else "KI-Vorschlag: suche Körperteile …")
+        btn = self.panel.tracking.ai_btn
+        btn.setEnabled(False)
+        btn.setText("KI startet …" if first else "KI sucht …")
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        self._pose_busy = True
         w = pose_ui.PoseWorker(frame)
         w.done.connect(lambda people: self._show_suggestions(people, frame.shape, ms))
-        w.failed.connect(lambda e: self._status(f"KI-Vorschlag fehlgeschlagen: {e}"))
+        w.failed.connect(lambda e: (self._pose_search_ended(),
+                                    self._status(f"KI-Vorschlag fehlgeschlagen: {e}")))
+        w.finished.connect(self._pose_search_ended)      # also when neither signal came
         self._pose_worker = w
         w.start()
 
+    def _pose_search_ended(self):
+        if not getattr(self, "_pose_busy", False):
+            return
+        self._pose_busy = False
+        btn = self.panel.tracking.ai_btn
+        btn.setEnabled(True)
+        btn.setText("KI-Vorschlag")
+        QApplication.restoreOverrideCursor()
+
     def _show_suggestions(self, people, shape, ms: float):
+        self._pose_search_ended()            # before the menu opens: normal cursor, button back
         if abs(self._cur_ms() - ms) > 1:
             self._status("KI-Vorschlag verworfen: das Video ist inzwischen weitergelaufen")
             return
@@ -981,7 +1001,7 @@ class MainWindow(QMainWindow):
         h, w = self._skel_shape[:2]
         x, y, bw, bh, ang = b
         box = (float(x / w), float(y / h), float(bw / w), float(bh / h)) + ((float(ang),) if ang else ())
-        self._box_drawn(box)
+        self._box_drawn(box, keep_first=True)
         name = pose.point_name(target) if isinstance(target, int) else pose.line_name(*target)
         self._status(f"Kästchen auf „{name}“ · {self.status_label.text()}")
 
@@ -1011,11 +1031,12 @@ class MainWindow(QMainWindow):
 
     def _pick_from_menu(self, box) -> None:
         self.view.set_skeleton(None)
-        self._box_drawn(box)
+        self._box_drawn(box, keep_first=True)
 
-    def _box_drawn(self, box):
+    def _box_drawn(self, box, keep_first: bool = False):
+        """keep_first: a box from the KI, it never replaces or corrects area 1."""
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
-        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown)
+        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown, keep_first=keep_first)
         img = self.view._img
         if img is not None:     # how big the area is in the analysis picture
             aw = self.panel.width.currentData()
@@ -1347,7 +1368,9 @@ class MainWindow(QMainWindow):
             lost_txt = (f" · Bereich {', '.join(map(str, areas))} ab {_fmt(a)} verloren"
                         + (f" (+{len(lost) - 1} weitere Stellen, rot in der Kurve)" if len(lost) > 1 else
                            " (rot in der Kurve) – dort nachjustieren"))
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}")
+        notes = motion.meta.get("notes") or []
+        note_txt = "".join(f" · {n}" for n in notes if "ausgefallen" in n or "Modelle" in n)
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}{note_txt}")
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")

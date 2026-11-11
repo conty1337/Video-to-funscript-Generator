@@ -1,4 +1,6 @@
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -8,10 +10,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from videogen import make_video  # noqa: E402
 
+# Settings and models of the tests never go to the real user folders (Qt keeps the
+# settings path it saw first, so a monkeypatched XDG_CONFIG_HOME in a later test is not
+# enough): otherwise e.g. "KI-Kontrolle on" from one run makes the next run wait for a
+# download question.
+_home = tempfile.mkdtemp(prefix="vtf-tests-")
+os.environ["XDG_CONFIG_HOME"] = os.path.join(_home, "config")
+os.environ["XDG_DATA_HOME"] = os.path.join(_home, "data")
+
 
 @pytest.fixture
 def sine_video(tmp_path):
     return make_video(tmp_path / "sine.avi")
+
+
+def pytest_unconfigure(config):
+    import shutil
+    shutil.rmtree(_home, ignore_errors=True)
 
 
 def pytest_sessionfinish(session, exitstatus):
