@@ -118,7 +118,7 @@ class _SeesTheSquare:
     left and right of the hand still show it)."""
     calls = 0
 
-    def people(self, img):
+    def people(self, img, reuse=False):
         _SeesTheSquare.calls += 1
         g = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         ys, xs = np.nonzero(g > 145)
@@ -149,3 +149,37 @@ def test_ai_check_is_part_of_the_cache_key_only_when_on():
     a = AnalysisSettings(mode="track", track_boxes=((0.1, 0.1, 0.2, 0.2),))
     assert "ai_check" not in a.cache_key()
     assert AnalysisSettings(mode="track", track_boxes=((0.1, 0.1, 0.2, 0.2),), ai_check=True).cache_key() != a.cache_key()
+
+
+def test_knots_lose_outliers_but_keep_strokes():
+    from vtf.analysis import _smooth_knots
+    ts = list(range(0, 90, 3))
+    ys = 40 * np.sin(np.array(ts) / 30 * 2 * np.pi)
+    noisy = ys.copy()
+    noisy[10] += 30                                   # one wild guess under the cover
+    out = np.array([c[1] for _t, c in _smooth_knots([(t, np.array([0.0, y])) for t, y in zip(ts, noisy)])])
+    assert abs(out[10] - ys[10]) < 6
+    assert out.max() > 33 and out.min() < -33         # strokes keep most of their height
+
+
+def test_people_search_reuses_last_boxes():
+    """Between regular checks the people are not searched again: their points are looked
+    for where they were."""
+    est = pose.PoseEstimator(det_net=object(), pose_net=object())
+    calls = {"detect": 0}
+    p = _person(center=(160, 140))
+
+    def detect(img):
+        calls["detect"] += 1
+        return [(p.box, 0.9)]
+
+    est.detect = detect
+    est.keypoints = lambda img, box: (p.pts, p.conf)
+    img = np.zeros((240, 320), np.uint8)
+    est.people(img)
+    est.people(img, reuse=True)
+    est.people(img, reuse=True)
+    assert calls["detect"] == 1
+    est.keypoints = lambda img, box: (p.pts, np.zeros(pose.N_POINTS))     # nobody there now
+    est.people(img, reuse=True)
+    assert calls["detect"] == 2                       # then a full search

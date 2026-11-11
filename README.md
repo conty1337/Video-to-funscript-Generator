@@ -221,7 +221,11 @@ der Maus verschieben.
   ob jedes Kästchen noch auf dem Körperteil sitzt, auf das es gesetzt wurde.
   Rutscht es weg, wird es zurückgeholt. Liegt länger eine Hand darauf, wartet das
   Kästchen dort, wo die KI das Körperteil sieht, und die Strecke wird durch diese
-  Stellen überbrückt. Kostet Zeit: je Prüfung etwa 0,2–0,5 s auf der CPU.
+  Stellen überbrückt (einzelne Ausreißer der KI werden dabei verworfen). Kostet
+  Zeit: Eine Prüfung mit Personensuche dauert etwa 0,5 s auf der CPU, die
+  häufigen Zwischenblicke suchen die Person dort, wo sie gerade war, und
+  brauchen etwa ein Drittel davon. Im Härtefall (10 s Hand auf dem Becken)
+  bleibt der Fehler unter 10 px statt 200 px, fast alle Hübe sind im Script.
 - **Modelle**: YOLOX-m (findet Personen) und RTMW-l (133 Körperpunkte mit Händen,
   Füßen und Gesicht) von OpenMMLab, Lizenz Apache-2.0, zusammen etwa 310 MB
   Download (330 MB auf der Platte). Sie werden beim ersten Benutzen nach

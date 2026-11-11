@@ -330,6 +330,23 @@ def _path_through(knots: list[tuple[int, np.ndarray]], v0, v1) -> dict[int, np.n
     return out
 
 
+def _smooth_knots(knots: list[tuple[int, np.ndarray]]) -> list[tuple[int, np.ndarray]]:
+    """Under a cover the body recognition sometimes guesses wildly. A place far off the
+    line between its neighbours (much more than the others are) is replaced by that
+    line; all others stay as they are, so strokes keep their height."""
+    if len(knots) < 3:
+        return knots
+    ts = np.array([t for t, _c in knots], np.float64)
+    ps = np.array([c for _t, c in knots], np.float64)
+    w = (ts[1:-1] - ts[:-2]) / np.maximum(ts[2:] - ts[:-2], 1e-9)
+    line = ps[:-2] + w[:, None] * (ps[2:] - ps[:-2])
+    resid = np.hypot(*(ps[1:-1] - line).T)
+    wild = resid > max(4.0, 3 * float(np.median(resid)))
+    out = ps.copy()
+    out[1:-1][wild] = line[wild]
+    return [(t, out[q]) for q, (t, _c) in enumerate(knots)]
+
+
 def _bridge_gaps(centers, gaps, outs, losts, owner, dx, dy, k: int, fps: float,
                  knots: dict | None = None) -> None:
     """Fill short stretches where an area was not followed (covered, lost or out of the
@@ -361,7 +378,7 @@ def _bridge_gaps(centers, gaps, outs, losts, owner, dx, dy, k: int, fps: float,
                 continue
             # a short gap is bridged best by a smooth curve; the places the body recognition
             # saw (a few px off under a cover) only help when the gap is too long for that
-            inner = (sorted((t, c) for t, c in seen.items() if a <= t < b)
+            inner = (_smooth_knots(sorted((t, c) for t, c in seen.items() if a <= t < b))
                      if b - last > 0.5 * BRIDGE_PLAIN_S * fps else [])
             pts = [(last, centers[last][area])] + inner + [(b, centers[b][area])]
             longest = max(t1 - t0 for (t0, _c0), (t1, _c1) in zip(pts, pts[1:]))
@@ -578,7 +595,9 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                            if anc is not None and area not in fixed and not (tracker.anchor and area > 0)
                            and (routine or (i % AI_UNSURE_EVERY == 0
                                             and (disagree[area] or _unsure(tracker.areas[area]))))]
-                    people = estimator.people(cur) if due else []
+                    # in between the regular checks the people are looked for where they were
+                    # a moment ago (no new search for people: that is two thirds of the time)
+                    people = estimator.people(cur, reuse=not routine) if due else []
                     long_lost = AI_STUCK_S * info.fps / step
                     for area in due:
                         t = tracker.areas[area]
