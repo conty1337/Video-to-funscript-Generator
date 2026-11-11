@@ -1367,7 +1367,9 @@ class MainWindow(QMainWindow):
             lost_txt = (f" · Bereich {', '.join(map(str, areas))} ab {_fmt(a)} verloren"
                         + (f" (+{len(lost) - 1} weitere Stellen, rot in der Kurve)" if len(lost) > 1 else
                            " (rot in der Kurve) – dort nachjustieren"))
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}")
+        notes = motion.meta.get("notes") or []
+        note_txt = "".join(f" · {n}" for n in notes if "ausgefallen" in n or "Modelle" in n)
+        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}{note_txt}")
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")

@@ -270,6 +270,102 @@ def _crop_affine(box, w: int = POSE_W, h: int = POSE_H, padding: float = 1.25) -
     return cv2.getAffineTransform(src, dst)
 
 
+# ---------------------------------------------------------------- detector without NMS
+# The YOLOX export ends in NonMaxSuppression + Gather. OpenCV's DNN (5.0) fails there
+# as soon as more than one person is in the frame ("indices are outside of range in
+# function 'gather'"). So the graph is cut before it, in memory (the file on disk stays
+# as downloaded and checked): outputs are the decoded boxes and class scores of all
+# 8400 anchors, and the NMS runs in Python with cv2.dnn.NMSBoxes.
+DET_BOXES, DET_SCORES = "1436", "1438"         # tensor names in the export
+DET_ANCHORS = (DET_SIZE // 8) ** 2 + (DET_SIZE // 16) ** 2 + (DET_SIZE // 32) ** 2
+DET_CLASSES = 80
+NMS_IOU = 0.65
+
+
+def _varint(b: bytes, i: int) -> tuple[int, int]:
+    v = shift = 0
+    while True:
+        c = b[i]
+        i += 1
+        v |= (c & 0x7F) << shift
+        shift += 7
+        if c < 0x80:
+            return v, i
+
+
+def _enc(v: int) -> bytes:
+    out = bytearray()
+    while True:
+        c, v = v & 0x7F, v >> 7
+        out.append(c | 0x80 if v else c)
+        if not v:
+            return bytes(out)
+
+
+def _fields(b: bytes):
+    """Top-level protobuf fields of *b*: (number, raw bytes incl. key, payload or None)."""
+    i = 0
+    while i < len(b):
+        start = i
+        key, i = _varint(b, i)
+        wt = key & 7
+        data = None
+        if wt == 0:
+            _, i = _varint(b, i)
+        elif wt == 1:
+            i += 8
+        elif wt == 5:
+            i += 4
+        elif wt == 2:
+            n, i = _varint(b, i)
+            data = b[i:i + n]
+            i += n
+        else:
+            raise ValueError("ONNX-Datei nicht lesbar")
+        yield key >> 3, b[start:i], data
+
+
+def _ld(field: int, data: bytes) -> bytes:
+    return _enc(field << 3 | 2) + _enc(len(data)) + data
+
+
+def _cut_onnx(model: bytes, outputs: list[tuple[str, tuple[int, ...]]]) -> bytes:
+    """ONNX model whose outputs are the given float tensors; nodes not needed for them
+    are dropped. Plain protobuf editing, no onnx package needed."""
+    out = bytearray()
+    found = False
+    for f, raw, data in _fields(model):
+        if f != 7 or data is None:              # ModelProto.graph = 7
+            out += raw
+            continue
+        found = True
+        nodes, rest = [], bytearray()
+        for gf, graw, gdata in _fields(data):
+            if gf == 1:                         # GraphProto.node
+                ins = [d.decode() for nf, _r, d in _fields(gdata) if nf == 1]
+                outs = [d.decode() for nf, _r, d in _fields(gdata) if nf == 2]
+                nodes.append((ins, outs, graw))
+            elif gf != 12:                      # GraphProto.output: replaced below
+                rest += graw
+        need = {name for name, _dims in outputs}
+        keep = []
+        for ins, outs, graw in reversed(nodes):  # nodes are in topological order
+            if need & set(outs):
+                keep.append(graw)
+                need |= set(ins)
+        missing = {name for name, _d in outputs} - {o for _i, outs, _g in nodes for o in outs}
+        if missing:
+            raise ValueError(f"Modell passt nicht (fehlt: {', '.join(sorted(missing))})")
+        g = bytearray(b"".join(reversed(keep))) + rest
+        for name, dims in outputs:              # ValueInfoProto: name, float tensor + shape
+            shape = b"".join(_ld(1, b"\x08" + _enc(d)) for d in dims)
+            g += _ld(12, _ld(1, name.encode()) + _ld(2, _ld(1, b"\x08\x01" + _ld(2, shape))))
+        out += _ld(7, bytes(g))
+    if not found:
+        raise ValueError("ONNX-Datei ohne Graph")
+    return bytes(out)
+
+
 class PoseEstimator:
     """Finds people and their 133 body points. Nets are loaded on first use."""
 
@@ -281,7 +377,10 @@ class PoseEstimator:
 
     def _nets(self):
         if self._det is None:
-            self._det = cv2.dnn.readNetFromONNX(str(self.folder / DETECTOR.name))
+            model = (self.folder / DETECTOR.name).read_bytes()
+            cut = _cut_onnx(model, [(DET_BOXES, (1, DET_ANCHORS, 4)),
+                                    (DET_SCORES, (1, DET_ANCHORS, DET_CLASSES))])
+            self._det = cv2.dnn.readNetFromONNX(np.frombuffer(cut, np.uint8))
         if self._pose is None:
             self._pose = cv2.dnn.readNetFromONNX(str(self.folder / POSE.name))
         return self._det, self._pose
@@ -294,9 +393,18 @@ class PoseEstimator:
     def detect(self, img: np.ndarray) -> list[tuple[np.ndarray, float]]:
         det, _pose = self._nets()
         lb, r = _letterbox(_bgr(img), DET_SIZE)
-        dets, _labels = self._forward(det, lb.transpose(2, 0, 1)[None].astype(np.float32))
-        d = np.asarray(dets).reshape(-1, 5)
-        d = d[d[:, 4] >= PERSON_SCORE]
+        boxes, scores = self._forward(det, lb.transpose(2, 0, 1)[None].astype(np.float32))
+        boxes = np.asarray(boxes, np.float32).reshape(-1, 4)
+        scores = np.asarray(scores, np.float32).reshape(len(boxes), -1)[:, 0]   # class 0 = person
+        sel = np.flatnonzero(scores >= PERSON_SCORE)
+        d = np.zeros((0, 5), np.float32)
+        if len(sel):
+            b = boxes[sel]
+            xywh = np.c_[b[:, :2], b[:, 2:] - b[:, :2]]
+            keep = np.asarray(cv2.dnn.NMSBoxes(xywh.tolist(), scores[sel].tolist(),
+                                               PERSON_SCORE, NMS_IOU), int).ravel()
+            d = np.c_[b[keep], scores[sel][keep]]
+            d = d[np.argsort(-d[:, 4])]
         h, w = img.shape[:2]
         out = []
         for x0, y0, x1, y1, s in d:

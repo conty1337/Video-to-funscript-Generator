@@ -530,6 +530,16 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
         else:
             report.setdefault("notes", []).append("KI-Kontrolle aus: Modelle nicht geladen")
     ai_every = max(1, round(AI_EVERY_S * info.fps / step))
+
+    def ai_people(img, reuse=False) -> list:
+        """People in the frame; if the AI fails, the analysis goes on without it."""
+        nonlocal estimator, anchors
+        try:
+            return estimator.people(img, reuse=reuse)
+        except Exception as e:             # a model / OpenCV problem must not end the analysis
+            estimator, anchors = None, []
+            report.setdefault("notes", []).append(f"KI-Kontrolle ausgefallen, ohne KI weiter: {e}")
+            return []
     anchors: list = []
     knots: dict[int, dict[int, np.ndarray]] = {}     # area -> {frame: centre} seen by the AI
     sec_start = 0
@@ -565,7 +575,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                 anchors = []
                 if estimator is not None:
                     from .pose import Anchor
-                    people = estimator.people(cur)
+                    people = ai_people(cur)
                     anchors = [Anchor.from_box(people, a.center, a.size * a.scale) for a in tracker.areas]
                 agree_at = [i] * len(tracker.areas)
                 disagree = [0] * len(tracker.areas)
@@ -586,8 +596,9 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                         if estimator is not None and area < len(anchors):
                             from .pose import Anchor
                             t = tracker.areas[area]
-                            anchors[area] = Anchor.from_box(estimator.people(cur), t.center,
-                                                            t.size * t.scale)
+                            people = ai_people(cur)
+                            if estimator is not None:
+                                anchors[area] = Anchor.from_box(people, t.center, t.size * t.scale)
                 if anchors and any(anchors):
                     routine = (i - sec_start) % ai_every == 0
                     fixed = {area for area, _bx in key_at.get(i, ())}       # the user's word counts
@@ -597,7 +608,9 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                                             and (disagree[area] or _unsure(tracker.areas[area]))))]
                     # in between the regular checks the people are looked for where they were
                     # a moment ago (no new search for people: that is two thirds of the time)
-                    people = estimator.people(cur, reuse=not routine) if due else []
+                    people = ai_people(cur, reuse=not routine) if due else []
+                    if estimator is None:
+                        due = []
                     long_lost = AI_STUCK_S * info.fps / step
                     for area in due:
                         t = tracker.areas[area]
