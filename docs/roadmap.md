@@ -110,16 +110,14 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
 
 ## Für später
 
-- [ ] **Automatisches Tracking per KI (Pose-Erkennung)**: Die App findet
-      Körperteile selbst, statt dass man Kästchen zieht. Dafür braucht es
-      **keine API und keine große KI**: Haltungsmodelle wie MediaPipe Pose,
-      RTMPose oder MoveNet sind klein (etwa 5–30 MB), laufen lokal auf der CPU
-      mit 10–30 Bildern pro Sekunde und lassen sich über OpenCV (ONNX)
-      einbauen. Das AppImage würde dadurch etwas größer. Offene Punkte: Die
-      Modelle sind auf normale Körperhaltungen trainiert, bei Nahaufnahmen
-      und verdeckten Körpern werden sie ungenau. Deshalb eher als Vorschlag für
-      die Kästchen, die man dann korrigiert. Lizenzen prüfen: MediaPipe und
-      RTMPose Apache-2.0 (gut), YOLO-Pose AGPL (ungünstig).
+- [x] **KI-Körpererkennung** (0.10.8): YOLOX-m + RTMW-l (OpenMMLab,
+      Apache-2.0, ~310 MB, Download beim ersten Benutzen, läuft über OpenCV
+      DNN). **KI-Vorschlag** setzt Kästchen auf Becken, Mund, Hände usw.,
+      **KI-Kontrolle** holt weggerutschte Kästchen während der Analyse zurück
+      und überbrückt längere Verdeckungen. Offen: Test an echten Videos,
+      vielleicht GPU (OpenCL) für die Netze.
+- [x] **Bildrand und kurze Verdeckungen** (0.10.8): Strecke außerhalb des
+      Bildes und unter einer Hand wird weich überbrückt.
 - [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,
       Suche und Bewertung, Doppelklick spielt ab.
 - [ ] **Script-Qualitätsprüfung**: warnt vor zu schnellen Stellen, Lücken,

@@ -14,6 +14,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QLabel,
     QListWidget,
@@ -38,6 +39,7 @@ class TrackingBox(QWidget):
     generatorChanged = Signal()     # calibration changed: the script is rebuilt at once
     seekRequested = Signal(int)     # ms
     message = Signal(str)
+    suggestRequested = Signal()     # "KI-Vorschlag": find body parts in the current frame
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -78,6 +80,21 @@ class TrackingBox(QWidget):
         grid.addWidget(self.out_btn, 1, 1)
         grid.addWidget(self.clear_btn, 2, 0, 1, 2)
         lay.addLayout(grid)
+        self.ai_btn = QPushButton("KI-Vorschlag")
+        self.ai_btn.setToolTip("Körperteile im aktuellen Bild erkennen (Becken, Mund, Hände, …) und "
+                               "als Kästchen vorschlagen (K). Beim ersten Mal werden die KI-Modelle "
+                               "geladen (etwa 310 MB, einmalig)")
+        self.ai_btn.setStyleSheet("padding: 0 8px;")
+        self.ai_check = QCheckBox("KI-Kontrolle beim Verfolgen")
+        self.ai_check.setToolTip(
+            "Die Körpererkennung prüft während der Analyse etwa jede Sekunde (bei Unsicherheit "
+            "öfter), ob jedes Kästchen noch auf seinem Körperteil sitzt. Rutscht es weg oder liegt "
+            "eine Hand darüber, wird es zurückgeholt bzw. die Stelle überbrückt. Langsamer; "
+            "braucht die KI-Modelle")
+        lay.addWidget(self.ai_btn)
+        lay.addWidget(self.ai_check)
+        self.ai_btn.clicked.connect(self.suggestRequested)
+        self.ai_check.toggled.connect(self.analysisChanged)
 
         # bound methods, no lambdas: a lambda holding self makes a reference cycle that
         # the garbage collector may break at any time - also after the QApplication is gone

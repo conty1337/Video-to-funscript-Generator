@@ -85,6 +85,7 @@ class AnalysisSettings:
     track_sections: tuple = ()            # TrackSection, ... (mode "track"); wins over track_boxes
     track_turn: bool = True               # areas follow turning and size, not only moving
     track_anchor: bool = False            # areas 2 and 3 stay put (only follow the camera)
+    ai_check: bool = False                # body recognition checks the areas now and then (pose.py)
 
     def sections(self) -> tuple:
         if self.track_sections:
@@ -103,7 +104,10 @@ class AnalysisSettings:
             d.pop("mode")
             d.pop("track_turn")
             d.pop("track_anchor")
+            d.pop("ai_check")
         else:
+            if not d["ai_check"]:             # same key as before the AI check existed
+                d.pop("ai_check")
             d.pop("roi")
             # calibration is applied when generating, it does not need a new analysis
             d["sections"] = tuple(s.analysis_key() for s in self.sections())
@@ -116,7 +120,15 @@ TRACKER_VERSION = 8
 #: frames kept (compressed) for following an area backwards from a correction,
 #: as image pixels: ~10 min at 320 px width
 BACK_BUDGET_PX = 18000 * 320 * 180
+AI_EVERY_S = 1.0            # AI check: this often the body points are looked at
+AI_PULL = 0.3               # box this far off its body part (part of its size): pull it back
 BRIDGE_MAX_S = 2.5          # an area out of the frame for longer is not bridged (unknown path)
+BRIDGE_PLAIN_S = 1.0        # covered or lost: bridged up to this long (or between AI sightings)
+AI_REACH = 0.5              # covered and placed by the AI: looked for this far around (box sizes)
+AI_SURE_LOOK = 0.8          # its look agrees this well at the AI's place: moved there at once
+AI_TRUST = 3                # AI looks in a row that put an area elsewhere: it counts as covered
+AI_STUCK_S = 0.5            # AI moves a covered or lost area when it stays so this long
+AI_UNSURE_EVERY = 3         # frames between AI looks while an area is covered, lost or unsure
 
 
 @dataclass
@@ -295,50 +307,84 @@ def _hermite(p0, v0, p1, v1, n: int) -> np.ndarray:
     return h00 * p0 + h10 * n * v0 + h01 * p1 + h11 * n * v1
 
 
-def _bridge_outside(centers, outs, losts, owner, dx, dy, k: int, fps: float) -> None:
-    """An area that went over the edge of the frame and came back: its path out
-    there is continued smoothly from how it left and how it came back (a cubic with
-    the speeds at both ends), so the turning point outside the frame is in the script
-    too instead of a flat stretch. Only short trips, both ends followed, same section."""
+def _path_through(knots: list[tuple[int, np.ndarray]], v0, v1) -> dict[int, np.ndarray]:
+    """Smooth path through (frame, point) knots, slopes v0/v1 (per frame) at the ends,
+    Catmull-Rom in between. Returns the points of the frames strictly between the ends."""
+    ts = [t for t, _p in knots]
+    ps = [np.asarray(p, np.float64) for _t, p in knots]
+    m = len(knots)
+    vs = [np.asarray(v0, np.float64)]
+    for q in range(1, m - 1):
+        vs.append((ps[q + 1] - ps[q - 1]) / (ts[q + 1] - ts[q - 1]))
+    vs.append(np.asarray(v1, np.float64))
+    out = {}
+    for q in range(m - 1):
+        n = ts[q + 1] - ts[q]
+        if n <= 0:
+            continue
+        seg = _hermite(ps[q], vs[q], ps[q + 1], vs[q + 1], n)
+        for j, c in enumerate(seg, start=ts[q] + 1):
+            out[j] = c
+        if q + 1 < m - 1:
+            out[ts[q + 1]] = ps[q + 1]
+    return out
+
+
+def _bridge_gaps(centers, gaps, outs, losts, owner, dx, dy, k: int, fps: float,
+                 knots: dict | None = None) -> None:
+    """Fill short stretches where an area was not followed (covered, lost or out of the
+    frame) with a smooth path from how it left to how it came back, through the places
+    the body recognition saw it meanwhile (`knots`: area -> {frame: centre}). Without
+    such places only up to BRIDGE_PLAIN_S (BRIDGE_MAX_S out of the frame): a cubic
+    cannot know strokes in a longer gap. Both ends must be followed, same section."""
     n = len(centers)
-    max_len = int(BRIDGE_MAX_S * fps)
+    knots = knots or {}
 
     def ok(j, area):
         return (0 <= j < n and centers[j] is not None and not losts[j][area]
                 and not np.isnan(centers[j][area][0]))
 
+    filled: set[int] = set()
     for area in range(k):
+        seen = knots.get(area, {})
         j = 0
         while j < n:
-            if outs[j] is None or not outs[j][area]:
+            if gaps[j] is None or not gaps[j][area]:
                 j += 1
                 continue
-            a = j                                       # first frame out
-            while j < n and outs[j] is not None and outs[j][area]:
+            a = j
+            while j < n and gaps[j] is not None and gaps[j][area]:
                 j += 1
-            b = j                                       # first frame back (found again)
+            b = j
             last = a - 1
-            if (b - a > max_len or not ok(last, area) or not ok(b, area)
-                    or owner[last] != owner[b] or owner[last] < 0):
+            if not ok(last, area) or not ok(b, area) or owner[last] != owner[b] or owner[last] < 0:
                 continue
-            p0, p1 = centers[last][area], centers[b][area]
-            v0 = p0 - centers[last - 1][area] if ok(last - 1, area) else np.zeros(2)
-            v1 = centers[b + 1][area] - p1 if ok(b + 1, area) else np.zeros(2)
-            path = _hermite(p0, v0, p1, v1, b - last)
-            for i, c in enumerate(path, start=a):
-                centers[i][area] = c
-                losts[i][area] = False
-            # the motion for the script over the bridge (camera motion is not known there)
-            for i in range(a, b + 1):
-                cur = [c for c in range(k) if ok(i, c) and ok(i - 1, c)]
-                if area not in cur and not (area == 0 or 0 in cur):
-                    continue
-                if 0 not in cur:
-                    continue
-                d0 = centers[i][0] - centers[i - 1][0]
-                rest = [centers[i][c] - centers[i - 1][c] for c in cur if c != 0]
-                d = d0 - np.mean(rest, axis=0) if rest else d0
-                dx[i], dy[i] = float(d[0]), float(d[1])
+            # a short gap is bridged best by a smooth curve; the places the body recognition
+            # saw (a few px off under a cover) only help when the gap is too long for that
+            inner = (sorted((t, c) for t, c in seen.items() if a <= t < b)
+                     if b - last > 0.5 * BRIDGE_PLAIN_S * fps else [])
+            pts = [(last, centers[last][area])] + inner + [(b, centers[b][area])]
+            longest = max(t1 - t0 for (t0, _c0), (t1, _c1) in zip(pts, pts[1:]))
+            out = all(outs[t] is not None and outs[t][area] for t in range(a, b))
+            limit = BRIDGE_MAX_S if (out or inner) else BRIDGE_PLAIN_S
+            if longest > limit * fps:
+                continue
+            v0 = centers[last][area] - centers[last - 1][area] if ok(last - 1, area) else np.zeros(2)
+            v1 = centers[b + 1][area] - centers[b][area] if ok(b + 1, area) else np.zeros(2)
+            for t, c in _path_through(pts, v0, v1).items():
+                centers[t][area] = c
+                losts[t][area] = False
+            filled.update(range(a, b + 1))
+    # the motion for the script over the bridges (camera motion is not known there)
+    for i in sorted(filled):
+        cur = [c for c in range(k) if ok(i, c) and ok(i - 1, c)]
+        if 0 not in cur:
+            continue
+        d = centers[i][0] - centers[i - 1][0]
+        rest = [centers[i][c] - centers[i - 1][c] for c in cur if c != 0]
+        if rest:
+            d = d - np.mean(rest, axis=0)
+        dx[i], dy[i] = float(d[0]), float(d[1])
 
 
 def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: bool = True) -> np.ndarray:
@@ -362,6 +408,42 @@ def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: 
             out[j - a] = t.center
         nxt = cur
     return out
+
+
+def _looks_right_there(t, c, cur, sure: float = 0.0) -> bool:
+    """Does the area look at least as much like itself at c as where it is now (and at
+    least `sure`)? Only the looks the user marked (or corrected) count: a look taken
+    lately while tracking may already show the wrong place."""
+    tpls = t.templates
+    if not tpls:
+        return sure <= 0
+    here = t._best(cur, tpls, 0.1)[0]
+    old = t.center
+    t.center = np.asarray(c, np.float64)
+    there = t._best(cur, tpls, 0.1)[0]
+    t.center = old
+    return there >= max(here - 0.05, 0.3, sure)
+
+
+def _unsure(t) -> bool:
+    return t.lost or t.covered or t.unsure_checks > 0
+
+
+def _move_area(t, c, cur) -> None:
+    """Put an area where the body recognition sees it. Turn and size as when it last surely
+    looked right (whatever dragged it away may have bent the box too); then its look
+    fine-tunes the place where it can."""
+    t.center = np.asarray(c, np.float64)
+    t.scale, t.angle = t.good[1], t.good[2]
+    score, off = t._best(cur, t.templates, 0.3) if t.templates else (0.0, np.zeros(2))
+    if score >= t.TEMPLATE_MIN_SCORE:
+        t.center = t.center + off
+    t.covered = t.outside = t.lost = False
+    t.lost_frames = t.bad_checks = t.unsure_checks = 0
+    t.vel = np.zeros(2)
+    t._set_good()
+    t.pts = None
+    t._refill(cur)
 
 
 def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: ProgressCb | None = None,
@@ -423,6 +505,20 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     tracker = None
     active = -1
     prev = None
+    estimator = None
+    if settings.ai_check:
+        from . import pose
+        if pose.installed():
+            estimator = pose.PoseEstimator()
+        else:
+            report.setdefault("notes", []).append("KI-Kontrolle aus: Modelle nicht geladen")
+    ai_every = max(1, round(AI_EVERY_S * info.fps / step))
+    anchors: list = []
+    knots: dict[int, dict[int, np.ndarray]] = {}     # area -> {frame: centre} seen by the AI
+    sec_start = 0
+    ai_moves = 0
+    agree_at: list[int] = []
+    disagree: list[int] = []
     for i, frame in enumerate(iter_gray_frames(info, settings.width, settings.hwaccel, step,
                                                     report=report)):
         if cancel and cancel():
@@ -447,7 +543,15 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                 tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur,
                                        turn=settings.track_turn, anchor=settings.track_anchor)
                 active = sec
+                sec_start = i
                 d = np.zeros(2)
+                anchors = []
+                if estimator is not None:
+                    from .pose import Anchor
+                    people = estimator.people(cur)
+                    anchors = [Anchor.from_box(people, a.center, a.size * a.scale) for a in tracker.areas]
+                agree_at = [i] * len(tracker.areas)
+                disagree = [0] * len(tracker.areas)
             else:
                 d = tracker.step(prev, cur)
                 # correction: the area is really here in this frame (after following it)
@@ -462,6 +566,78 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                             back = _track_back(frames, seg[0], i, box_px, cur.shape, cancel,
                                                settings.track_turn)
                         events.append((i, sec, area, tracker.areas[area].center - before, back))
+                        if estimator is not None and area < len(anchors):
+                            from .pose import Anchor
+                            t = tracker.areas[area]
+                            anchors[area] = Anchor.from_box(estimator.people(cur), t.center,
+                                                            t.size * t.scale)
+                if anchors and any(anchors):
+                    routine = (i - sec_start) % ai_every == 0
+                    fixed = {area for area, _bx in key_at.get(i, ())}       # the user's word counts
+                    due = [area for area, anc in enumerate(anchors)
+                           if anc is not None and area not in fixed and not (tracker.anchor and area > 0)
+                           and (routine or (i % AI_UNSURE_EVERY == 0
+                                            and (disagree[area] or _unsure(tracker.areas[area]))))]
+                    people = estimator.people(cur) if due else []
+                    long_lost = AI_STUCK_S * info.fps / step
+                    for area in due:
+                        t = tracker.areas[area]
+                        stuck = t.lost or t.covered
+                        loc = anchors[area].locate(people, t.center)
+                        if loc is None or t.outside:
+                            continue
+                        c = loc[0]
+                        if not (0 <= c[0] < t.w and 0 <= c[1] < t.h):
+                            continue
+                        knots.setdefault(area, {})[i] = c   # a place for a bridge, if needed
+                        off = float(np.hypot(*(c - t.center))) / float(np.max(t.size * t.scale))
+                        if stuck:
+                            # covered or lost: wait (and look for it) where the body points
+                            # say it is now; after a while follow from there even if its look
+                            # does not show (still covered, e.g. a hand resting on it)
+                            if t.covered:
+                                t.center = np.asarray(c, np.float64)
+                                t.search_reach = AI_REACH
+                            if t.lost_frames < long_lost:
+                                continue
+                        elif off <= AI_PULL:
+                            agree_at[area], disagree[area] = i, 0
+                            continue
+                        else:
+                            disagree[area] += 1
+                        if not stuck and not _looks_right_there(t, c, cur, AI_SURE_LOOK):
+                            if disagree[area] >= AI_TRUST:
+                                # the body points keep saying it is elsewhere, its look does not
+                                # clearly tell: something dragged it. Covered: it waits where the
+                                # body points say, the tracker looks for it there, the stretch
+                                # since it last surely looked right is bridged
+                                t.cover()
+                                t.center = np.asarray(c, np.float64)
+                                t.recent = None             # may show what dragged it
+                                t.search_reach = AI_REACH   # it is near where the body points say
+                            continue
+                        before = t.center.copy()
+                        _move_area(t, c, cur)
+                        ai_moves += 1
+                        gap = i - agree_at[area] - 1        # frames since the AI last agreed
+                        if stuck:
+                            pass                            # the lost stretch is bridged
+                        elif gap <= BRIDGE_PLAIN_S * info.fps / step:
+                            t.slipped = gap                 # dragged lately: bridged too
+                        else:
+                            # drifted slowly: spread the offset back over that stretch like a
+                            # correction (keeps the strokes in it)
+                            events.append((agree_at[area], sec, area, np.zeros(2), None))
+                            events.append((i, sec, area, t.center - before, None))
+                        agree_at[area], disagree[area] = i, 0
+            # areas just found covered: the frames before were already following the cover
+            if tracker is not None and sec >= 0:
+                for area, t in enumerate(tracker.areas):
+                    if t.slipped:
+                        for j in range(max(sec_start + 1, i - t.slipped), i):
+                            if losts[j] is not None and owner[j] == sec:
+                                losts[j][area] = True
+                        t.slipped = 0
             dx.append(float(d[0]))
             dy.append(float(d[1]))
             c = np.full((k, 2), np.nan)
@@ -493,7 +669,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
     dx_a = np.asarray(dx, np.float64)
     dy_a = np.asarray(dy, np.float64)
     _spread_corrections(events, centers, owner, plan, dx_a, dy_a, k)
-    _bridge_outside(centers, outs, losts, owner, dx_a, dy_a, k, info.fps / step)
+    gaps = [None if lo is None else lo.copy() for lo in losts]
+    _bridge_gaps(centers, gaps, outs, losts, owner, dx_a, dy_a, k, info.fps / step, knots)
     dx, dy = dx_a, dy_a
     nan = np.full((k, 2), np.nan)
     tracks = np.array([nan if c is None else c for c in centers], np.float32) / np.array([w, h], np.float32)
@@ -508,7 +685,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
         progress(1.0)
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32), np.asarray(dy, np.float32),
                       {"opencl": False, "width": w, "height": h, "mode": "track",
-                       "decoder": report.get("decoder"), "decoder_errors": report.get("errors", [])},
+                       "decoder": report.get("decoder"), "decoder_errors": report.get("errors", []),
+                       "ai_moves": ai_moves, "notes": report.get("notes", [])},
                       tracks=tracks, track_sizes=sizes, track_section=np.asarray(owner, np.int16),
                       track_geom=geom, track_lost=lost)
 

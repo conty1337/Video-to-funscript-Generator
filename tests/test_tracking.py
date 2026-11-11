@@ -174,8 +174,10 @@ def test_hidden_area_is_lost_not_thrown_away(tmp_path):
                                               width=W, hwaccel="none", compensate_camera=False))
     t = np.arange(len(m)) / m.fps
     hidden = (t > 0.65) & (t < 0.85)
-    assert m.track_lost[hidden, 0].any()            # noticed
+    # a short cover is noticed and bridged: no red stretch, a smooth path through it
+    assert not m.track_lost[hidden, 0].any()
     xs = m.tracks[:, 0, 0] * W
+    assert np.abs(np.diff(xs[hidden])).max() < 15
     assert np.abs(np.diff(xs)).max() < 60           # no jump across the picture
     assert not m.track_lost[t > 1.5, 0].all()       # found again afterwards
 
@@ -497,7 +499,7 @@ def test_area_leaving_the_frame_waits_and_comes_back():
 def test_trip_out_of_the_frame_is_bridged():
     """The path outside the frame continues how the area left and came back: the turning
     point out there is in the motion, not a flat stretch."""
-    from vtf.analysis import _bridge_outside
+    from vtf.analysis import _bridge_gaps
     n, k = 21, 1
     true = -40.0 * np.sin(np.linspace(0, np.pi, n)) + 10          # peak at -30 (outside)
     centers = [np.array([[0.0, y]]) for y in true]
@@ -508,9 +510,33 @@ def test_trip_out_of_the_frame_is_bridged():
         centers[i][0] = (0.0, 5.0)                                # waiting at the edge
     dy = np.r_[0, np.diff([c[0, 1] for c in centers])]
     dx = np.zeros(n)
-    _bridge_outside(centers, outs, losts, [0] * n, dx, dy, k, 30.0)
+    gaps = [lo.copy() for lo in losts]
+    _bridge_gaps(centers, gaps, outs, losts, [0] * n, dx, dy, k, 30.0)
     got = np.array([c[0, 1] for c in centers])
     assert not any(lo[0] for lo in losts)
     assert got.min() < -20 and abs(int(np.argmin(got)) - n // 2) <= 1
     np.testing.assert_allclose(np.cumsum(dy)[-1], got[-1] - got[0], atol=1e-6)
     np.testing.assert_allclose(dy[1:], np.diff(got), atol=1e-6)
+
+
+def test_long_cover_is_bridged_through_places_seen_meanwhile():
+    """A cover too long for a plain curve is bridged only with places the body recognition
+    saw in between; strokes under the cover then stay in the motion."""
+    from vtf.analysis import _bridge_gaps
+    n, k = 91, 1
+    true = 40.0 * np.sin(np.linspace(0, 6 * np.pi, n)) + 100        # 3 strokes in 3 s
+    lost = np.zeros(n, bool)
+    lost[10:80] = True                                                # 2.3 s covered
+    for knots, expect in (({}, False), ({0: {j: np.array([0.0, true[j]]) for j in range(10, 80, 3)}}, True)):
+        centers = [np.array([[0.0, y]]) for y in true]
+        for j in np.nonzero(lost)[0]:
+            centers[j][0] = (0.0, true[9])
+        losts = [np.array([v]) for v in lost]
+        outs = [np.array([False]) for _ in lost]
+        gaps = [lo.copy() for lo in losts]
+        dx, dy = np.zeros(n), np.zeros(n)
+        _bridge_gaps(centers, gaps, outs, losts, [0] * n, dx, dy, k, 30.0, knots)
+        got = np.array([c[0, 1] for c in centers])
+        assert (not any(lo[0] for lo in losts)) == expect
+        if expect:
+            assert np.abs(got - true).max() < 3

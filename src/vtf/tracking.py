@@ -127,6 +127,9 @@ class AreaTracker:
         self.lost = False
         self.outside = False            # mostly out of the frame: not followed, waiting at the edge
         self.frames = 0
+        self.good_frame = 0
+        self.slipped = 0                # set when found covered: frames before that were wrong too
+        self.search_reach = 2.0         # while covered: look this far around (box sizes)
         self.lost_frames = 0
         # appearances to compare with: (upright patch, scale then, angle offset). The patch
         # is cut out along the area (turned with it), 1 patch px = 1 image px at `scale then`.
@@ -138,12 +141,17 @@ class AreaTracker:
         self.bad_checks = 0
         self.unsure_checks = 0          # comparisons in a row that did not look quite right
         self.last_score = 1.0
-        self.good = (self.center.copy(), self.scale, self.angle)
+        self._set_good()
         if first is not None:
             t = self._capture(first)
             if t is not None:
                 self.templates.append(t)
                 self.recent = t
+
+    def _set_good(self) -> None:
+        """Remember this place as the last one where the area surely looked right."""
+        self.good = (self.center.copy(), self.scale, self.angle)
+        self.good_frame = self.frames
 
     @property
     def template(self):
@@ -293,6 +301,16 @@ class AreaTracker:
             self.center = self._keep_near(self.center + pull * off)
         return score
 
+    def cover(self) -> None:
+        """The points followed whatever moved over the area: back to the last good place,
+        wait there until it shows again."""
+        self.center, self.scale, self.angle = self.good[0].copy(), self.good[1], self.good[2]
+        self.covered = True
+        self.lost = True
+        # the frames since then followed the wrong thing too: tell the analysis
+        self.slipped = max(0, self.frames - self.good_frame - 1)
+        self.pts = None
+
     def _check_covered(self, score: float | None) -> bool:
         """After a comparison: True when the area has just been found covered."""
         if score is None:
@@ -301,7 +319,7 @@ class AreaTracker:
         if score >= self.GOOD_SCORE:
             self.bad_checks = 0
             self.unsure_checks = 0
-            self.good = (self.center.copy(), self.scale, self.angle)
+            self._set_good()
             return False
         if float(np.hypot(*self.vel)) > self.BLUR_SPEED * float(np.max(self.size * self.scale)):
             # moving fast: motion blur makes it look different, that says nothing about covering
@@ -314,10 +332,7 @@ class AreaTracker:
         if score < self.COVERED_SCORE or dragged:
             self.bad_checks += 2 if dragged else 1
             if self.bad_checks >= 2:
-                # the points followed whatever moved over it: back to the last good place
-                self.center, self.scale, self.angle = self.good[0].copy(), self.good[1], self.good[2]
-                self.covered = True
-                self.pts = None
+                self.cover()
                 return True
         return False
 
@@ -373,7 +388,7 @@ class AreaTracker:
             self.lost_frames = 0
             self.bad_checks = 0
             self.unsure_checks = 0
-            self.good = (self.center.copy(), self.scale, self.angle)
+            self._set_good()
             self._refill(cur)
         else:
             self.lost = True
@@ -383,13 +398,14 @@ class AreaTracker:
         self.frames += 1
         if self.covered:
             # wait at the last good place and look for it a bit around, every other frame
-            if self.frames % 2 == 0 and self._reacquire(cur, 2.0):
+            if self.frames % 2 == 0 and self._reacquire(cur, self.search_reach):
                 self.covered = False
+                self.search_reach = 2.0
                 self.bad_checks = 0
                 self.unsure_checks = 0
                 self.lost = False
                 self.lost_frames = 0
-                self.good = (self.center.copy(), self.scale, self.angle)
+                self._set_good()
                 self._refill(cur)
             else:
                 self.lost = True
