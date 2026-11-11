@@ -47,6 +47,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 26 | Zufallsgenerator, Musik-Modus (Gerät folgt dem Takt), Script aus Musik | ✅ |
 | 27 | Handy-Fernbedienung im Browser, Einrichtungs-Assistent, Sicherheits-Timer | ✅ |
 | 28 | Andere Player (mpv, VLC, DeoVR, HereSphere), Vibratoren, TCode-Geräte (OSR2/SR6) mit allen Achsen | ✅ |
+| 29 | Bildrand und kurze Verdeckungen überbrücken, KI-Körpererkennung: Kästchen-Vorschlag und KI-Kontrolle | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -197,11 +198,43 @@ jeder Korrektur) ab, auch gedreht und skaliert. Schiebt sich etwas davor,
 auch nur teilweise wie eine Hand, springt der Bereich an die letzte sichere
 Stelle zurück, wird rot und wartet, bis er wieder zu sehen ist. Rote Stellen
 in der Kurve: dort war ein Bereich verdeckt oder verloren, dort entstehen
-keine Hübe. Liegt ein Kästchen trotzdem daneben: an der Stelle **anpacken und
+keine Hübe. Geht etwas über den **Bildrand**, folgt das Kästchen dem
+sichtbaren Rest, bis weniger als 40 % davon im Bild sind. Dann wartet es am
+Rand und wird wiedergefunden, sobald es zurückkommt. Die Strecke draußen
+(bis 2,5 s) wird aus der Bewegung beim Verlassen und beim Zurückkommen
+weitergerechnet, so landet auch der Wendepunkt außerhalb des Bildes im Script.
+Kurze Verdeckungen (bis 1 s, z.B. eine Hand, die drüberwischt) werden genauso
+überbrückt, auch die Bilder kurz davor, in denen das Kästchen schon mitgezogen
+wurde. Liegt ein Kästchen trotzdem daneben: an der Stelle **anpacken und
 richtig hinschieben** (*nachjustieren*). Nach der nächsten Analyse folgt der
 Bereich von dort aus, und die Strecke davor wird rückwärts verfolgt und
 ausgeglichen. Anfang und Ende eines Abschnitts lassen sich in der Kurve mit
 der Maus verschieben.
+
+**KI-Körpererkennung** (optional, lokal, ohne Internet nach dem ersten Laden):
+
+- **KI-Vorschlag** (Taste K): erkennt die Personen im aktuellen Bild und bietet
+  Kästchen für Becken/Schritt, Hüfte, Mund, Kopf, Brust und beide Hände an. Ein
+  Klick setzt das Kästchen, danach wie gewohnt anpassen.
+- **KI-Kontrolle beim Verfolgen** (Häkchen unter dem Knopf): Während der Analyse
+  prüft die Körpererkennung etwa jede Sekunde, bei Unsicherheit alle drei Bilder,
+  ob jedes Kästchen noch auf dem Körperteil sitzt, auf das es gesetzt wurde.
+  Rutscht es weg, wird es zurückgeholt. Liegt länger eine Hand darauf, wartet das
+  Kästchen dort, wo die KI das Körperteil sieht, und die Strecke wird durch diese
+  Stellen überbrückt (einzelne Ausreißer der KI werden dabei verworfen). Kostet
+  Zeit: Eine Prüfung mit Personensuche dauert etwa 0,5 s auf der CPU, die
+  häufigen Zwischenblicke suchen die Person dort, wo sie gerade war, und
+  brauchen etwa ein Drittel davon. Im Härtefall (10 s Hand auf dem Becken)
+  bleibt der Fehler unter 10 px statt 200 px, fast alle Hübe sind im Script.
+- **Modelle**: YOLOX-m (findet Personen) und RTMW-l (133 Körperpunkte mit Händen,
+  Füßen und Gesicht) von OpenMMLab, Lizenz Apache-2.0, zusammen etwa 310 MB
+  Download (330 MB auf der Platte). Sie werden beim ersten Benutzen nach
+  Rückfrage geladen, die Prüfsummen werden kontrolliert, und sie liegen danach
+  unter `~/.local/share/video-to-funscript/models`. Sie laufen über OpenCV, das
+  schon in der App steckt, das AppImage wird dadurch nicht größer.
+- Gut bei ganzen Körpern und halbnahen Einstellungen. Bei sehr nahen
+  Ausschnitten, in denen kaum Körperpunkte zu sehen sind, findet die KI nichts.
+  Dann gibt es keinen Vorschlag, und die Kontrolle bleibt für dieses Kästchen aus.
 
 *Vorbereitung*: Bereiche, Abschnitte und Kalibrierung werden sofort als
 `<Video>.vtf.json` neben dem Video gespeichert und beim nächsten Öffnen
@@ -509,7 +542,15 @@ Punkte, und der Bereich bewegt sich um den Median der übrigen. Bei schnellen
 Hüben beginnt die Suche dort, wohin die letzte Bewegung zeigt (Vorhersage), so
 bleibt das Kästchen auch bei großen Sprüngen zwischen zwei Bildern dran. Alle paar
 Bilder wird das Aussehen verglichen und der Bereich (mit Zwischenpixeln)
-zurückgezogen, falls er weggedriftet ist.
+zurückgezogen, falls er weggedriftet ist. Ragt er über den Bildrand oder ist er
+durch schnelle Bewegung verwischt, wird dieser Vergleich nicht als Verdeckung
+gewertet. Die Strecke außerhalb des Bildes oder unter einer Verdeckung wird
+mit einer kubischen Kurve überbrückt, die die Geschwindigkeit an beiden Enden
+übernimmt. Bei längeren Lücken geht die Kurve durch die Stellen, an denen die
+KI-Kontrolle das Körperteil gesehen hat. Die KI-Kontrolle merkt sich beim
+Markieren, welche Körperpunkte im Kästchen liegen und wo die Mitte von jedem
+aus gesehen liegt, gemessen in Körperhöhen. So passt das auch, wenn die Person
+näher kommt.
 
 Da Schritt 1–2 (teuer) von 3–4 (billig) getrennt sind, wirken
 Script-Einstellungen sofort ohne neue Analyse.
@@ -528,9 +569,10 @@ ein Bernstein-Akzent nur für das Script). Details und Quellen stehen in
 
 Wie genau das Tracking ist, misst `python tools/measure_tracking.py`: künstliche
 Videos mit bekannter Bewegung (schneller werdend, kleine Hübe, groß/klein im
-Wechsel, wenig Muster, Pausen, schnelle Hübe), dazu Fehler beim Verfolgen in Pixeln, Abweichung
+Wechsel, wenig Muster, Pausen, schnelle Hübe, halb und ganz aus dem Bild), dazu Fehler beim Verfolgen in Pixeln, Abweichung
 der Wendepunkte in ms, Hubhöhe, verpasste und falsche Punkte. `--shake 0.5`
-fügt Zittern hinzu, `--width` ändert die Analysebreite.
+fügt Zittern hinzu, `--width` ändert die Analysebreite, `--only "aus dem Bild"` misst nur
+passende Szenen, `--seed` wählt andere Texturen.
 
 Projektstruktur:
 
@@ -538,6 +580,8 @@ Projektstruktur:
 src/vtf/
   video.py       Video-Infos + schnelles Dekodieren (FFmpeg/OpenCV)
   analysis.py    Optischer Fluss -> Bewegungsdaten (+ Cache)
+  tracking.py    Markierte Bereiche verfolgen
+  pose.py        KI-Körpererkennung (Modelle laden, Personen und Punkte, Anker)
   generator.py   Bewegungsdaten -> Kurve -> Funscript-Punkte
   funscript.py   Dateiformat
   batch.py       Ordnerverarbeitung

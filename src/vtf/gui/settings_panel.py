@@ -274,7 +274,8 @@ class SettingsPanel(QWidget):
         d = AnalysisSettings()
         a = asdict(self.analysis_settings())
         a.update(width=DEFAULT_WIDTH, frame_step=d.frame_step, hwaccel=d.hwaccel, compensate_camera=d.compensate_camera,
-                 use_opencl=d.use_opencl, track_turn=d.track_turn, track_anchor=d.track_anchor)
+                 use_opencl=d.use_opencl, track_turn=d.track_turn, track_anchor=d.track_anchor,
+                 ai_check=d.ai_check)
         self.load_dict({"generator": asdict(self.generator_settings()), "analysis": a})
         self.analysisChanged.emit()
 
@@ -331,7 +332,7 @@ class SettingsPanel(QWidget):
             compensate_camera=self.cam.isChecked(), use_opencl=self.opencl.isChecked(),
             hwaccel=self.hwaccel.currentData(), mode=self.mode,
             track_sections=tuple(self.sections), track_turn=self.turn.isChecked(),
-            track_anchor=self.anchor.isChecked())
+            track_anchor=self.anchor.isChecked(), ai_check=self.tracking.ai_check.isChecked())
 
     def to_dict(self) -> dict:
         a = asdict(self.analysis_settings())
@@ -346,7 +347,7 @@ class SettingsPanel(QWidget):
         widgets = [self.axis, self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm,
                    self.pos_min, self.pos_max, self.invert, self.full_stroke, self.width, self.step,
                    self.cam, self.opencl, self.hwaccel, self.method, self.max_speed, self.turn,
-                   self.anchor]
+                   self.anchor, self.tracking.ai_check]
         for w in widgets:
             w.blockSignals(True)
         try:
@@ -364,6 +365,7 @@ class SettingsPanel(QWidget):
             self.cam.setChecked(bool(a.get("compensate_camera", True)))
             self.turn.setChecked(bool(a.get("track_turn", True)))
             self.anchor.setChecked(bool(a.get("track_anchor", False)))
+            self.tracking.ai_check.setChecked(bool(a.get("ai_check", False)))
             self.opencl.setChecked(bool(a.get("use_opencl", False)))
             _set_combo(self.hwaccel, a.get("hwaccel"))
             _set_combo(self.method, a.get("mode"))

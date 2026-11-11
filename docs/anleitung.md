@@ -35,6 +35,10 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
      den Ausschnitt verschieben, Strg+0 setzt zurück.
    - Kästchen anpassen: innen ziehen verschiebt, eine Ecke ändert die Größe,
      der runde Griff oder das Mausrad drehen.
+   - Oder **KI-Vorschlag** (K): Die KI erkennt Becken, Mund, Hände usw. und
+     setzt das gewählte Kästchen. Mit Häkchen bei **KI-Kontrolle beim
+     Verfolgen** passt sie während der Analyse auf, dass die Kästchen nicht
+     wegrutschen. Beim ersten Mal lädt sie ihre Modelle, etwa 310 MB.
 4. **Kalibrieren** (empfohlen): zu einer Stelle spulen, wo es *ganz drin* ist,
    und **Ganz drin** (D) drücken, dann zu *ganz draußen* und **Ganz draußen**
    (A). Dann nutzt das Script die echte Tiefe.
@@ -45,6 +49,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    mitlaufen.
    - **Rot** in der Kurve: Hier war ein Bereich verdeckt oder verloren, dort
      entstehen keine Hübe.
+   - Geht etwas kurz **aus dem Bild**, ist das kein Problem: Das Kästchen
+     wartet am Rand, und die Bewegung draußen wird weitergerechnet.
    - Ein Kästchen liegt daneben: an der Stelle **anpacken und richtig
      hinschieben**, dann neu analysieren. Die Zeit davor wird mit ausgeglichen.
 8. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video.

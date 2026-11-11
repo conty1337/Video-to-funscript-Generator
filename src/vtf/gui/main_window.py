@@ -5,6 +5,7 @@ from __future__ import annotations
 import bisect
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import cv2
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -46,7 +48,7 @@ from ..generator import generate, generate_axes
 from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
 from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
-from . import theme
+from . import pose_ui, theme
 from .audio import AudioPlayer
 from .batch_dialog import BatchDialog
 from .curve_widget import CurveWidget
@@ -70,6 +72,8 @@ class MainWindow(QMainWindow):
 
         self.video_path: str | None = None
         self.cap: cv2.VideoCapture | None = None
+        self._frame = None                    # last frame shown (BGR)
+        self._pose_worker = None
         self.fps = 30.0
         self.frame_count = 0
         self.motion: MotionData | None = None
@@ -319,6 +323,7 @@ class MainWindow(QMainWindow):
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
+        self.panel.tracking.suggestRequested.connect(self.suggest_boxes)
         self.panel.tracking.seekRequested.connect(self.seek_ms)
         self.panel.tracking.analysisChanged.connect(self._sections_changed)
         self.panel.tracking.generatorChanged.connect(self._sections_changed)
@@ -413,6 +418,7 @@ class MainWindow(QMainWindow):
                   lambda: self._track_cmd(self.panel.tracking.calibrate, "out"), "A")
         m.addSeparator()
         self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self._act(m, "KI-Vorschlag für Kästchen", self.suggest_boxes, "K")
         self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
@@ -608,6 +614,7 @@ class MainWindow(QMainWindow):
             return
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
         self._cur_idx = idx
+        self._frame = frame
         self.view.set_frame(frame)
         self.slider.blockSignals(True)
         self.slider.setValue(idx)
@@ -920,6 +927,55 @@ class MainWindow(QMainWindow):
     def _cur_ms(self) -> float:
         return max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0.0
 
+    def suggest_boxes(self):
+        """KI-Vorschlag: find body parts in the shown frame and offer them as boxes."""
+        if self.player_mode or self._frame is None or self.panel.mode != "track":
+            self._status("KI-Vorschlag: erst ein Video öffnen und „Tracking“ als Methode wählen")
+            return
+        if self._pose_worker is not None and self._pose_worker.isRunning():
+            return
+        if not pose_ui.ensure_models(self):
+            return
+        self.pause()
+        frame, ms = self._frame.copy(), self._cur_ms()
+        self._status("KI-Vorschlag: suche Körperteile …")
+        w = pose_ui.PoseWorker(frame)
+        w.done.connect(lambda people: self._show_suggestions(people, frame.shape, ms))
+        w.failed.connect(lambda e: self._status(f"KI-Vorschlag fehlgeschlagen: {e}"))
+        self._pose_worker = w
+        w.start()
+
+    def _show_suggestions(self, people, shape, ms: float):
+        if abs(self._cur_ms() - ms) > 1:
+            self._status("KI-Vorschlag verworfen: das Video ist inzwischen weitergelaufen")
+            return
+        menu = self._suggestion_menu(people, shape)
+        if menu is None:
+            self._status("KI-Vorschlag: keine Person erkannt – Kästchen bitte selbst aufziehen")
+            return
+        btn = self.panel.tracking.ai_btn
+        menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _suggestion_menu(self, people, shape) -> QMenu | None:
+        """Menu with one entry per visible body part; choosing one adds its box."""
+        from .. import pose
+        found = pose.suggestions(people)
+        if not found:
+            return None
+        h, w = shape[:2]
+        menu = QMenu(self)
+        menu.addSection(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        for i, region, (x, y, bw, bh) in found:
+            x0, y0 = max(0.0, x), max(0.0, y)
+            x1, y1 = min(float(w), x + bw), min(float(h), y + bh)
+            if x1 - x0 < 4 or y1 - y0 < 4:
+                continue
+            box = (x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h)
+            who = f"Person {i + 1}: " if len(people) > 1 else ""
+            menu.addAction(who + region.label).triggered.connect(
+                lambda _c=False, b=box: self._box_drawn(b))
+        return menu
+
     def _box_drawn(self, box):
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
         msg = self.panel.tracking.add_box(box, self._cur_ms(), shown)
@@ -1200,7 +1256,11 @@ class MainWindow(QMainWindow):
                 self, "Analyse", "Manuelle Änderungen werden durch die neue Analyse ersetzt. Fortfahren?"
         ) != QMessageBox.Yes:
             return
-        self.worker = AnalysisWorker(self.video_path, self.panel.analysis_settings())
+        settings = self.panel.analysis_settings()
+        if settings.mode == "track" and settings.ai_check and not pose_ui.ensure_models(self):
+            settings = replace(settings, ai_check=False)
+            self._status("KI-Kontrolle aus: ohne KI-Modelle wird normal verfolgt")
+        self.worker = AnalysisWorker(self.video_path, settings)
         self.worker.progress.connect(self._progress)
         self.worker.finishedOk.connect(self._analysis_done)
         self.worker.failed.connect(self._analysis_failed)

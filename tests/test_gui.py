@@ -1426,3 +1426,48 @@ def test_reset_to_defaults(app, tmp_path, monkeypatch):
     d.set_mode(0)
     w.dirty = False
     w.close()
+
+
+def test_ai_suggestion_and_check(app, sine_video, tmp_path, monkeypatch):
+    """KI-Vorschlag: found body parts become a menu, choosing one adds the box; the
+    KI-Kontrolle setting reaches the analysis and is saved with the settings."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    import numpy as np
+
+    from vtf import pose
+    from vtf.gui import pose_ui
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.settings_panel import SettingsPanel
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(sine_video))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    app.processEvents()
+    monkeypatch.setattr(pose_ui, "ensure_models", lambda parent: True)
+    pts = np.zeros((pose.N_POINTS, 2))
+    conf = np.zeros(pose.N_POINTS)
+    h, wd = w._frame.shape[:2]
+    pts[pose.L_HIP], pts[pose.R_HIP] = (wd * 0.55, h * 0.5), (wd * 0.45, h * 0.5)
+    conf[[pose.L_HIP, pose.R_HIP]] = 5.0
+    person = pose.Person(np.array([0, 0, wd, h]), 0.9, pts, conf)
+
+    menu = w._suggestion_menu([person], w._frame.shape)
+    acts = [a for a in menu.actions() if not a.isSeparator()]
+    assert [a.text() for a in acts] == ["Becken / Schritt", "Hüfte (breit)"]
+    acts[0].trigger()
+    assert w._suggestion_menu([], w._frame.shape) is None
+    assert len(w.panel.tracking.sections) == 1
+    box = w.panel.tracking.sections[0].boxes[0]
+    assert abs(box[0] + box[2] / 2 - 0.5) < 0.02
+
+    w.panel.tracking.ai_check.setChecked(True)
+    assert w.panel.analysis_settings().ai_check
+    p = SettingsPanel()
+    p.load_dict(w.panel.to_dict())
+    assert p.tracking.ai_check.isChecked()
+    p.reset_options()
+    assert not p.tracking.ai_check.isChecked()
+    p.deleteLater()
+    w.dirty = False
+    w.close()
