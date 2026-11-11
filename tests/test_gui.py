@@ -1453,7 +1453,7 @@ def test_ai_suggestion_and_check(app, sine_video, tmp_path, monkeypatch):
     person = pose.Person(np.array([0, 0, wd, h]), 0.9, pts, conf)
 
     menu = w._suggestion_menu([person], w._frame.shape)
-    acts = [a for a in menu.actions() if not a.isSeparator()]
+    acts = [a for a in menu.actions() if not a.isSeparator() and a.isEnabled()]
     assert [a.text() for a in acts] == ["Becken / Schritt", "Hüfte (breit)"]
     acts[0].trigger()
     assert w._suggestion_menu([], w._frame.shape) is None

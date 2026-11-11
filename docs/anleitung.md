@@ -35,10 +35,7 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
      den Ausschnitt verschieben, Strg+0 setzt zurück.
    - Kästchen anpassen: innen ziehen verschiebt, eine Ecke ändert die Größe,
      der runde Griff oder das Mausrad drehen.
-   - Oder **KI-Vorschlag** (K): Die KI erkennt Becken, Mund, Hände usw. und
-     setzt das gewählte Kästchen. Mit Häkchen bei **KI-Kontrolle beim
-     Verfolgen** passt sie während der Analyse auf, dass die Kästchen nicht
-     wegrutschen. Beim ersten Mal lädt sie ihre Modelle, etwa 310 MB.
+   - Oder die KI setzt das Kästchen, siehe [Kästchen mit der KI](#kästchen-mit-der-ki).
 4. **Kalibrieren** (empfohlen): zu einer Stelle spulen, wo es *ganz drin* ist,
    und **Ganz drin** (D) drücken, dann zu *ganz draußen* und **Ganz draußen**
    (A). Dann nutzt das Script die echte Tiefe.
@@ -141,3 +138,37 @@ Muster-Steuerung für einen Bereich ein.
 | Strg+1 / Strg+2 | linke/rechte Leiste ein/aus |
 | F11 | Vollbild |
 | Esc | Not-Aus (Gerät stoppen) |
+
+## Kästchen mit der KI
+
+Statt Kästchen selbst aufzuziehen, kann die KI die Körperteile finden. Sie
+läuft auf deinem Rechner. Beim ersten Mal fragt die App, ob sie die Modelle
+laden darf (etwa 310 MB, einmalig), danach geht es ohne Internet.
+
+**1. KI-Vorschlag drücken** (oder Taste K). Vorher „Tracking“ als Methode
+wählen und zu einer Stelle spulen, wo die Person gut zu sehen ist. Es
+erscheint eine Liste der gefundenen Körperteile, bei mehreren Personen mit
+„Person 1“, „Person 2“. Ein Klick setzt das Kästchen.
+
+![KI-Vorschlag: Liste der erkannten Körperteile](ki-vorschlag.png)
+
+**2. Kästchen prüfen** (2) und bei Bedarf wie gewohnt verschieben oder in
+der Größe ändern. Für ein Gegenstück (Kästchen 2) noch einmal KI-Vorschlag
+drücken, zum Beispiel „Person 2: Becken“.
+
+**3. KI-Kontrolle beim Verfolgen** (3) anhaken, wenn das Kästchen sonst
+verrutscht oder oft verdeckt wird, zum Beispiel durch eine Hand. Das geht
+auch bei selbst gezogenen Kästchen, solange darin Körperpunkte liegen
+(Hüftgelenke, Hand, Mund).
+
+![Kästchen auf dem Becken, KI-Kontrolle an](ki-kaestchen.png)
+
+**4. Analysieren.** Die Analyse dauert mit KI-Kontrolle länger. Die Hübe
+misst weiterhin der normale Tracker, Bild für Bild. Die KI sorgt nur dafür,
+dass das Kästchen auf seinem Körperteil bleibt. Ist es länger verdeckt,
+überbrückt sie die Stelle mit dem, was sie vom Körper noch sieht.
+
+![Nach der Analyse: Kästchen folgt dem Becken, Hübe in der Kurve](ki-analyse.png)
+
+**Wann die KI nichts findet:** bei sehr nahen Ausschnitten, in denen kaum
+etwas vom Körper zu sehen ist. Dann wie gewohnt selbst aufziehen.

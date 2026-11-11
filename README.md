@@ -211,7 +211,10 @@ Bereich von dort aus, und die Strecke davor wird rückwärts verfolgt und
 ausgeglichen. Anfang und Ende eines Abschnitts lassen sich in der Kurve mit
 der Maus verschieben.
 
-**KI-Körpererkennung** (optional, lokal, ohne Internet nach dem ersten Laden):
+**KI-Körpererkennung** (optional, lokal, ohne Internet nach dem ersten Laden,
+Schritt für Schritt mit Bildern in der [Anleitung](docs/anleitung.md#kästchen-mit-der-ki)):
+
+![KI-Vorschlag: Liste der erkannten Körperteile](docs/ki-vorschlag.png)
 
 - **KI-Vorschlag** (Taste K): erkennt die Personen im aktuellen Bild und bietet
   Kästchen für Becken/Schritt, Hüfte, Mund, Kopf, Brust und beide Hände an. Ein

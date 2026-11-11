@@ -964,7 +964,9 @@ class MainWindow(QMainWindow):
             return None
         h, w = shape[:2]
         menu = QMenu(self)
-        menu.addSection(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        head = menu.addAction(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        head.setEnabled(False)          # a heading (addSection shows no text in every style)
+        menu.addSeparator()
         for i, region, (x, y, bw, bh) in found:
             x0, y0 = max(0.0, x), max(0.0, y)
             x1, y1 = min(float(w), x + bw), min(float(h), y + bh)
