@@ -152,6 +152,16 @@ erscheint eine Liste der gefundenen Körperteile, bei mehreren Personen mit
 
 ![KI-Vorschlag: Liste der erkannten Körperteile](ki-vorschlag.png)
 
+**Oder selbst im Bild wählen:** Gleichzeitig zeichnet die KI die erkannten
+Punkte und Linien ins Video, also Gelenke, Hände mit Fingern, Füße und
+Gesicht. Fährt die Maus darüber, leuchtet der Teil auf und zeigt seinen Namen.
+Ein Klick auf einen **Punkt** (z.B. Knie, Hand, Finger) setzt ein Kästchen
+dorthin. Ein Klick auf eine **Linie** (z.B. Oberschenkel) setzt ein gedrehtes
+Kästchen entlang der Linie. Das gibt dem Tracker mehr Fläche zum Verfolgen.
+Esc oder Weiterspulen blendet das Gerüst aus.
+
+![Gerüst der KI: Linie „Oberschenkel rechts“ unter der Maus](ki-geruest.png)
+
 **2. Kästchen prüfen** (2) und bei Bedarf wie gewohnt verschieben oder in
 der Größe ändern. Für ein Gegenstück (Kästchen 2) noch einmal KI-Vorschlag
 drücken, zum Beispiel „Person 2: Becken“.

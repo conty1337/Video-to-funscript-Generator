@@ -33,6 +33,8 @@ TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
 MAX_TRACKS = 3
 MIN_SIZE = 0.012         # smallest area side, as a fraction of the frame
 MAX_ZOOM = 8.0
+SKEL_POINT = 10           # px around a body point that still picks it
+SKEL_LINE = 7            # px around a body line that still picks it
 GRAB = 8                 # px around a handle that still grabs it
 
 
@@ -43,6 +45,7 @@ class VideoView(QWidget):
     boxEdited = Signal(int, tuple)   # mode "track": marked area i moved/resized to (x, y, w, h, angle)
     boxCorrected = Signal(int, tuple)  # mode "track": area i grabbed elsewhere and put right
     tracksCleared = Signal()      # mode "track": right click
+    skeletonPicked = Signal(int, object)   # body recognition shown: (person, point | (a, b)) clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -63,6 +66,8 @@ class VideoView(QWidget):
         self._zoom = 1.0                       # Strg+wheel: zoom in to mark small things
         self._zc = (0.5, 0.5)                  # image point (normalized) in the middle when zoomed
         self._pan_from: tuple | None = None    # middle mouse drag: (start pos, centre then)
+        self._skeleton: list | None = None     # body recognition: [(points (n, 2) normalized, seen)]
+        self._skel_hover = None                # (person, point | (a, b)) under the mouse
         self.setMouseTracking(True)
         self.set_mode("roi")
 
@@ -100,6 +105,92 @@ class VideoView(QWidget):
 
     def _can_edit(self) -> bool:
         return self.mode == "track" and self._overlay is None and self.editable
+
+    def set_skeleton(self, people) -> None:
+        """Show the recognised body points and lines to pick from: [(points normalized
+        (n, 2), seen (n,) bool)], None hides them."""
+        self._skeleton = [(np.asarray(pts, float), np.asarray(seen, bool)) for pts, seen in people] \
+            if people else None
+        self._skel_hover = None
+        self.update()
+
+    def skeleton_shown(self) -> bool:
+        return self._skeleton is not None
+
+    def _skel_px(self, r: QRectF, pts: np.ndarray) -> np.ndarray:
+        return np.c_[r.x() + pts[:, 0] * r.width(), r.y() + pts[:, 1] * r.height()]
+
+    def _skel_hit(self, pos: QPointF):
+        """Point (preferred) or line of the shown skeleton under pos: (person, target)."""
+        if not self._skeleton:
+            return None
+        from ..pose import LINKS
+        r = self._image_rect()
+        q = np.array([pos.x(), pos.y()])
+        best = None
+        for k, (pts, seen) in enumerate(self._skeleton):
+            px = self._skel_px(r, pts)
+            idx = np.nonzero(seen)[0]
+            if len(idx):
+                d = np.hypot(*(px[idx] - q).T)
+                j = int(np.argmin(d))
+                if d[j] <= SKEL_POINT and (best is None or best[0] > -1 or d[j] < best[1]):
+                    best = (-1, float(d[j]), k, int(idx[j]))
+        if best is not None:
+            return best[2], best[3]
+        for k, (pts, seen) in enumerate(self._skeleton):
+            px = self._skel_px(r, pts)
+            for a, b in LINKS:
+                if not (seen[a] and seen[b]):
+                    continue
+                pa, pb = px[a], px[b]
+                ab = pb - pa
+                t = float(np.clip(np.dot(q - pa, ab) / max(np.dot(ab, ab), 1e-9), 0, 1))
+                d = float(np.hypot(*(pa + t * ab - q)))
+                if d <= SKEL_LINE and (best is None or d < best[1]):
+                    best = (0, d, k, (a, b))
+        return None if best is None else (best[2], best[3])
+
+    def _paint_skeleton(self, p: QPainter, r: QRectF) -> None:
+        from ..pose import LINKS, line_name, point_name
+        hover = self._skel_hover
+        accent = QColor("#38d6ff")
+        for k, (pts, seen) in enumerate(self._skeleton):
+            px = self._skel_px(r, pts)
+            for a, b in LINKS:
+                if not (seen[a] and seen[b]):
+                    continue
+                on = hover == (k, (a, b))
+                hand = a >= 91 or b >= 91
+                for col, width in ((QColor(0, 0, 0, 150), 5 if not hand else 3),
+                                   (accent if on else QColor(255, 255, 255, 220), 3 if not hand else 1.5)):
+                    p.setPen(QPen(col, width + (3 if on else 0), Qt.SolidLine, Qt.RoundCap))
+                    p.drawLine(QPointF(*px[a]), QPointF(*px[b]))
+            p.setPen(QPen(QColor(0, 0, 0, 170), 1.5))
+            for i in np.nonzero(seen)[0]:
+                on = hover == (k, int(i))
+                rad = (7 if on else 4.5) if i < 23 else (5 if on else 2.2)
+                p.setBrush(accent if on else QColor("#ff5c8a" if i < 23 else "#ffd166"))
+                p.drawEllipse(QPointF(*px[i]), rad, rad)
+        if hover is not None:
+            k, t = hover
+            who = f"Person {k + 1}: " if len(self._skeleton) > 1 else ""
+            text = who + (point_name(t) if isinstance(t, int) else line_name(*t))
+            p.setFont(theme.mono_font(11))
+            fm = p.fontMetrics()
+            pts, _seen = self._skeleton[k]
+            px = self._skel_px(r, pts)
+            at = px[t] if isinstance(t, int) else (px[t[0]] + px[t[1]]) / 2
+            box = QRectF(at[0] + 14, at[1] - 26, fm.horizontalAdvance(text) + 14, 20)
+            p.fillRect(box, QColor(0, 0, 0, 190))
+            p.setPen(accent)
+            p.drawText(box, Qt.AlignCenter, text)
+        p.setFont(theme.mono_font(11))
+        hint = "Punkt oder Linie anklicken = Kästchen dort · Esc = ausblenden"
+        tag = QRectF(r.x() + 8, r.bottom() - 28, p.fontMetrics().horizontalAdvance(hint) + 16, 20)
+        p.fillRect(tag, QColor(0, 0, 0, 170))
+        p.setPen(theme.qcolor(theme.TEXT))
+        p.drawText(tag, Qt.AlignCenter, hint)
 
     def set_track_overlay(self, boxes) -> None:
         """Where the tracked areas are in the current frame (None = show the marked ones)."""
@@ -187,6 +278,8 @@ class VideoView(QWidget):
             return
         if self.mode == "track":
             self._paint_tracks(p, r)
+            if self._skeleton:
+                self._paint_skeleton(p, r)
             return
         rect = None
         if self._drag_rect is not None:
@@ -383,6 +476,12 @@ class VideoView(QWidget):
                 self.roiChanged.emit(None)
             self.update()
         elif ev.button() == Qt.LeftButton:
+            if self.mode == "track" and self._skeleton:
+                pick = self._skel_hit(ev.position())
+                if pick is not None:
+                    self.set_skeleton(None)
+                    self.skeletonPicked.emit(pick[0], pick[1])
+                    return
             hit = self._hit(ev.position())
             if hit is not None:
                 kind, i, corner = hit
@@ -460,6 +559,14 @@ class VideoView(QWidget):
             self._drag_rect = QRectF(self._drag_start, ev.position()).normalized() & self._image_rect()
             self.update()
             return
+        if self._skeleton:
+            pick = self._skel_hit(ev.position())
+            if pick != self._skel_hover:
+                self._skel_hover = pick
+                self.update()
+            if pick is not None:
+                self.setCursor(QCursor(Qt.PointingHandCursor))
+                return
         hit = self._hit(ev.position()) if self._img is not None else None
         shape = {"rotate": Qt.PointingHandCursor, "move": Qt.SizeAllCursor}.get(hit[0]) if hit else None
         if hit and hit[0] == "resize":

@@ -116,6 +116,21 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
       **KI-Kontrolle** holt weggerutschte Kästchen während der Analyse zurück
       und überbrückt längere Verdeckungen. Offen: Test an echten Videos,
       vielleicht GPU (OpenCL) für die Netze.
+- [x] **KI-Gerüst zum Anklicken** (0.10.9): Punkte und Linien der KI im Video,
+      ein Klick auf einen Punkt oder eine Linie setzt das Kästchen dort.
+- [ ] **Hub direkt aus Körperpunkten** (im Hinterkopf, erst wenn Tests mit
+      echten Videos zeigen, dass der Tracker die Hübe nicht gut trifft): Statt
+      ein Kästchen zu verfolgen, misst die KI den Abstand oder Winkel zwischen
+      gewählten Punkten (z.B. Hüfte zu Knie, Winkel des Oberschenkels) und
+      macht daraus den Hub.
+      - Vorteil: robust gegen Verdeckung, Licht und Verformung; wählbar über
+        das Gerüst.
+      - Nachteil: Die KI müsste jedes Bild ansehen, ein 10-Minuten-Video hätte
+        etwa 30–45 min Analyse auf der CPU (vielleicht schneller mit GPU/OpenCL
+        oder jedem zweiten Bild).
+      - Nachteil: Die Punkte zittern um ein paar Pixel, kleine Hübe würden
+        ungenauer. Denkbar als Mischung: Tracker für die feine Bewegung, KI für
+        die Lage.
 - [x] **Bildrand und kurze Verdeckungen** (0.10.8): Strecke außerhalb des
       Bildes und unter einer Hand wird weich überbrückt.
 - [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,
