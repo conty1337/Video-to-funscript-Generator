@@ -1453,13 +1453,39 @@ def test_ai_suggestion_and_check(app, sine_video, tmp_path, monkeypatch):
     person = pose.Person(np.array([0, 0, wd, h]), 0.9, pts, conf)
 
     menu = w._suggestion_menu([person], w._frame.shape)
-    acts = [a for a in menu.actions() if not a.isSeparator()]
-    assert [a.text() for a in acts] == ["Becken / Schritt", "Hüfte (breit)"]
+    acts = [a for a in menu.actions() if not a.isSeparator() and a.isEnabled()]
+    assert [a.text() for a in acts] == ["Becken / Schritt", "Hüfte (breit)",
+                                        "Selbst im Bild wählen (Punkt oder Linie anklicken)"]
     acts[0].trigger()
     assert w._suggestion_menu([], w._frame.shape) is None
     assert len(w.panel.tracking.sections) == 1
     box = w.panel.tracking.sections[0].boxes[0]
     assert abs(box[0] + box[2] / 2 - 0.5) < 0.02
+
+    # the skeleton: points and lines drawn into the video, a click puts a box there
+    from PySide6.QtCore import QPointF
+    pts[pose.L_KNEE], pts[pose.R_KNEE] = (wd * 0.55, h * 0.8), (wd * 0.45, h * 0.8)
+    conf[[pose.L_KNEE, pose.R_KNEE]] = 5.0
+    w._show_skeleton([person], w._frame.shape)
+    assert w.view.skeleton_shown()
+    w.view.grab()                                        # paints without errors (and lays out)
+    r = w.view._image_rect()
+    on_point = QPointF(r.x() + 0.55 * r.width(), r.y() + 0.5 * r.height())
+    assert w.view._skel_hit(on_point) == (0, pose.L_HIP)
+    on_line = QPointF(r.x() + 0.55 * r.width(), r.y() + 0.65 * r.height())
+    assert w.view._skel_hit(on_line) == (0, (pose.L_HIP, pose.L_KNEE))
+    picked = []
+    w.view.skeletonPicked.connect(lambda k, t: picked.append((k, t)))
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QMouseEvent
+    ev = QMouseEvent(QEvent.MouseButtonPress, on_line, on_line, Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
+    w.view.mousePressEvent(ev)
+    assert picked == [(0, (pose.L_HIP, pose.L_KNEE))] and not w.view.skeleton_shown()
+    boxes = w.panel.tracking.sections[0].boxes
+    assert len(boxes) == 2 and len(boxes[1]) == 5 and abs(abs(boxes[1][4]) - 90) < 1
+    w._show_skeleton([person], w._frame.shape)
+    w.seek_frame(10)
+    assert not w.view.skeleton_shown()                   # belongs to the frame it was found in
 
     w.panel.tracking.ai_check.setChecked(True)
     assert w.panel.analysis_settings().ai_check

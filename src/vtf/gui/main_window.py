@@ -320,6 +320,7 @@ class MainWindow(QMainWindow):
         self.view.boxRotated.connect(self._box_rotated)
         self.view.boxEdited.connect(self._box_edited)
         self.view.boxCorrected.connect(self._box_corrected)
+        self.view.skeletonPicked.connect(self._skeleton_picked)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -613,6 +614,8 @@ class MainWindow(QMainWindow):
                 self._video_ended()
             return
         idx = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+        if idx != self._cur_idx and self.view.skeleton_shown():
+            self.view.set_skeleton(None)        # the points belong to the frame they were found in
         self._cur_idx = idx
         self._frame = frame
         self.view.set_frame(frame)
@@ -953,8 +956,34 @@ class MainWindow(QMainWindow):
         if menu is None:
             self._status("KI-Vorschlag: keine Person erkannt – Kästchen bitte selbst aufziehen")
             return
+        self._show_skeleton(people, shape)
         btn = self.panel.tracking.ai_btn
         menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+
+    def _show_skeleton(self, people, shape) -> None:
+        """Draw the recognised points and lines into the video: click one to put a box there."""
+        from .. import pose
+        h, w = shape[:2]
+        self._skel_people = people
+        self._skel_shape = shape
+        self.view.set_skeleton([(p.pts / np.array([w, h]), p.conf >= pose.SURE) for p in people])
+        self._status("KI-Vorschlag: aus der Liste wählen oder im Bild einen Punkt (Gelenk, Hand, "
+                     "Finger) bzw. eine Linie (z.B. Oberschenkel) anklicken")
+
+    def _skeleton_picked(self, k: int, target) -> None:
+        from .. import pose
+        people = getattr(self, "_skel_people", None) or []
+        if not 0 <= k < len(people):
+            return
+        b = pose.pick_box(people[k], target)
+        if b is None:
+            return
+        h, w = self._skel_shape[:2]
+        x, y, bw, bh, ang = b
+        box = (float(x / w), float(y / h), float(bw / w), float(bh / h)) + ((float(ang),) if ang else ())
+        self._box_drawn(box)
+        name = pose.point_name(target) if isinstance(target, int) else pose.line_name(*target)
+        self._status(f"Kästchen auf „{name}“ · {self.status_label.text()}")
 
     def _suggestion_menu(self, people, shape) -> QMenu | None:
         """Menu with one entry per visible body part; choosing one adds its box."""
@@ -964,17 +993,25 @@ class MainWindow(QMainWindow):
             return None
         h, w = shape[:2]
         menu = QMenu(self)
-        menu.addSection(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        head = menu.addAction(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        head.setEnabled(False)          # a heading (addSection shows no text in every style)
+        menu.addSeparator()
         for i, region, (x, y, bw, bh) in found:
             x0, y0 = max(0.0, x), max(0.0, y)
             x1, y1 = min(float(w), x + bw), min(float(h), y + bh)
             if x1 - x0 < 4 or y1 - y0 < 4:
                 continue
-            box = (x0 / w, y0 / h, (x1 - x0) / w, (y1 - y0) / h)
+            box = (float(x0 / w), float(y0 / h), float((x1 - x0) / w), float((y1 - y0) / h))
             who = f"Person {i + 1}: " if len(people) > 1 else ""
             menu.addAction(who + region.label).triggered.connect(
-                lambda _c=False, b=box: self._box_drawn(b))
+                lambda _c=False, b=box: self._pick_from_menu(b))
+        menu.addSeparator()
+        menu.addAction("Selbst im Bild wählen (Punkt oder Linie anklicken)")
         return menu
+
+    def _pick_from_menu(self, box) -> None:
+        self.view.set_skeleton(None)
+        self._box_drawn(box)
 
     def _box_drawn(self, box):
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
@@ -1236,6 +1273,7 @@ class MainWindow(QMainWindow):
 
     def emergency_stop(self):
         """Esc: stop the device immediately and pause playback."""
+        self.view.set_skeleton(None)
         self._stop_patterns()
         self.external.emergency_stop()
         self.devices.emergency_stop()

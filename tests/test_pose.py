@@ -183,3 +183,17 @@ def test_people_search_reuses_last_boxes():
     est.keypoints = lambda img, box: (p.pts, np.zeros(pose.N_POINTS))     # nobody there now
     est.people(img, reuse=True)
     assert calls["detect"] == 2                       # then a full search
+
+
+def test_pick_box_for_point_and_line():
+    p = _person(center=(100.0, 120.0), height=200.0)
+    x, y, w, h, ang = pose.pick_box(p, pose.L_HIP)
+    assert abs(x + w / 2 - 110) < 1e-6 and abs(y + h / 2 - 120) < 1e-6 and w == h and ang == 0
+    # thigh: hip (110, 120) -> knee (110, 170): turned box along it, mostly upright
+    x, y, w, h, ang = pose.pick_box(p, (pose.L_HIP, pose.L_KNEE))
+    assert abs(x + w / 2 - 110) < 1e-6 and abs(y + h / 2 - 145) < 1e-6
+    assert abs(abs(ang) - 90) < 1e-6 and w > 50 and h < w
+    assert pose.pick_box(p, (pose.L_HIP, pose.L_HIP)) is None
+    assert pose.point_name(pose.L_KNEE) == "Knie links"
+    assert pose.line_name(pose.L_HIP, pose.L_KNEE) == "Oberschenkel links"
+    assert all(0 <= a < pose.N_POINTS and 0 <= b < pose.N_POINTS for a, b in pose.LINKS)

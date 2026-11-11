@@ -395,3 +395,68 @@ class Anchor:
             if best is None or d < best[2]:
                 best = (c, int(ok.sum()), d)
         return None if best is None else (best[0], best[1])
+
+
+# ---------------------------------------------------------------- skeleton (pick it yourself)
+_BODY_LINKS = ((5, 7), (7, 9), (6, 8), (8, 10), (5, 6), (5, 11), (6, 12), (11, 12),
+               (11, 13), (13, 15), (12, 14), (14, 16), (0, 1), (0, 2), (1, 3), (2, 4),
+               (15, 17), (15, 18), (15, 19), (16, 20), (16, 21), (16, 22))
+_HAND_LINKS = tuple((a, b) for f in range(5) for a, b in
+                    zip((0, 1 + 4 * f, 2 + 4 * f, 3 + 4 * f), (1 + 4 * f, 2 + 4 * f, 3 + 4 * f, 4 + 4 * f)))
+LINKS = (_BODY_LINKS + ((9, 91), (10, 112))
+         + tuple((91 + a, 91 + b) for a, b in _HAND_LINKS)
+         + tuple((112 + a, 112 + b) for a, b in _HAND_LINKS))
+
+_BODY_NAMES = ("Nase", "Auge links", "Auge rechts", "Ohr links", "Ohr rechts", "Schulter links",
+               "Schulter rechts", "Ellbogen links", "Ellbogen rechts", "Handgelenk links",
+               "Handgelenk rechts", "Hüfte links", "Hüfte rechts", "Knie links", "Knie rechts",
+               "Knöchel links", "Knöchel rechts", "großer Zeh links", "kleiner Zeh links",
+               "Ferse links", "großer Zeh rechts", "kleiner Zeh rechts", "Ferse rechts")
+_FINGERS = ("Daumen", "Zeigefinger", "Mittelfinger", "Ringfinger", "kleiner Finger")
+
+
+def point_name(i: int) -> str:
+    """German name of a body point (COCO-WholeBody numbering)."""
+    if i < len(_BODY_NAMES):
+        return _BODY_NAMES[i]
+    if i in MOUTH:
+        return "Mund"
+    if i in FACE:
+        return "Gesicht"
+    side, base = ("links", 91) if i in L_HAND else ("rechts", 112)
+    k = i - base
+    return f"Hand {side}" if k == 0 else f"{_FINGERS[(k - 1) // 4]} {side}"
+
+
+def line_name(a: int, b: int) -> str:
+    names = {(5, 7): "Oberarm links", (6, 8): "Oberarm rechts", (7, 9): "Unterarm links",
+             (8, 10): "Unterarm rechts", (11, 13): "Oberschenkel links", (12, 14): "Oberschenkel rechts",
+             (13, 15): "Unterschenkel links", (14, 16): "Unterschenkel rechts", (5, 6): "Schultern",
+             (11, 12): "Becken", (5, 11): "Seite links", (6, 12): "Seite rechts"}
+    return names.get((a, b)) or f"{point_name(a)} – {point_name(b)}"
+
+
+def pick_box(p: Person, target) -> tuple[float, float, float, float, float] | None:
+    """Box (x, y, w, h, angle; px) for a clicked point (int) or line ((a, b)) of person p.
+    A point gets a square around it; a line a turned box along it."""
+    small = p.height * (0.035 if (isinstance(target, int) and target >= 91) else 0.07)
+    side = max(small, 16.0)
+    if isinstance(target, int):
+        cx, cy = p.pts[target]
+        return (cx - side / 2, cy - side / 2, side, side, 0.0)
+    a, b = target
+    pa, pb = p.pts[a], p.pts[b]
+    d = pb - pa
+    length = float(np.hypot(*d))
+    if length < 4:
+        return None
+    w = length * 1.1
+    h = max(0.35 * length, side * 0.8)
+    cx, cy = (pa + pb) / 2
+    ang = float(np.degrees(np.arctan2(d[1], d[0])))
+    # keep boxes mostly upright: a box along a leg reads better turned by -90 than by +90
+    if ang > 90:
+        ang -= 180
+    elif ang < -90:
+        ang += 180
+    return (cx - w / 2, cy - h / 2, w, h, round(ang, 1))
