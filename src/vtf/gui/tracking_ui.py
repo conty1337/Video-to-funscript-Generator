@@ -159,19 +159,26 @@ class TrackingBox(QWidget):
         if msg:
             self.message.emit(msg)
 
-    def add_box(self, box, ms: float, shown=()) -> str:
+    def add_box(self, box, ms: float, shown=(), keep_first: bool = False) -> str:
         """An area was drawn on the frame at ms. `shown` = the areas visible there
         (tracked positions after an analysis): drawing over one of them inside a
-        section corrects that area instead of starting a new section."""
+        section corrects that area instead of starting a new section.
+        keep_first (boxes from the KI): area 1 is never replaced or corrected, a full
+        section swaps its oldest area among 2 and 3."""
         box = tuple(round(v, 4) for v in box)
         cur = self.index_at(ms)
         if cur is not None and abs(self.sections[cur].start_ms - ms) > self.frame_ms * 0.6:
+            if keep_first and shown:
+                shown = ((-9.0, -9.0, 0.0, 0.0),) + tuple(shown[1:])    # area 1 can't be hit
             hit = _overlapping(box, shown)
             if hit is not None:
                 return self._add_key(cur, ms, hit, box, shown[hit])
         for i, s in enumerate(self.sections):
             if abs(s.start_ms - ms) <= self.frame_ms * 0.6:          # same frame: one more area
-                boxes = (s.boxes + (box,))[-MAX_AREAS:]
+                if keep_first and s.boxes:
+                    boxes = s.boxes[:1] + (s.boxes[1:] + (box,))[-(MAX_AREAS - 1):]
+                else:
+                    boxes = (s.boxes + (box,))[-MAX_AREAS:]
                 self.sections[i] = replace(s, boxes=boxes)
                 self.refresh()
                 self.analysisChanged.emit()
@@ -182,7 +189,11 @@ class TrackingBox(QWidget):
             # splitting a section with an end: the new part keeps that end
             end = self.sections[cut].end_ms
             self.sections[cut] = replace(self.sections[cut], end_ms=int(ms))
-        self.sections.append(TrackSection(int(ms), (box,), end_ms=end))
+        first = ()
+        if keep_first and cut is not None and shown and shown[0][0] > -1:
+            # a KI box inside a section: area 1 goes on in the new part from where it is now
+            first = (tuple(round(float(v), 4) for v in shown[0][:5]),)
+        self.sections.append(TrackSection(int(ms), first + (box,), end_ms=end))
         self.sections.sort(key=lambda s: s.start_ms)
         self.refresh()
         self.analysisChanged.emit()

@@ -1536,3 +1536,31 @@ def test_ai_suggestion_shows_that_it_is_working(app, sine_video, tmp_path, monke
     assert btn.isEnabled() and btn.text() == "KI-Vorschlag"
     assert "keine Person" in w.status_label.text()
     w.close()
+
+
+def test_ai_boxes_leave_area_1_alone(app):
+    """Boxes from the KI only fill or swap areas 2 and 3; area 1 is never replaced or
+    corrected by them (drawing by hand still works as before)."""
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    one, a, b, c = (0.1, 0.1, 0.1, 0.1), (0.4, 0.4, 0.1, 0.1), (0.6, 0.6, 0.1, 0.1), (0.8, 0.8, 0.1, 0.1)
+    tb.add_box(one, 0)
+    tb.add_box(a, 0, keep_first=True)
+    tb.add_box(b, 0, keep_first=True)
+    tb.add_box(c, 0, keep_first=True)                     # full: oldest of 2/3 goes
+    assert tb.sections[0].boxes == (one, b, c)
+    tb.add_box(a, 0)                                      # by hand: as before, area 1 goes
+    assert tb.sections[0].boxes == (b, c, a)
+    # inside a section after an analysis: a KI box over area 1 is no correction of it
+    tb2 = TrackingBox()
+    tb2.reset(10_000, 30)
+    tb2.add_box(one, 0)
+    tb2.add_box(a, 0)
+    shown = (one, a)
+    msg = tb2.add_box((0.41, 0.41, 0.1, 0.1), 2000, shown, keep_first=True)
+    assert "Bereich 2" in msg and tb2.sections[0].keys[0][1] == 1     # over area 2: corrects it
+    tb2.add_box((0.1, 0.1, 0.1, 0.1), 3000, shown, keep_first=True)   # over area 1: no correction
+    assert all(k[1] != 0 for k in tb2.sections[0].keys)
+    assert len(tb2.sections) == 2 and tb2.sections[1].boxes[0] == one  # area 1 goes on as it is

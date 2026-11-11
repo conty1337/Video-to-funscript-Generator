@@ -1001,7 +1001,7 @@ class MainWindow(QMainWindow):
         h, w = self._skel_shape[:2]
         x, y, bw, bh, ang = b
         box = (float(x / w), float(y / h), float(bw / w), float(bh / h)) + ((float(ang),) if ang else ())
-        self._box_drawn(box)
+        self._box_drawn(box, keep_first=True)
         name = pose.point_name(target) if isinstance(target, int) else pose.line_name(*target)
         self._status(f"Kästchen auf „{name}“ · {self.status_label.text()}")
 
@@ -1031,11 +1031,12 @@ class MainWindow(QMainWindow):
 
     def _pick_from_menu(self, box) -> None:
         self.view.set_skeleton(None)
-        self._box_drawn(box)
+        self._box_drawn(box, keep_first=True)
 
-    def _box_drawn(self, box):
+    def _box_drawn(self, box, keep_first: bool = False):
+        """keep_first: a box from the KI, it never replaces or corrects area 1."""
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
-        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown)
+        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown, keep_first=keep_first)
         img = self.view._img
         if img is not None:     # how big the area is in the analysis picture
             aw = self.panel.width.currentData()
