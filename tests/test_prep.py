@@ -72,3 +72,19 @@ def test_outlines_and_stroke_are_kept(tmp_path):
     # files written before outlines existed still load
     save_prep(v, [TrackSection(0, ((0.1, 0.1, 0.2, 0.2),))])
     assert "outlines" not in prep_path(v).read_text() and load_prep(v)[0].outlines == ()
+
+
+def test_cuts_saved_next_to_the_video(tmp_path):
+    from vtf.prep import load_bookmarks, load_cuts, save_bookmarks, save_cuts
+
+    v = tmp_path / "c.mp4"
+    v.write_bytes(b"x")
+    save_cuts(v, [(5000, 9000), (1000, 2000)])
+    save_bookmarks(v, [(3000, "A")])
+    save_prep(v, [TrackSection(0, ((0.1, 0.1, 0.2, 0.2),))])
+    assert load_cuts(v) == [(1000, 2000), (5000, 9000)] and load_bookmarks(v) == [(3000, "A")]
+    save_prep(v, [])
+    save_bookmarks(v, [])
+    assert load_cuts(v) == [(1000, 2000), (5000, 9000)]              # cuts alone keep the file
+    save_cuts(v, [])
+    assert not prep_path(v).exists()

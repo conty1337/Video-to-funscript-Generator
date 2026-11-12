@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from ..batch import VIDEO_EXTS
-from ..playlist import Playlist, has_script
+from ..playlist import COUNTDOWN_RANGE_S, LEAD_MS, Playlist, has_script
 from . import theme
 
 PATH_ROLE = Qt.UserRole
@@ -151,12 +152,42 @@ class PlayerPanel(QWidget):
         self.intro_cb = QCheckBox("Ruhigen Anfang überspringen")
         self.intro_cb.setToolTip("Startet 10 s bevor das Script losgeht, statt am Anfang des Videos")
         self.countdown_cb = QCheckBox("Countdown vor dem Start")
-        self.countdown_cb.setToolTip("Zählt die letzten 10 s herunter, bevor das Script losgeht")
+        self.countdown_cb.setToolTip("Zählt die letzten 10 s herunter, bevor das Script losgeht – auch "
+                                     "nach einem Schnitt oder einer Pause, wenn es weitergeht")
         self.intro_cb.setChecked(str(settings.value("player/intro", "true")).lower() == "true")
         self.countdown_cb.setChecked(str(settings.value("player/countdown", "true")).lower() == "true")
-        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb):
+        lo, hi = COUNTDOWN_RANGE_S
+        self.countdown_s = QSpinBox()
+        self.countdown_s.setRange(lo, hi)
+        self.countdown_s.setSuffix(" s")
+        self.countdown_s.setToolTip("Wie lange der Countdown läuft. So weit vor dem ersten Hub startet "
+                                    "das Video, und so weit vor dem nächsten Hub geht es nach einer "
+                                    "übersprungenen Pause weiter")
+        try:
+            self.countdown_s.setValue(int(settings.value("player/countdown_s", LEAD_MS // 1000)))
+        except (TypeError, ValueError):
+            self.countdown_s.setValue(LEAD_MS // 1000)
+        self.cuts_cb = QCheckBox("Schnitte überspringen")
+        self.cuts_cb.setToolTip("Im Editor markierte Schnitte (Taste X) werden beim Abspielen übersprungen")
+        self.cuts_cb.setChecked(str(settings.value("player/cuts", "true")).lower() == "true")
+        self.quiet_cb = QCheckBox("Pausen ohne Hübe überspringen")
+        self.quiet_cb.setToolTip("Bewegt sich das Script 15 s oder länger nicht, geht es die Countdown-Länge vor "
+                                 "dem nächsten Hub weiter; nach dem letzten Hub zum nächsten Video")
+        self.quiet_cb.setChecked(str(settings.value("player/quiet", "false")).lower() == "true")
+        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb,
+                   self.cuts_cb, self.quiet_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
+            if cb is self.countdown_cb:          # its length right below it
+                row = QHBoxLayout()
+                row.setContentsMargins(24, 0, 0, 0)
+                cap = QLabel("Länge")
+                cap.setObjectName("caption")
+                row.addWidget(cap)
+                row.addWidget(self.countdown_s)
+                row.addStretch(1)
+                fl.addLayout(row)
+        self.countdown_s.valueChanged.connect(self.save)
         self.play_btn = QPushButton(theme.icon("play", theme.ON_ACCENT), "Playlist abspielen")
         self.play_btn.setObjectName("primary")
         fl.addSpacing(4)
@@ -188,6 +219,10 @@ class PlayerPanel(QWidget):
         else:
             super().keyPressEvent(ev)
 
+    def lead_ms(self) -> int:
+        """Countdown length (ms): how far before a stroke the player starts / comes back."""
+        return int(self.countdown_s.value()) * 1000
+
     def save(self) -> None:
         pl = self.playlist
         self.qs.setValue("player/items", list(pl.items))
@@ -197,6 +232,9 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/skip", "true" if pl.skip_without_script else "false")
         self.qs.setValue("player/intro", "true" if self.intro_cb.isChecked() else "false")
         self.qs.setValue("player/countdown", "true" if self.countdown_cb.isChecked() else "false")
+        self.qs.setValue("player/countdown_s", int(self.countdown_s.value()))
+        self.qs.setValue("player/cuts", "true" if self.cuts_cb.isChecked() else "false")
+        self.qs.setValue("player/quiet", "true" if self.quiet_cb.isChecked() else "false")
 
     def refresh(self) -> None:
         pl = self.playlist

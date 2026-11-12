@@ -2,7 +2,7 @@
 
 Mode "roi":   drag a rectangle = analysis area, right click removes it.
 Mode "track": drag up to three rectangles = areas to track (body parts,
-              objects), right click removes the section. Marked areas can be
+              objects), right click opens a menu (nothing is deleted at once). Marked areas can be
               moved (drag inside), resized (drag a corner) and turned (round
               handle or mouse wheel). After the analysis the tracked areas are
               drawn where they are in the current frame; grabbing one there
@@ -40,6 +40,7 @@ MAX_ZOOM = 8.0
 SKEL_POINT = 10           # px around a body point that still picks it
 SKEL_LINE = 7            # px around a body line that still picks it
 GRAB = 8                 # px around a handle that still grabs it
+MENU_SLACK = 12          # px beside an area where a right click still means that area
 ROLE_NAMES = ("Toy", "Bezug", "Bezug")   # what area 1, 2, 3 are
 STROKE_COLOR = "#e86fd0"
 
@@ -71,7 +72,7 @@ class VideoView(QWidget):
     boxRotated = Signal(int, float)  # mode "track": marked area i turned to angle (degrees)
     boxEdited = Signal(int, tuple)   # mode "track": marked area i moved/resized to (x, y, w, h, angle)
     boxCorrected = Signal(int, tuple)  # mode "track": area i grabbed elsewhere and put right
-    tracksCleared = Signal()      # mode "track": right click
+    sectionMenuRequested = Signal(QPoint)  # mode "track": right click beside the areas (global pos)
     skeletonPicked = Signal(int, object)   # body recognition shown: (person, point | (a, b)) clicked
     outlineDrawn = Signal(tuple, tuple)    # mode "track", draw mode "outline": (box, outline)
     strokeDrawn = Signal(tuple)            # draw mode "stroke": arrow (x0, y0, x1, y1), head = out
@@ -118,7 +119,8 @@ class VideoView(QWidget):
                         "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
                         "Das startet einen Tracking-Abschnitt an dieser Stelle. Kästchen innen ziehen = "
                         "verschieben, an einer Ecke = Größe, runder Griff oder Mausrad = drehen. "
-                        "Rechtsklick löscht den Abschnitt an dieser Stelle")
+                        "Rechtsklick aufs Kästchen: Rolle, Umrandung, entfernen; daneben: Abschnitt-Menü. "
+                        "Strg+Z macht es rückgängig")
         self.update()
 
     def set_draw_mode(self, mode: str) -> None:
@@ -462,6 +464,24 @@ class VideoView(QWidget):
         p.setPen(color)
         p.drawText(tag, Qt.AlignCenter, "raus")
 
+    def _area_near(self, pos: QPointF, slack: float) -> int | None:
+        """The area under pos, or the nearest one within `slack` px of its edge."""
+        boxes = self._grab_boxes()
+        r = self._image_rect()
+        best, best_d = None, slack
+        for i in reversed(range(len(boxes))):
+            if self._contains(r, boxes[i], pos):
+                return i
+            _pts, c, ang = self._poly(r, boxes[i])
+            rect = self._norm_rect(r, boxes[i][:4])
+            dx, dy = pos.x() - c.x(), pos.y() - c.y()
+            lx = abs(dx * math.cos(ang) + dy * math.sin(ang)) - rect.width() / 2
+            ly = abs(-dx * math.sin(ang) + dy * math.cos(ang)) - rect.height() / 2
+            d = math.hypot(max(lx, 0.0), max(ly, 0.0))
+            if d <= best_d:
+                best, best_d = i, d
+        return best
+
     def _paint_tracks(self, p: QPainter, r: QRectF) -> None:
         analysed = self._overlay is not None
         boxes = self._overlay if analysed else self._tracks
@@ -602,13 +622,12 @@ class VideoView(QWidget):
                     self._lasso = self._arrow = None
                     self.update()
                     return
-                r = self._image_rect()
-                boxes = self._grab_boxes()
-                for i in reversed(range(len(boxes))):
-                    if self._contains(r, boxes[i], ev.position()):
-                        self.areaMenuRequested.emit(i, ev.globalPosition().toPoint())
-                        return
-                self.tracksCleared.emit()
+                i = self._area_near(ev.position(), MENU_SLACK)
+                if i is not None:
+                    self.areaMenuRequested.emit(i, ev.globalPosition().toPoint())
+                else:
+                    self.sectionMenuRequested.emit(ev.globalPosition().toPoint())
+                return
             else:
                 self._roi = None
                 self.roiChanged.emit(None)

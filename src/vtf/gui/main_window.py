@@ -45,8 +45,8 @@ from ..funscript import (
     position_at,
 )
 from ..generator import generate, generate_axes
-from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
-from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
+from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, skip_target
+from ..prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -61,6 +61,9 @@ from .timeline import TimelineSlider
 from .update_ui import UpdateController
 from .video_view import VideoView
 from .workers import AnalysisWorker
+
+
+TRACK_UNDO = "tracking"      # undo entry holding the tracking sections, not script points
 
 
 class MainWindow(QMainWindow):
@@ -80,6 +83,9 @@ class MainWindow(QMainWindow):
         self.worker: AnalysisWorker | None = None
         self.undo_stack: list[tuple[str, list[Action]]] = []   # (axis, actions)
         self.redo_stack: list[tuple[str, list[Action]]] = []
+        # tracking changes are undone with the same Strg+Z: entries (TRACK_UNDO, sections)
+        self._track_shadow: list = []          # the sections after the last change
+        self._track_restoring = False
         self.dirty = False
 
         # widgets
@@ -125,6 +131,10 @@ class MainWindow(QMainWindow):
         self.curve_title.setObjectName("section")
         self.axis = "L0"                       # axis shown in the curve
         self.bookmarks: list[tuple[int, str]] = []   # (ms, name), saved next to the video
+        self.cuts: list[tuple[int, int]] = []         # (from, to) the player skips, saved there too
+        self._cut_start: float | None = None          # X pressed once: the cut starts here
+        self._quiet_cache: tuple = ((), [])
+        self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -325,7 +335,7 @@ class MainWindow(QMainWindow):
         self.view.strokeDrawn.connect(self._stroke_drawn)
         self.view.areaMenuRequested.connect(self._area_menu)
         self.panel.tracking.drawModeChanged.connect(self.view.set_draw_mode)
-        self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self.view.sectionMenuRequested.connect(self._section_menu)
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
         self.panel.tracking.suggestRequested.connect(self.suggest_boxes)
@@ -381,6 +391,10 @@ class MainWindow(QMainWindow):
         self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
         self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
         self._act(m, "Script aus Musik…", self.music_script)
+        m.addSeparator()
+        self._act(m, "Schnitt: Anfang / Ende hier", self.toggle_cut, "X")
+        self._act(m, "Schnitt bis zur nächsten Bewegung", self.cut_to_next_move, "Shift+X")
+        self._act(m, "Schnitt hier entfernen", self.remove_cut_here)
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -544,8 +558,13 @@ class MainWindow(QMainWindow):
             self.panel.tracking.refresh()
             self.panel.method.setCurrentIndex(self.panel.method.findData("track"))
             self._update_section_marks()
+        self._track_shadow = list(self.panel.tracking.sections)
         self.bookmarks = load_bookmarks(path)
         self._show_bookmarks()
+        self.cuts = load_cuts(path)
+        self._cut_start = None
+        self._skip_resume = None
+        self._show_cuts()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -593,8 +612,12 @@ class MainWindow(QMainWindow):
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
         self.panel.tracking.reset(0, 30)
+        self._track_shadow = []
         self.bookmarks = []
         self._show_bookmarks()
+        self.cuts = []
+        self._cut_start = None
+        self._show_cuts()
         self.rail.set_speed(0.0)
         self.axis_actions = {}
         self.axis = "L0"
@@ -651,6 +674,96 @@ class MainWindow(QMainWindow):
             a, b = acts[i - 1], acts[i]
             speed = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
         self.rail.set_speed(speed)
+
+    # ------------------------------------------------------------ cuts
+    def _show_cuts(self):
+        self.curve.set_cuts(self.cuts, self._cut_start)
+
+    def _cuts_changed(self):
+        self._show_cuts()
+        if self.video_path:
+            try:
+                save_cuts(self.video_path, self.cuts)
+            except OSError as e:
+                self._status(f"Schnitte nicht gespeichert: {e}")
+
+    def add_cut(self, a: float, b: float) -> str:
+        """Cut from a to b (ms); overlapping cuts become one."""
+        a, b = sorted((int(a), int(b)))
+        if b - a < 200:
+            return "Schnitt zu kurz – erst zum Ende spulen"
+        merged = []
+        for c in sorted([*self.cuts, (a, b)]):
+            if merged and c[0] <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], c[1]))
+            else:
+                merged.append(c)
+        self.cuts = merged
+        self._cuts_changed()
+        return f"✂ Schnitt {_fmt(a)} – {_fmt(b)}: der Player springt darüber"
+
+    def toggle_cut(self):
+        """X: first press marks where the cut starts, the second where it ends."""
+        if not self.cap:
+            return
+        ms = self._cur_ms()
+        if self._cut_start is None:
+            self._cut_start = ms
+            self._show_cuts()
+            self._status(f"✂ Schnitt beginnt bei {_fmt(ms)} – zum Ende spulen und nochmal X")
+            return
+        start, self._cut_start = self._cut_start, None
+        self._status(self.add_cut(start, ms))
+        self._show_cuts()
+
+    def cut_to_next_move(self):
+        """Shift+X: cut from here to shortly before the next stroke (or the end)."""
+        if not self.cap:
+            return
+        ms = self._cur_ms()
+        acts = self.stroke_actions()
+        lead = self.player.lead_ms()             # the countdown then runs up to the stroke
+        nxt = next((a.at for a, b in zip(acts, acts[1:]) if a.at > ms + lead and abs(b.pos - a.pos) >= 10),
+                   None)
+        end = nxt - lead if nxt is not None else self.frame_count / self.fps * 1000
+        self._cut_start = None
+        self._status(self.add_cut(ms, end))
+
+    def remove_cut_here(self):
+        ms = self._cur_ms()
+        keep = [c for c in self.cuts if not c[0] <= ms <= c[1]]
+        if len(keep) == len(self.cuts):
+            self._status("Hier ist kein Schnitt")
+            return
+        self.cuts = keep
+        self._cuts_changed()
+        self._status("Schnitt entfernt")
+
+    def _player_skip(self, media_ms: float) -> bool:
+        """Player: jump over cuts and (if wanted) long stretches without strokes."""
+        if not self.player_mode:
+            return False
+        cuts = self.cuts if self.player.cuts_cb.isChecked() else ()
+        quiet = ()
+        if self.player.quiet_cb.isChecked():
+            acts = self.stroke_actions()
+            lead = self.player.lead_ms()
+            key = (id(acts), len(acts), acts[0].at if acts else 0, acts[-1].at if acts else 0, lead)
+            if self._quiet_cache[0] != key:
+                self._quiet_cache = (key, quiet_stretches(acts, self.frame_count / self.fps * 1000,
+                                                          lead_ms=lead))
+            quiet = self._quiet_cache[1]
+        to = skip_target(media_ms, cuts, quiet)
+        if to is None or to <= media_ms:
+            return False
+        if to >= self.frame_count / self.fps * 1000 - 100:
+            self.pause()
+            self._video_ended()
+        else:
+            self.seek_ms(to)
+            self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
+            self._status(f"✂ übersprungen bis {_fmt(to)}")
+        return True
 
     # ------------------------------------------------------------ bookmarks
     def _show_bookmarks(self):
@@ -841,11 +954,14 @@ class MainWindow(QMainWindow):
             self.seek_ms(min(tb.sections, key=lambda s: abs(s.start_ms - ms)).start_ms)
 
     def _update_countdown(self, ms: float):
-        """Player: count the last seconds down before the script starts."""
+        """Player: count the last seconds down before the script starts, and before it
+        goes on after a pause (a skipped cut, or just a long still stretch)."""
         sec = None
         if self.player_mode and self.player.countdown_cb.isChecked():
-            start = script_start_ms(self.stroke_actions())
-            if start is not None and 0 < start - ms <= LEAD_MS:
+            start = resume_ms(ms, self.stroke_actions())
+            if start is None and self._skip_resume is not None and ms < self._skip_resume:
+                start = self._skip_resume            # just jumped over a cut: count down to it too
+            if start is not None and 0 < start - ms <= self.player.lead_ms():
                 sec = math.ceil((start - ms) / 1000)
         self.view.set_countdown(sec)
 
@@ -877,6 +993,8 @@ class MainWindow(QMainWindow):
         if not self.cap:
             return
         media_ms = self._media_ms()
+        if self._player_skip(media_ms):
+            return
         target = int(media_ms * self.fps / 1000)
         if target >= self.frame_count:
             self.pause()
@@ -1098,7 +1216,28 @@ class MainWindow(QMainWindow):
         elif chosen is flat:
             self._status(tb.clear_outline(ms, area))
         elif chosen is rm:
-            self._status(tb.remove_area(ms, area))
+            self._status(tb.remove_area(ms, area) + " – Strg+Z holt ihn zurück")
+
+    def _section_menu(self, pos):
+        """Right click in the video beside the areas: delete only from a menu."""
+        if self.panel.mode != "track":
+            return
+        tb = self.panel.tracking
+        ms = self._cur_ms()
+        i = tb.index_at(ms)
+        menu = QMenu(self)
+        head = menu.addAction(f"Abschnitt {i + 1}" if i is not None else "Kein Abschnitt an dieser Stelle")
+        head.setEnabled(False)
+        menu.addSeparator()
+        stroke = menu.addAction("Hub-Richtung entfernen")
+        stroke.setEnabled(i is not None and tb.sections[i].stroke is not None)
+        delete = menu.addAction("Abschnitt hier löschen")
+        delete.setEnabled(i is not None)
+        chosen = self._run_menu(menu, pos)
+        if chosen is stroke:
+            self._status(tb.set_stroke(ms, None))
+        elif chosen is delete:
+            self._status(tb.delete_at(ms) + " – Strg+Z holt ihn zurück")
 
     def _run_menu(self, menu: QMenu, pos):
         return menu.exec(pos)
@@ -1153,6 +1292,12 @@ class MainWindow(QMainWindow):
         return out
 
     def _sections_changed(self):
+        secs = list(self.panel.tracking.sections)
+        if not self._track_restoring and secs != self._track_shadow:
+            self.undo_stack.append((TRACK_UNDO, self._track_shadow))     # Strg+Z brings it back
+            del self.undo_stack[:-100]
+            self.redo_stack.clear()
+        self._track_shadow = secs
         self._update_track_overlay(self._cur_ms())
         self._update_section_marks()
         if self.video_path and self.panel.mode == "track":
@@ -1254,7 +1399,8 @@ class MainWindow(QMainWindow):
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
-            skip = intro_skip_ms(self.stroke_actions()) if self.player.intro_cb.isChecked() else 0
+            skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms())
+                    if self.player.intro_cb.isChecked() else 0)
             if skip:
                 self.seek_ms(skip)
             if not self.timer.isActive():
@@ -1601,6 +1747,9 @@ class MainWindow(QMainWindow):
         self._update_meta()
 
     def _restore(self, src: list, dst: list):
+        if src[-1][0] == TRACK_UNDO:
+            self._restore_tracking(src, dst)
+            return
         axis, acts = src.pop()
         dst.append((axis, list(self.actions_for(axis))))
         if axis != self.axis:
@@ -1609,6 +1758,22 @@ class MainWindow(QMainWindow):
         self.dirty = True
         self._update_axis_labels()
         self._refresh_position()
+
+    def _restore_tracking(self, src: list, dst: list):
+        _key, secs = src.pop()
+        tb = self.panel.tracking
+        before = list(tb.sections)
+        dst.append((TRACK_UNDO, before))
+        tb.sections = list(secs)
+        tb.refresh()
+        self._track_restoring = True
+        try:
+            # only the arrow or the calibration differs: no new analysis needed
+            same = [s.analysis_key() for s in before] == [s.analysis_key() for s in secs]
+            (tb.generatorChanged if same else tb.analysisChanged).emit()
+        finally:
+            self._track_restoring = False
+        self._status("Tracking: " + ("rückgängig gemacht" if dst is self.redo_stack else "wiederhergestellt"))
 
     def undo(self):
         if self.undo_stack:

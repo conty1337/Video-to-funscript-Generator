@@ -40,8 +40,8 @@ def _read(path: Path) -> dict:
 
 
 def _write(path: Path, data: dict) -> Path | None:
-    """Write the file; with neither sections nor bookmarks it is removed."""
-    if not data.get("sections") and not data.get("bookmarks"):
+    """Write the file; with no sections, bookmarks or cuts it is removed."""
+    if not data.get("sections") and not data.get("bookmarks") and not data.get("cuts"):
         try:
             path.unlink()
         except FileNotFoundError:
@@ -69,6 +69,22 @@ def load_bookmarks(video: str | Path) -> list[tuple[int, str]]:
         return []
 
 
+def save_cuts(video: str | Path, cuts) -> Path | None:
+    """Cuts [(from ms, to ms), ...]: stretches the player skips (the rest is kept)."""
+    path = prep_path(video)
+    data = _read(path)
+    data.setdefault("version", PREP_VERSION)
+    data["cuts"] = [[int(a), int(b)] for a, b in sorted(cuts)]
+    return _write(path, data)
+
+
+def load_cuts(video: str | Path) -> list[tuple[int, int]]:
+    try:
+        return sorted((int(c[0]), int(c[1])) for c in _read(prep_path(video)).get("cuts", []))
+    except (ValueError, TypeError, IndexError):
+        return []
+
+
 def save_prep(video: str | Path, sections) -> Path | None:
     """Write the sections (bookmarks are kept); with neither the file is removed.
     Returns the path written."""
@@ -90,9 +106,10 @@ def save_prep(video: str | Path, sections) -> Path | None:
             **({"stroke": list(_box(s.stroke))} if s.stroke else {}),
         } for s in secs],
     }
-    if old.get("bookmarks"):
-        data["bookmarks"] = old["bookmarks"]
-    return _write(path, data) if secs or data.get("bookmarks") else _write(path, {})
+    for key in ("bookmarks", "cuts"):
+        if old.get(key):
+            data[key] = old[key]
+    return _write(path, data) if secs or data.get("bookmarks") or data.get("cuts") else _write(path, {})
 
 
 def load_prep(video: str | Path) -> list[TrackSection]:

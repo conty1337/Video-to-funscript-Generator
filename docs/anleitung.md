@@ -36,6 +36,9 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
      ein paar Pixeln Abstand zum Rand (im Bild rot schraffiert). Gut, wenn
      direkt daneben etwas liegt, das sich anders bewegt, z.B. Finger, Hand
      oder Fuß. Rechtsklick → „Umrandung entfernen“ macht wieder ein Rechteck.
+   - **Löschen**: Rechtsklick aufs Kästchen → „Bereich entfernen“, Rechtsklick
+     daneben → „Abschnitt hier löschen“. Versehentlich gelöscht? **Strg+Z**
+     holt es zurück (auch Rollen, Pfeile, verschobene Kästchen).
    - **Hub-Richtung** (Knopf oder Taste H): einen Pfeil entlang der
      Stoßrichtung ziehen, die Spitze zeigt nach *raus*. Gemessen wird dann nur
      entlang des Pfeils, seitliches Wackeln zählt nicht. Gut bei Maschinen, die
@@ -95,7 +98,15 @@ Muster-Steuerung für einen Bereich ein.
   **Gerät** (Strg+D) → Verbinden. Beim ersten Mal am besten Gerät →
   **Einrichtungs-Assistent**. Ohne Gerät: „Simulation“.
 - **Player** (Strg+P): Videos in die Playlist ziehen, „Playlist abspielen“.
-  Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown.
+  Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown
+  (Länge unter „Countdown vor dem Start“ einstellbar, 3–30 s).
+  Schnitte (siehe unten) werden übersprungen, auf Wunsch auch jede Pause ohne
+  Hübe ab 15 s („Pausen ohne Hübe überspringen“). Wenn es danach weitergeht,
+  zählt der Countdown wie am Anfang herunter.
+- **Schnitt** (im Editor): Wo nichts passiert, **X** am Anfang und **X** am
+  Ende drücken, oder **Umschalt+X** = Schnitt bis zum Countdown vor dem nächsten Hub.
+  Schraffiert in der Kurve; der Player springt darüber. Entfernen: Bearbeiten
+  → „Schnitt hier entfernen“.
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
   abspielen. Nur zwei Regler, **Tiefe** und **Tempo**. Sie bleiben gespeichert
   und lassen sich beim Abspielen ändern: ↑/↓ Tiefe, ←/→ Tempo, Leertaste
@@ -143,6 +154,8 @@ Muster-Steuerung für einen Bereich ein.
 | ← / → | Bild zurück/vor, mit Umschalt 1 s |
 | E / D / A | Abschnitt-Ende, ganz drin, ganz draußen |
 | B, Alt+← / Alt+→ | Lesezeichen setzen, voriges/nächstes |
+| X, Umschalt+X | Schnitt Anfang/Ende, Schnitt bis zum nächsten Hub |
+| U, H | Umranden, Hub-Richtung (Tracking) |
 | Strg+Mausrad, Strg+0 | Video zoomen, Zoom zurücksetzen |
 | Strg+T | Rhythmus einfügen |
 | Strg+S | Script speichern |

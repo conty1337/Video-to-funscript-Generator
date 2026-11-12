@@ -20,7 +20,7 @@ from typing import ClassVar
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
 from .. import editing
@@ -63,6 +63,8 @@ class CurveWidget(QWidget):
         self.bookmarks: list[tuple[int, str]] = []
         self._edge: tuple[int, str] | None = None   # section edge being dragged
         self.lost: list[tuple] = []      # tracking: (start, end) where an area was lost
+        self.cuts: list[tuple] = []      # (start, end) the player skips
+        self.cut_open: float | None = None   # a cut started here, its end not set yet
         self._sel: set[int] = set()          # selected action indices
         self._drag_from: QPointF | None = None
         self._drag_base: list[Action] | None = None
@@ -96,6 +98,11 @@ class CurveWidget(QWidget):
 
     def set_sections(self, sections) -> None:
         self.sections = list(sections)
+        self.update()
+
+    def set_cuts(self, cuts, open_at: float | None = None) -> None:
+        self.cuts = list(cuts)
+        self.cut_open = open_at
         self.update()
 
     def set_bookmarks(self, bookmarks) -> None:
@@ -264,6 +271,24 @@ class CurveWidget(QWidget):
                 p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
                 p.setPen(QColor(190, 165, 240))
                 p.drawText(QPointF(x + 4, r.top() + 24), name)
+        # cuts: hatched, the player jumps over them
+        for a, b in self.cuts:
+            x0, x1 = self._x(a), self._x(b)
+            if x1 < r.left() or x0 > r.right():
+                continue
+            band = QRectF(x0, r.top(), max(2.0, x1 - x0), r.height())
+            p.fillRect(band, QColor(0, 0, 0, 90))
+            p.fillRect(band, QBrush(theme.qcolor(theme.TEXT_2, 0.25), Qt.BDiagPattern))
+            p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.7), 1))
+            p.drawLine(QPointF(x0, r.top()), QPointF(x0, r.bottom()))
+            p.drawLine(QPointF(x1, r.top()), QPointF(x1, r.bottom()))
+            p.setPen(theme.qcolor(theme.TEXT_2))
+            p.drawText(QPointF(max(x0, r.left()) + 4, r.bottom() - 10), "✂ Schnitt")
+        if self.cut_open is not None:
+            x = self._x(self.cut_open)
+            p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.9), 1, Qt.DashLine))
+            p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
+            p.drawText(QPointF(x + 4, r.bottom() - 10), "✂ ab hier …")
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)
