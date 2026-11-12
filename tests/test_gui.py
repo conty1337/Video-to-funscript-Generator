@@ -1597,7 +1597,7 @@ def test_roles_outlines_and_stroke_in_the_sections(app):
     assert tb.sections[0].boxes == (toy,) and tb.sections[0].keys[0][1] == 0 and len(changes) == n + 1
     assert "Abschnitt" in tb.set_stroke(1000, (0.5, 0.6, 0.4, 0.5))
     assert tb.stroke_at(500) == (0.5, 0.6, 0.4, 0.5) and gens
-    assert "↕" in tb.list.item(0).text()
+    assert "Hub-Richtung" in tb.list.item(0).toolTip()
     tb.set_stroke(1000, None)
     assert tb.stroke_at(500) is None
     # a new section after a scene cut keeps the arrow of the one it splits

@@ -282,13 +282,16 @@ class CurveWidget(QWidget):
             p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.7), 1))
             p.drawLine(QPointF(x0, r.top()), QPointF(x0, r.bottom()))
             p.drawLine(QPointF(x1, r.top()), QPointF(x1, r.bottom()))
+            lx = max(x0, r.left()) + 4
+            p.drawPixmap(int(lx), int(r.bottom() - 22), theme.icon_pixmap("scissors", theme.TEXT_2, 14))
             p.setPen(theme.qcolor(theme.TEXT_2))
-            p.drawText(QPointF(max(x0, r.left()) + 4, r.bottom() - 10), "✂ Schnitt")
+            p.drawText(QPointF(lx + 18, r.bottom() - 10), "Schnitt")
         if self.cut_open is not None:
             x = self._x(self.cut_open)
             p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.9), 1, Qt.DashLine))
             p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
-            p.drawText(QPointF(x + 4, r.bottom() - 10), "✂ ab hier …")
+            p.drawPixmap(int(x + 4), int(r.bottom() - 22), theme.icon_pixmap("scissors", theme.TEXT_2, 14))
+            p.drawText(QPointF(x + 22, r.bottom() - 10), "Schnitt ab hier, Ende fehlt")
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)

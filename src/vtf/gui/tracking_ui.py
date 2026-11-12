@@ -508,8 +508,7 @@ class TrackingBox(QWidget):
             half = s.calib_in_ms is not None or s.calib_out_ms is not None
             cal = "kalibriert" if s.calibrated else ("halb kalibriert" if half else "relativ")
             fix = f"  ·  {len(s.keys)}× korr." if s.keys else ""
-            arrow = "  ·  ↕" if s.stroke else ""
-            item = QListWidgetItem(f"{i + 1}   {fmt_ms(a)} – {fmt_ms(b)}   ·  {n} Ber.  ·  {cal}{fix}{arrow}")
+            item = QListWidgetItem(f"{i + 1}   {fmt_ms(a)} – {fmt_ms(b)}   ·  {n} Ber.  ·  {cal}{fix}")
             item.setData(Qt.UserRole, s.start_ms)
             tip = [f"Bereiche: {n} (1 = Toy / bewegt" + (", 2–3 = Bezug)" if n > 1 else ")")]
             lined = [str(a + 1) for a in range(n) if s.outline(a)]

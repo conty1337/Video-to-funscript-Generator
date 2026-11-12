@@ -11,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -238,16 +238,16 @@ class MainWindow(QMainWindow):
         self.edit_tools = QWidget()                 # buttons for the menu commands, editing only
         tools = QHBoxLayout(self.edit_tools)
         tools.setContentsMargins(0, 0, 0, 0)
-        tools.setSpacing(6)
+        tools.setSpacing(8)
         self.cut_btn = self._tool("scissors", "Schnitt", self.toggle_cut,
                                   "Schnitt: Anfang hier, nochmal am Ende drücken (X). Der Player springt darüber")
         self.cut_btn.setCheckable(True)
-        self._tool("scissors", "Bis zum nächsten Hub", self.cut_to_next_move,
+        self._tool("skip-forward", "Bis zum nächsten Hub", self.cut_to_next_move,
                    "Schnitt von hier bis zum Countdown vor dem nächsten Hub (Umschalt+X)", tools)
         self._tool("x", "Schnitt weg", self.remove_cut_here, "Schnitt an der Abspielposition entfernen", tools)
         tools.insertWidget(0, self.cut_btn)
-        tools.addSpacing(10)
-        self._tool("", "Glätten", self.smooth_points, "Ausgewählte Punkte glätten (Strg+G)", tools)
+        tools.addSpacing(12)                        # cuts, then the other edits
+        self._tool("waves", "Glätten", self.smooth_points, "Ausgewählte Punkte glätten (Strg+G)", tools)
         self._tool("bookmark", "Lesezeichen", self.add_bookmark, "Lesezeichen an der Abspielposition (B)", tools)
         self._tool("plus", "Rhythmus", self.insert_rhythm, "Rhythmus oder Muster einfügen (Strg+T)", tools)
         head.addWidget(self.edit_tools)
@@ -511,7 +511,7 @@ class MainWindow(QMainWindow):
 
     def _tool(self, icon: str, text: str, slot, tip: str, layout=None) -> QPushButton:
         """A small button in the timeline header for a menu command."""
-        b = QPushButton(theme.icon(icon, theme.TEXT_2, 14) if icon else QIcon(), text)
+        b = QPushButton(theme.icon(icon, theme.TEXT_2, 16), text)
         b.setObjectName("tool")
         b.setToolTip(tip)
         b.setFocusPolicy(Qt.NoFocus)
@@ -730,7 +730,7 @@ class MainWindow(QMainWindow):
                 merged.append(c)
         self.cuts = merged
         self._cuts_changed()
-        return f"✂ Schnitt {_fmt(a)} – {_fmt(b)}: der Player springt darüber"
+        return f"Schnitt {_fmt(a)} – {_fmt(b)}: der Player springt darüber"
 
     def toggle_cut(self):
         """X: first press marks where the cut starts, the second where it ends."""
@@ -741,7 +741,7 @@ class MainWindow(QMainWindow):
         if self._cut_start is None:
             self._cut_start = ms
             self._show_cuts()
-            self._status(f"✂ Schnitt beginnt bei {_fmt(ms)} – zum Ende spulen und nochmal X")
+            self._status(f"Schnitt beginnt bei {_fmt(ms)} – zum Ende spulen und nochmal X")
             return
         start, self._cut_start = self._cut_start, None
         self._status(self.add_cut(start, ms))
@@ -793,7 +793,7 @@ class MainWindow(QMainWindow):
         else:
             self.seek_ms(to)
             self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
-            self._status(f"✂ übersprungen bis {_fmt(to)}")
+            self._status(f"Übersprungen bis {_fmt(to)}")
         return True
 
     # ------------------------------------------------------------ bookmarks
