@@ -137,6 +137,9 @@ Video.
      skaliert wird (0 = über das ganze Video).
    * **Bewegungsumfang**: minimale/maximale Position (0–100).
    * **Umkehren** / **Immer voller Hub**.
+   * **Plateaus: ein Punkt in der Mitte** (an): Bleibt es ganz drin oder ganz
+     draußen kurz stehen oder zittert dort, kommt ein Punkt in die Mitte statt
+     zwei an die Ränder. Aus, wenn dort echte kleine Doppelstöße sind.
 5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = neuer Punkt,
    Rechtsklick oder Entf = löschen, Mausrad = Zoom, Klick in die Kurve = zu
    dieser Stelle springen. Strg+Z / Strg+Umschalt+Z.

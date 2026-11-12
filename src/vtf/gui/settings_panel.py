@@ -153,8 +153,14 @@ class SettingsPanel(QWidget):
         lay.addSpacing(4)
         self.invert = QCheckBox("Richtung umkehren")
         self.full_stroke = QCheckBox("Immer voller Hub")
+        self.plateaus = QCheckBox("Plateaus: ein Punkt in der Mitte")
+        self.plateaus.setToolTip("Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), "
+                                 "kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. "
+                                 "Aus, wenn dort echte kleine Doppelstöße sind")
+        self.plateaus.setChecked(True)
         lay.addWidget(self.invert)
         lay.addWidget(self.full_stroke)
+        lay.addWidget(self.plateaus)
         lay.addStretch(1)
 
         lay = QVBoxLayout(self.analysis_page)
@@ -250,6 +256,7 @@ class SettingsPanel(QWidget):
         self.axis.currentIndexChanged.connect(self.generatorChanged)
         self.invert.toggled.connect(self.generatorChanged)
         self.full_stroke.toggled.connect(self.generatorChanged)
+        self.plateaus.toggled.connect(self.generatorChanged)
         self.width.currentIndexChanged.connect(self.analysisChanged)
         self.step.valueChanged.connect(self.analysisChanged)
         self.cam.toggled.connect(self.analysisChanged)
@@ -324,7 +331,7 @@ class SettingsPanel(QWidget):
             drift_window_ms=self.drift.value(), normalize_window_ms=self.norm.value(),
             min_interval_ms=self.min_interval.value(), pos_min=self.pos_min.value(),
             pos_max=self.pos_max.value(), full_stroke=self.full_stroke.isChecked(),
-            max_speed=self.max_speed.value())
+            max_speed=self.max_speed.value(), plateaus=self.plateaus.isChecked())
 
     def analysis_settings(self) -> AnalysisSettings:
         return AnalysisSettings(
@@ -345,7 +352,7 @@ class SettingsPanel(QWidget):
         g = {k: v for k, v in (d.get("generator") or {}).items() if k in gen}
         a = d.get("analysis") or {}
         widgets = [self.axis, self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm,
-                   self.pos_min, self.pos_max, self.invert, self.full_stroke, self.width, self.step,
+                   self.pos_min, self.pos_max, self.invert, self.full_stroke, self.plateaus, self.width, self.step,
                    self.cam, self.opencl, self.hwaccel, self.method, self.max_speed, self.turn,
                    self.anchor, self.tracking.ai_check]
         for w in widgets:
@@ -360,6 +367,7 @@ class SettingsPanel(QWidget):
                     w.setValue(int(g[key]))
             self.invert.setChecked(bool(g.get("invert", False)))
             self.full_stroke.setChecked(bool(g.get("full_stroke", False)))
+            self.plateaus.setChecked(bool(g.get("plateaus", True)))
             _set_combo(self.width, a.get("width"))
             self.step.setValue(int(a.get("frame_step", 1)))
             self.cam.setChecked(bool(a.get("compensate_camera", True)))
