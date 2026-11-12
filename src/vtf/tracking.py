@@ -34,6 +34,9 @@ LOOK_MARGIN = 0.1        # ... and go there when the look is this much more sure
 LOOK_CHECK_OFF = 0.1     # ... but only when the points moved this far (box sizes) from the expected move
 LOST_REACH_FRAC = 0.1    # after a loss look at least this part of the picture width around
 FEW_POINTS = 6           # fewer than this: follow the area by its look (template), not by points
+REACQUIRE_FINE = 0.3     # found again: turns and sizes are tried this far (box sizes) around the place
+LOST_SLOW_AFTER = 15     # lost this many frames: look for it only every LOST_SLOW_EVERY-th frame
+LOST_SLOW_EVERY = 3
 FB_MAX_ERR = 1.0         # px, forward-backward consistency
 MAX_AREAS = 3
 OUTLINE_INSET = 0.06     # outline: points stay this part of the area's smaller side inside
@@ -311,11 +314,15 @@ class AreaTracker:
         return float(score), per_px * (np.array([[c, -s], [s, c]]) @ local)
 
     def _best(self, gray: np.ndarray, tpls, reach: float) -> tuple[float, np.ndarray]:
-        best = (-1.0, np.zeros(2))
+        return self._best_tpl(gray, tpls, reach)[:2]
+
+    def _best_tpl(self, gray: np.ndarray, tpls, reach: float) -> tuple[float, np.ndarray, tuple | None]:
+        """Like _best, and which of the looks it was (to try variants with that one only)."""
+        best = (-1.0, np.zeros(2), None)
         for t in tpls:
-            r = self._match(gray, t, reach)
-            if r[0] > best[0]:
-                best = r
+            score, off = self._match(gray, t, reach)
+            if score > best[0]:
+                best = (score, off, t)
         return best
 
     def _lost_reach(self) -> float:
@@ -330,19 +337,27 @@ class AreaTracker:
         tpls = ([self.recent] if self.recent is not None else []) + self.templates
         if not tpls:
             return False
-        # it may have turned or changed size meanwhile: try a few turns and sizes
         base = (self.angle, self.scale)
-        best = (-1.0, np.zeros(2), base)
-        turns = (0.0, -8.0, 8.0, -16.0, 16.0) if self.turn else (0.0,)
-        sizes = (1.0, 1.1, 1 / 1.1) if self.turn else (1.0,)
-        for d_ang in turns:
-            for d_sc in sizes:
-                self.angle, self.scale = base[0] + d_ang, base[1] * d_sc
-                score, off = self._best(gray, tpls, reach)
-                if score > best[0]:
-                    best = (score, off, (self.angle, self.scale))
-            if best[0] > 0.8:
-                break
+        old = self.center.copy()
+        # where: the whole reach, as it looked (a turn of up to 16 degrees still finds the
+        # place, a bit less sure). Searching every turn and size over the whole reach made
+        # one search cost ~15x as much, every frame while an area was lost
+        score, off, tpl = self._best_tpl(gray, tpls, reach)
+        best = (score, off, base)
+        if self.turn and tpl is not None:
+            # it may have turned or changed size meanwhile: try a few, close to that place
+            self.center = old + off
+            for d_ang in (0.0, -8.0, 8.0, -16.0, 16.0):
+                for d_sc in (1.0, 1.1, 1 / 1.1):
+                    if d_ang == 0.0 and d_sc == 1.0:
+                        continue
+                    self.angle, self.scale = base[0] + d_ang, base[1] * d_sc
+                    sc_, off_ = self._match(gray, tpl, REACQUIRE_FINE)   # the look that fit best
+                    if sc_ > best[0]:
+                        best = (sc_, off + off_, (self.angle, self.scale))
+                if best[0] > 0.8:
+                    break
+            self.center = old
         self.angle, self.scale = base
         score, off, (ang, sc) = best
         if score < self.GOOD_SCORE:
@@ -452,10 +467,14 @@ class AreaTracker:
         reach = min(2.0, 0.6 + float(np.hypot(*self.vel)) / max(box, 1.0))
         self.center = np.asarray(start, np.float64)
         best = (-1.0, self.center.copy(), base)
-        # it may grow or shrink from frame to frame (coming closer to the camera)
+        # it may grow or shrink from frame to frame (coming closer to the camera); the other
+        # sizes only with the look that fit best at the size it has
+        tpls = self._look_tpls()
         for f in ((1.0, 1.08, 1 / 1.08) if self.turn else (1.0,)):
             self.scale = float(np.clip(base * f, 0.4, 2.5))
-            score, off = self._best(cur, self._look_tpls(), reach)
+            score, off, tpl = self._best_tpl(cur, tpls, reach)
+            if f == 1.0 and tpl is not None:
+                tpls = [tpl]
             if score > best[0]:
                 best = (score, self.center + off, self.scale)
         self.center, self.scale = old_c, base
@@ -522,7 +541,9 @@ class AreaTracker:
             return np.zeros(2)
         if self.outside:
             return self._wait_outside(cur)
-        if self.lost_frames >= 2 and self._reacquire(cur, self._lost_reach()):
+        if (self.lost_frames >= 2
+                and (self.lost_frames < LOST_SLOW_AFTER or self.lost_frames % LOST_SLOW_EVERY == 0)
+                and self._reacquire(cur, self._lost_reach())):
             # found again: position fixed, but no motion from this frame (unknown path)
             self.lost_frames = 0
             self.lost = False
