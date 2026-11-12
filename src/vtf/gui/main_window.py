@@ -370,6 +370,7 @@ class MainWindow(QMainWindow):
         self.view.strokeDrawn.connect(self._stroke_drawn)
         self.view.areaMenuRequested.connect(self._area_menu)
         self.panel.tracking.drawModeChanged.connect(self.view.set_draw_mode)
+        self.panel.tracking.autoRequested.connect(self.auto_find)
         self.view.sectionMenuRequested.connect(self._section_menu)
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -476,6 +477,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
         self._act(m, "KI-Vorschlag für Kästchen", self.suggest_boxes, "K")
+        self._act(m, "Bereiche automatisch finden", self.auto_find, "F")
         self._act(m, "Umranden statt Rechteck an/aus", lambda: self._toggle_draw("outline"), "U")
         self._act(m, "Hub-Richtung ziehen", lambda: self._toggle_draw("stroke"), "H")
         self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
@@ -1149,6 +1151,41 @@ class MainWindow(QMainWindow):
 
     def _cur_ms(self) -> float:
         return max(0, self._cur_idx) / self.fps * 1000 if self.cap else 0.0
+
+    def auto_find(self):
+        """Find toy, reference and stroke direction from the playhead on, as a new section."""
+        if self.player_mode or not self.video_path or self.panel.mode != "track":
+            self._status("Automatisch finden: erst ein Video öffnen und „Tracking“ als Methode wählen")
+            return
+        from ..autofind import find_in_video
+
+        self.pause()
+        ms = self._cur_ms()
+        self._status("Suche, was sich im Rhythmus bewegt …")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            found = find_in_video(self.video_path, ms)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if found is None:
+            self._status("Automatisch finden: hier bewegt sich nichts deutlich im Rhythmus – an eine Stelle "
+                         "mit gleichmäßigen Hüben spulen oder selbst markieren")
+            return
+        tb = self.panel.tracking
+        i = tb.index_at(ms)
+        replaced = i is not None and abs(tb.sections[i].start_ms - ms) <= 1000 / self.fps * 0.6
+        if replaced:                            # marked here already: the found areas replace them
+            tb.delete_at(ms)
+        tb.add_box(found.toy, ms, (), outline=found.outline)
+        if found.body is not None:
+            tb.add_box(found.body, ms, ())
+        if found.stroke is not None:
+            tb.set_stroke(ms, found.stroke)
+        self._update_track_overlay(ms)
+        sure = "sicher" if found.sure >= 0.7 else "unsicher – bitte genau prüfen"
+        self._status(f"Gefunden ({sure}): Toy umrandet{', Bezug' if found.body else ', kein Bezug'}, "
+                     f"Hub-Richtung, etwa {found.rate * 60:.0f} Hübe/min – prüfen, dann analysieren"
+                     + (" · die Kästchen von vorher ersetzt, Strg+Z holt sie zurück" if replaced else ""))
 
     def suggest_boxes(self):
         """KI-Vorschlag: find body parts in the shown frame and offer them as boxes."""

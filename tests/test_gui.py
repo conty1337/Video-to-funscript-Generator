@@ -1851,3 +1851,37 @@ def test_script_check_marks_and_jumps(app, sine_video, monkeypatch):
     finally:
         w.dirty = False                 # no "unsaved changes" question when a check fails
         w.close()
+
+
+def test_auto_find_marks_toy_reference_and_arrow(app, tmp_path):
+    from test_tracking import _finger_video
+
+    from vtf.gui.main_window import MainWindow
+
+    path = tmp_path / "auto.avi"
+    truth, (W, H) = _finger_video(path, n=150)
+    w = MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(path))
+        w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+        w.auto_find()
+        tb = w.panel.tracking
+        assert len(tb.sections) == 1
+        s = tb.sections[0]
+        assert len(s.boxes) == 2 and s.outline(0) and s.stroke is not None
+        x, y, bw, bh = s.boxes[0][:4]
+        cx, cy = (x + bw / 2) * W, (y + bh / 2) * H
+        assert abs(cx - truth[0][0]) < 25 and abs(cy - truth[0][1]) < 25         # on the toy
+        bx, by, bbw, bbh = s.boxes[1][:4]
+        assert 230 < (bx + bbw / 2) * W < 300                                    # the still finger
+        x0, y0, x1, y1 = s.stroke
+        assert abs((y1 - y0) * H) > 3 * abs((x1 - x0) * W)                       # strokes go up and down
+        w.auto_find()                                                            # again here: replaces
+        assert len(tb.sections) == 1 and len(tb.sections[0].boxes) == 2
+        w.undo()
+        assert len(tb.sections[0].boxes) == 2
+    finally:
+        w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+        w.dirty = False
+        w.close()

@@ -51,6 +51,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 30 | Toy umranden statt Rechteck, Rollen (Toy / Bezug), Hub-Richtung als Pfeil | ✅ |
 | 31 | Schnitte (X): Stellen ohne Handlung markieren, der Player springt darüber; Pausen ohne Hübe überspringen | ✅ |
 | 32 | Script-Prüfung: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin | ✅ |
+| 33 | Automatisch finden (F): Toy umrandet, Bezug und Hub-Richtung aus der rhythmischen Bewegung | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -168,6 +169,12 @@ Jeder Bereich wird mit vielen Bildpunkten verfolgt.
 * 2–3 Bereiche: Bereich 1 (das Toy, was sich bewegt) relativ zu den anderen
   (Bezug, z.B. der Körper). Dann spielt die Kamera keine Rolle mehr, auch Zoom
   und Schwenks stören kaum. Rechtsklick auf ein Kästchen ändert die Rolle.
+* **Automatisch finden** (F oder Knopf): Die App schaut sich ein paar Sekunden ab
+  der Abspielposition an. Was sich weit, gleichmäßig im Rhythmus und gemeinsam
+  bewegt, wird das Toy (gleich umrandet), eine Stelle mit Muster daneben, die sich
+  wenig bewegt, der Bezug, dazu die Hub-Richtung (Spitze vom Bezug weg = raus).
+  Danach kurz prüfen und bei Bedarf anpassen. Am besten an einer Stelle mit
+  gleichmäßigen Hüben und ruhiger Kamera.
 * **Umranden** (U): eng um das Toy fahren statt ein Rechteck aufzuziehen. Nur
   Punkte innen, mit ein paar Pixeln Abstand zum Rand, werden verfolgt – Finger
   oder Fuß direkt daneben ziehen das Kästchen nicht mehr weg.

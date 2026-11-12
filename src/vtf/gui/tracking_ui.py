@@ -45,6 +45,7 @@ class TrackingBox(QWidget):
     message = Signal(str)
     suggestRequested = Signal()     # "KI-Vorschlag": find body parts in the current frame
     drawModeChanged = Signal(str)   # "box", "outline" or "stroke": what a drag in the video draws
+    autoRequested = Signal()        # "Automatisch finden": toy, reference and arrow by themselves
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,6 +111,14 @@ class TrackingBox(QWidget):
         self.outline_btn.toggled.connect(self._draw_mode_clicked)
         self.stroke_btn.toggled.connect(self._draw_mode_clicked)
         self.stroke_del.clicked.connect(self._stroke_del_clicked)
+        self.auto_btn = QPushButton("Automatisch finden")
+        self.auto_btn.setToolTip(
+            "Sucht ab hier ein paar Sekunden lang, was sich im Rhythmus bewegt: das wird das Toy "
+            "(umrandet), eine Stelle mit Muster daneben der Bezug, dazu die Hub-Richtung (F). Danach "
+            "kurz prüfen und bei Bedarf anpassen")
+        self.auto_btn.setStyleSheet("padding: 0 8px;")
+        lay.addWidget(self.auto_btn)
+        self.auto_btn.clicked.connect(self.autoRequested)
         self.ai_btn = QPushButton("KI-Vorschlag")
         self.ai_btn.setToolTip("Körperteile im aktuellen Bild erkennen (Becken, Mund, Hände, …) und "
                                "als Kästchen vorschlagen (K). Beim ersten Mal werden die KI-Modelle "

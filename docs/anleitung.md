@@ -25,6 +25,9 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    - *Tracking*: du markierst, was verfolgt wird. Genauer, empfohlen.
 3. **Markieren** (bei Tracking): an eine Stelle spulen, wo alles gut zu sehen
    ist, und Kästchen ins Video ziehen.
+   - Schneller: **Automatisch finden** (F) an einer Stelle mit gleichmäßigen
+     Hüben. Die App setzt Toy (umrandet), Bezug und Hub-Richtung selbst. Danach
+     kurz prüfen, ob alles sitzt, sonst anpassen wie unten.
    - **Kästchen 1** auf das Teil, das sich bewegt (im Bild „1 Toy“).
    - **Kästchen 2** (und 3) auf ein Gegenstück, das stillhält oder sich
      anders bewegt (im Bild „Bezug“, z.B. der Körper). Gemessen wird der
@@ -163,6 +166,7 @@ Muster-Steuerung für einen Bereich ein.
 | B, Alt+← / Alt+→ | Lesezeichen setzen, voriges/nächstes |
 | X, Umschalt+X | Schnitt Anfang/Ende, Schnitt bis zum nächsten Hub |
 | F3, Umschalt+F3 | nächste/vorige Stelle aus der Prüfung |
+| F | Bereiche automatisch finden (Tracking) |
 | U, H | Umranden, Hub-Richtung (Tracking) |
 | Strg+Mausrad, Strg+0 | Video zoomen, Zoom zurücksetzen |
 | Strg+T | Rhythmus einfügen |
