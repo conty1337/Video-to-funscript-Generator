@@ -407,6 +407,7 @@ class MainWindow(QMainWindow):
         self._act(m, "Funscript laden…", self.load_funscript_dialog)
         m.addSeparator()
         self._act(m, "Stapelverarbeitung…", self.open_batch, "Ctrl+B")
+        self._act(m, "Bibliothek…", self.open_library, "Ctrl+L")
         m.addSeparator()
         self._act(m, "Beenden", self.close, QKeySequence.Quit)
         m = self.menuBar().addMenu("&Bearbeiten")
@@ -507,6 +508,8 @@ class MainWindow(QMainWindow):
         tb.addAction(theme.icon("folder-open"), "Öffnen", self.open_dialog)
         self.save_action = tb.addAction(theme.icon("save"), "Speichern", self.export)
         tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
+        tb.addAction(theme.icon("library"), "Bibliothek", self.open_library).setToolTip(
+            "Alle Scripts eines Ordners mit Heatmap, Suche und Bewertung (Strg+L)")
         tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
         tb.addAction(theme.icon("activity"), "Muster", self.open_patterns).setToolTip(
             "Muster-Steuerung: fertige und eigene Muster auf dem Gerät abspielen (Strg+M)")
@@ -1965,6 +1968,30 @@ class MainWindow(QMainWindow):
             self.curve.set_actions(fs.actions)
             self._update_axis_labels()
             self._status(f"Geladen in Achse {AXES[self.axis][0]}: {path}")
+
+    def open_library(self):
+        from .library_dialog import LibraryDialog
+
+        dlg = LibraryDialog(self.qsettings, self)
+        dlg.playRequested.connect(self._library_play)
+        dlg.queueRequested.connect(self._library_queue)
+        dlg.editRequested.connect(self._library_edit)
+        dlg.exec()
+
+    def _library_play(self, path: str):
+        self.player.add_paths([path])
+        items = self.player.playlist.items
+        target = str(Path(path).resolve())
+        if target in items:
+            self.play_index(items.index(target))
+
+    def _library_queue(self, paths: list):
+        n = self.player.add_paths(paths)
+        self._status(f"{n} Video{'s' if n != 1 else ''} zur Playlist hinzugefügt")
+
+    def _library_edit(self, path: str):
+        self.set_player_mode(False)
+        self.open_video(path)
 
     def open_batch(self):
         folder = str(Path(self.video_path).parent) if self.video_path else self.qsettings.value("last_dir", "")

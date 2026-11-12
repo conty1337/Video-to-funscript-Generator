@@ -52,6 +52,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 31 | Schnitte (X): Stellen ohne Handlung markieren, der Player springt darüber; Pausen ohne Hübe überspringen | ✅ |
 | 32 | Script-Prüfung: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin | ✅ |
 | 33 | Automatisch finden (F): Toy umrandet, Bezug und Hub-Richtung aus der rhythmischen Bewegung | ✅ |
+| 34 | Bibliothek (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche, Sortierung und Sternen | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -313,6 +314,14 @@ Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s von selbst
 („Pausen ohne Hübe überspringen“; nach dem letzten Hub kommt das nächste
 Video). Wie am Anfang zählt dann der Countdown herunter, bis es weitergeht –
 nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
+
+**Bibliothek** (Strg+L oder Knopf oben): zeigt alle Videos mit Script aus einem
+Ordner (mit Unterordnern) mit Länge, Hüben pro Minute, mittlerem Tempo, Bewertung
+und Heatmap. Suchen, sortieren (Name, Bewertung, Tempo, Neueste, Länge) und nach
+Sternen filtern. Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
+Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Editor
+öffnen“ zum Bearbeiten. Die Bewertungen bleiben auf dem Rechner
+(`~/.config/video-to-funscript/library.json`).
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

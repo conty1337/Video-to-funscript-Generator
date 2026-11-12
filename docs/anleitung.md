@@ -117,6 +117,8 @@ Muster-Steuerung für einen Bereich ein.
   Schraffiert in der Kurve; der Player springt darüber. Entfernen: Bearbeiten
   → „Schnitt hier entfernen“. Alles auch als Knöpfe oben in der Zeitleiste
   (Schnitt, Bis zum nächsten Hub, Schnitt weg, Glätten, Lesezeichen, Rhythmus).
+- **Bibliothek** (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche,
+  Sortierung und Sternen. Doppelklick spielt ab, Taste 1–5 bewertet.
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
   abspielen. Nur zwei Regler, **Tiefe** und **Tempo**. Sie bleiben gespeichert
   und lassen sich beim Abspielen ändern: ↑/↓ Tiefe, ←/→ Tempo, Leertaste

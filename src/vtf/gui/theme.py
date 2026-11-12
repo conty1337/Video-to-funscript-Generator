@@ -64,6 +64,7 @@ _ICONS = {
                 '<circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
     "alert": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>'
              '<path d="M12 9v4"/><path d="M12 17h.01"/>',
+    "library": '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
     "bookmark": '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
     "waves": '<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>'
              '<path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>'
@@ -225,6 +226,10 @@ QSlider::handle:horizontal:disabled {{ background: {MUTED}; }}
 QSlider#timeline::sub-page:horizontal {{ background: {ACCENT}; }}
 QSlider#volume {{ min-width: 72px; max-width: 88px; }}
 
+QTreeWidget#library {{ background: {DEEP}; border: 1px solid {HAIRLINE}; border-radius: 8px; outline: none; }}
+QTreeWidget#library::item {{ padding: 8px 4px; color: {TEXT}; }}
+QTreeWidget#library::item:hover {{ background: {CARD}; }}
+QTreeWidget#library::item:selected {{ background: {RAISED}; color: {TEXT}; }}
 QListWidget#playlist {{ background: {DEEP}; border: none; outline: none; padding: 0 8px; }}
 QListWidget#playlist::item {{ padding: 8px; border-radius: 8px; color: {TEXT_2}; margin: 1px 0; }}
 QListWidget#playlist::item:hover {{ background: {CARD}; }}
