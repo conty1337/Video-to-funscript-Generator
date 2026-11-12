@@ -48,6 +48,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 27 | Handy-Fernbedienung im Browser, Einrichtungs-Assistent, Sicherheits-Timer | ✅ |
 | 28 | Andere Player (mpv, VLC, DeoVR, HereSphere), Vibratoren, TCode-Geräte (OSR2/SR6) mit allen Achsen | ✅ |
 | 29 | Bildrand und kurze Verdeckungen überbrücken, KI-Körpererkennung: Kästchen-Vorschlag und KI-Kontrolle | ✅ |
+| 30 | Toy umranden statt Rechteck, Rollen (Toy / Bezug), Hub-Richtung als Pfeil | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -159,15 +160,22 @@ stellt die Lautstärke ein. Beides merkt sich die App.
 und im Video bis zu 3 Bereiche aufziehen, z.B. um die beiden Körperteile.
 Jeder Bereich wird mit vielen Bildpunkten verfolgt.
 * 1 Bereich: dessen Bewegung (Kamerabewegung wird abgezogen).
-* 2–3 Bereiche: Bereich 1 relativ zu den anderen. Dann spielt die Kamera keine
-  Rolle mehr, auch Zoom und Schwenks stören kaum.
+* 2–3 Bereiche: Bereich 1 (das Toy, was sich bewegt) relativ zu den anderen
+  (Bezug, z.B. der Körper). Dann spielt die Kamera keine Rolle mehr, auch Zoom
+  und Schwenks stören kaum. Rechtsklick auf ein Kästchen ändert die Rolle.
+* **Umranden** (U): eng um das Toy fahren statt ein Rechteck aufzuziehen. Nur
+  Punkte innen, mit ein paar Pixeln Abstand zum Rand, werden verfolgt – Finger
+  oder Fuß direkt daneben ziehen das Kästchen nicht mehr weg.
+* **Hub-Richtung** (H): Pfeil entlang der Stoßrichtung, Spitze = raus. Das
+  Script misst nur entlang des Pfeils, seitliches Wackeln zählt nicht.
 
 *Abschnitte*: Das Markieren startet einen Abschnitt an dieser Stelle. **Ende
 hier** (Taste E) beendet ihn, z.B. wenn die Szene vorbei ist. Nach einem
 Szenenwechsel einfach an der neuen Stelle wieder markieren, dann beginnt dort
 ein neuer Abschnitt. Nur in Abschnitten entstehen Punkte. Die Abschnitte stehen
 als Liste in den Einstellungen (Klick springt zum Start) und als helle Bänder in
-der Kurve. Rechtsklick ins Video löscht den Abschnitt an dieser Stelle.
+der Kurve. Rechtsklick ins Video (neben die Kästchen) löscht den Abschnitt an
+dieser Stelle.
 
 *Tiefen-Kalibrierung*: Zu einer Stelle spulen, wo es ganz drin ist, und **Ganz
 drin** (Taste D) klicken, dann zu einer Stelle ganz draußen und **Ganz

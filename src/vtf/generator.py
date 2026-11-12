@@ -86,16 +86,43 @@ def project(motion: MotionData, axis: str) -> np.ndarray:
     return -dy          # image y grows downwards
 
 
+def stroke_dir(motion: MotionData, stroke) -> np.ndarray | None:
+    """Unit vector (analysis px) of a stroke arrow (x0, y0, x1, y1 normalized), pointing
+    to its head ("out"); None without a usable arrow."""
+    if not stroke or len(stroke) < 4:
+        return None
+    w = float(motion.meta.get("width", 1) or 1)
+    h = float(motion.meta.get("height", 1) or 1)
+    v = np.array([(stroke[2] - stroke[0]) * w, (stroke[3] - stroke[1]) * h], np.float64)
+    n = float(np.hypot(*v))
+    return v / n if n > 1e-6 else None
+
+
+def project_sections(motion: MotionData, axis: str, sections=()) -> np.ndarray:
+    """Like project(), but tracking sections with a stroke arrow measure only along it:
+    sideways shaking and wobbling do not count."""
+    vel = project(motion, axis)
+    if motion.track_section is None:
+        return vel
+    for i, sec in enumerate(sections):
+        u = stroke_dir(motion, getattr(sec, "stroke", None))
+        if u is None:
+            continue
+        mask = motion.track_section == i
+        vel[mask] = motion.dx[mask] * u[0] + motion.dy[mask] * u[1]
+    return vel
+
+
 # ------------------------------------------------------------- pipeline
 
-def build_signal(motion: MotionData, s: GeneratorSettings) -> tuple[np.ndarray, np.ndarray]:
+def build_signal(motion: MotionData, s: GeneratorSettings, sections=()) -> tuple[np.ndarray, np.ndarray]:
     fps = motion.fps
     n = len(motion)
     t_ms = np.arange(n) * (1000.0 / fps)
     if n < 3:
         return t_ms, np.full(n, 0.5)
 
-    vel = project(motion, s.axis)
+    vel = project_sections(motion, s.axis, sections)
     pos = np.cumsum(vel)
     drift_n = int(round(s.drift_window_ms / 1000.0 * fps))
     if drift_n > 2:
@@ -257,7 +284,7 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
     """Script from the analysis. With tracking sections, points are only made
     inside them, and calibrated sections use the real depth."""
     s = s or GeneratorSettings()
-    t_ms, sig = build_signal(motion, s)
+    t_ms, sig = build_signal(motion, s, sections)
     if motion.track_section is None or not sections:
         return GeneratedScript(t_ms, sig, limit_speed(extract_actions(t_ms, sig, s), s.max_speed))
     sig = sig.copy()
@@ -281,12 +308,16 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
     return GeneratedScript(t_ms, sig, actions)
 
 
-def _measure(motion: MotionData, n_areas: int, axis: str) -> np.ndarray:
+def _measure(motion: MotionData, n_areas: int, axis: str, u: np.ndarray | None = None) -> np.ndarray:
     """What the depth is read from, per sample (px of the analysis frame):
-    the distance between areas 1 and 2, or with one area its position."""
+    the distance between areas 1 and 2, or with one area its position. With a stroke
+    direction `u`: only the part along it."""
     w = float(motion.meta.get("width", 1) or 1)
     h = float(motion.meta.get("height", 1) or 1)
     tr = motion.tracks.astype(np.float64) * np.array([w, h])
+    if u is not None:
+        rel = tr[:, 0] - tr[:, 1] if n_areas >= 2 else tr[:, 0]
+        return rel @ u
     if n_areas >= 2:
         return np.hypot(*(tr[:, 1] - tr[:, 0]).T)
     if axis == "horizontal":
@@ -304,7 +335,7 @@ def depth_signal(motion: MotionData, s: GeneratorSettings, section, index: int) 
     if not mask.any():
         return None
     n_areas = int(np.sum(~np.isnan(motion.track_sizes[index, :, 0]))) if motion.track_sizes is not None else 1
-    m = _measure(motion, n_areas, s.axis)
+    m = _measure(motion, n_areas, s.axis, stroke_dir(motion, getattr(section, "stroke", None)))
     fps = motion.fps
 
     def at(ms):

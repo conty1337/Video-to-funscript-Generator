@@ -6,7 +6,10 @@ Mode "track": drag up to three rectangles = areas to track (body parts,
               moved (drag inside), resized (drag a corner) and turned (round
               handle or mouse wheel). After the analysis the tracked areas are
               drawn where they are in the current frame; grabbing one there
-              puts it right (a correction).
+              puts it right (a correction). Draw mode "outline": a drag draws a
+              polygon around the thing instead of a rectangle; "stroke": a drag
+              draws the stroke arrow. Right click on an area opens its menu
+              (role, outline, remove).
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ import math
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QCursor,
@@ -27,6 +30,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..tracking import outline_inset
 from . import theme
 
 TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
@@ -36,6 +40,29 @@ MAX_ZOOM = 8.0
 SKEL_POINT = 10           # px around a body point that still picks it
 SKEL_LINE = 7            # px around a body line that still picks it
 GRAB = 8                 # px around a handle that still grabs it
+ROLE_NAMES = ("Toy", "Bezug", "Bezug")   # what area 1, 2, 3 are
+STROKE_COLOR = "#e86fd0"
+
+
+def lasso_to_box(points: list[tuple[float, float]], aspect: float):
+    """A drawn outline (normalized frame points) -> (box (x, y, w, h), outline in the
+    box's own coordinates), or None if it is too small. `aspect` = frame w / h."""
+    pts = np.asarray(points, np.float64)
+    if len(pts) < 3:
+        return None
+    # simplify in px-like coordinates (frame height = 1000)
+    px = (pts * [1000 * aspect, 1000]).astype(np.float32).reshape(-1, 1, 2)
+    simple = cv2.approxPolyDP(px, 2.0, True).reshape(-1, 2) / [1000 * aspect, 1000]
+    if len(simple) < 3:
+        return None
+    x0, y0 = simple.min(axis=0)
+    x1, y1 = simple.max(axis=0)
+    w, h = x1 - x0, y1 - y0
+    if w < MIN_SIZE or h < MIN_SIZE or cv2.contourArea(px) < (MIN_SIZE * 1000) ** 2 * aspect:
+        return None
+    uv = (simple - [x0 + w / 2, y0 + h / 2]) / [w, h]
+    box = (round(float(x0), 4), round(float(y0), 4), round(float(w), 4), round(float(h), 4))
+    return box, tuple((round(float(u), 4), round(float(v), 4)) for u, v in uv)
 
 
 class VideoView(QWidget):
@@ -46,6 +73,9 @@ class VideoView(QWidget):
     boxCorrected = Signal(int, tuple)  # mode "track": area i grabbed elsewhere and put right
     tracksCleared = Signal()      # mode "track": right click
     skeletonPicked = Signal(int, object)   # body recognition shown: (person, point | (a, b)) clicked
+    outlineDrawn = Signal(tuple, tuple)    # mode "track", draw mode "outline": (box, outline)
+    strokeDrawn = Signal(tuple)            # draw mode "stroke": arrow (x0, y0, x1, y1), head = out
+    areaMenuRequested = Signal(int, QPoint)   # right click on area i (global position)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -68,6 +98,12 @@ class VideoView(QWidget):
         self._pan_from: tuple | None = None    # middle mouse drag: (start pos, centre then)
         self._skeleton: list | None = None     # body recognition: [(points (n, 2) normalized, seen)]
         self._skel_hover = None                # (person, point | (a, b)) under the mouse
+        self.draw_mode = "box"                 # what a drag draws: "box", "outline", "stroke"
+        self._outlines: list = []              # per shown area: outline in its own coordinates
+        self._stroke = None                    # stroke arrow of the section shown
+        self._lasso: list | None = None        # widget points while an outline is drawn
+        self._arrow: tuple | None = None       # (start, end) widget points while the arrow is drawn
+        self.analysis_width = 320              # px: how wide the analysis picture is (outline inset)
         self.setMouseTracking(True)
         self.set_mode("roi")
 
@@ -83,6 +119,17 @@ class VideoView(QWidget):
                         "Das startet einen Tracking-Abschnitt an dieser Stelle. Kästchen innen ziehen = "
                         "verschieben, an einer Ecke = Größe, runder Griff oder Mausrad = drehen. "
                         "Rechtsklick löscht den Abschnitt an dieser Stelle")
+        self.update()
+
+    def set_draw_mode(self, mode: str) -> None:
+        self.draw_mode = mode if mode in ("box", "outline", "stroke") else "box"
+        self._lasso = self._arrow = None
+        self.update()
+
+    def set_area_info(self, outlines=(), stroke=None) -> None:
+        """Outline per area (() = rectangle) and the stroke arrow, for drawing them."""
+        self._outlines = [tuple(o) for o in outlines]
+        self._stroke = tuple(stroke) if stroke else None
         self.update()
 
     def set_tracks(self, boxes) -> None:
@@ -360,6 +407,61 @@ class VideoView(QWidget):
         ly = -dx * math.sin(ang) + dy * math.cos(ang)
         return abs(lx) <= rect.width() / 2 and abs(ly) <= rect.height() / 2
 
+    def _outline_widget(self, r: QRectF, box, outline) -> list[QPointF]:
+        """Outline points (box's own coordinates) in widget px, turned with the box."""
+        rect = self._norm_rect(r, box[:4])
+        ang = math.radians(box[4]) if len(box) > 4 and box[4] is not None else 0.0
+        c = rect.center()
+        ca, sa = math.cos(ang), math.sin(ang)
+        out = []
+        for u, v in outline:
+            dx, dy = u * rect.width(), v * rect.height()
+            out.append(QPointF(c.x() + dx * ca - dy * sa, c.y() + dx * sa + dy * ca))
+        return out
+
+    def _paint_outline(self, p: QPainter, r: QRectF, box, outline, color: QColor, analysed: bool) -> None:
+        """The outline, and inside along its edge the band that is left out (red hatching)."""
+        pts = self._outline_widget(r, box, outline)
+        path = QPainterPath()
+        path.addPolygon(QPolygonF(pts))
+        path.closeSubpath()
+        img_w = self._img.width() if self._img is not None else 1
+        aw = max(1, self.analysis_width)
+        bw = box[2] * aw
+        bh = box[3] * aw * (self._img.height() / max(1, img_w) if self._img is not None else 0.5625)
+        band = outline_inset(bw, bh) * r.width() / aw          # analysis px -> widget px
+        p.save()
+        p.setClipPath(path)
+        hatch = QColor("#e5534b")
+        hatch.setAlpha(110)
+        p.setPen(QPen(hatch, 2 * band))
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(path)
+        p.restore()
+        p.setPen(QPen(color, 2 if analysed else 1.8))
+        p.setBrush(Qt.NoBrush)
+        p.drawPath(path)
+
+    def _paint_stroke(self, p: QPainter, r: QRectF, line, live: bool = False) -> None:
+        a = QPointF(r.x() + line[0] * r.width(), r.y() + line[1] * r.height())
+        b = QPointF(r.x() + line[2] * r.width(), r.y() + line[3] * r.height())
+        color = QColor(STROKE_COLOR)
+        p.setPen(QPen(color, 2.5, Qt.DashLine if live else Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(a, b)
+        ang = math.atan2(b.y() - a.y(), b.x() - a.x())
+        head = []
+        for d in (2.6, -2.6):
+            head.append(QPointF(b.x() - 14 * math.cos(ang + d / 6), b.y() - 14 * math.sin(ang + d / 6)))
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawPolygon(QPolygonF([b] + head))
+        p.drawEllipse(a, 3.5, 3.5)
+        p.setFont(theme.mono_font(11))
+        tag = QRectF(b.x() + 6, b.y() - 9, 40, 18)
+        p.fillRect(tag, QColor(0, 0, 0, 150))
+        p.setPen(color)
+        p.drawText(tag, Qt.AlignCenter, "raus")
+
     def _paint_tracks(self, p: QPainter, r: QRectF) -> None:
         analysed = self._overlay is not None
         boxes = self._overlay if analysed else self._tracks
@@ -368,14 +470,23 @@ class VideoView(QWidget):
             pts, _c, _ang = self._poly(r, box)
             lost = len(box) > 5 and bool(box[5])
             color = QColor("#e5534b") if lost else QColor(TRACK_COLORS[i % len(TRACK_COLORS)])
-            p.setPen(QPen(color, 2 if analysed else 1.5, Qt.SolidLine if analysed else Qt.DashLine))
+            outline = self._outlines[i] if i < len(self._outlines) else ()
+            if outline:
+                self._paint_outline(p, r, box, outline, color, analysed)
+                frame = QColor(color)
+                frame.setAlpha(110)
+                p.setPen(QPen(frame, 1, Qt.DotLine))
+            else:
+                p.setPen(QPen(color, 2 if analysed else 1.5, Qt.SolidLine if analysed else Qt.DashLine))
             p.setBrush(Qt.NoBrush)
             p.drawPolygon(QPolygonF(pts))
             top = min(pts, key=lambda q: q.y())
-            tag = QRectF(top.x() - 11, max(r.y(), top.y() - 24), 22 if not lost else 30, 18)
+            text = f"{i + 1} {ROLE_NAMES[i % len(ROLE_NAMES)]}" + ("?" if lost else "")
+            tw = p.fontMetrics().horizontalAdvance(text) + 10
+            tag = QRectF(top.x() - tw / 2, max(r.y(), top.y() - 24), tw, 18)
             p.fillRect(tag, color)
             p.setPen(QColor(theme.ON_ACCENT))
-            p.drawText(tag, Qt.AlignCenter, f"{i + 1}" + ("?" if lost else ""))
+            p.drawText(tag, Qt.AlignCenter, text)
             if analysed or not self.editable:                  # can be grabbed to put it right
                 p.setBrush(color)
                 for q in pts:
@@ -393,7 +504,24 @@ class VideoView(QWidget):
             p.setPen(QPen(theme.qcolor(theme.TEXT, 0.8), 1, Qt.DashLine))
             p.setBrush(Qt.NoBrush)
             p.drawRect(self._drag_rect)
-        if not boxes and self._drag_rect is None:
+        if self._stroke and self._arrow is None:
+            self._paint_stroke(p, r, self._stroke)
+        if self._arrow is not None:
+            a, b = (self._to_norm(q) for q in self._arrow)
+            self._paint_stroke(p, r, (a.x(), a.y(), b.x(), b.y()), live=True)
+        if self._lasso:
+            p.setPen(QPen(theme.qcolor(theme.TEXT, 0.9), 1.5, Qt.DashLine))
+            p.setBrush(Qt.NoBrush)
+            p.drawPolyline(QPolygonF(self._lasso))
+        if self.draw_mode != "box" and not self._lasso and self._arrow is None:
+            hint = ("Umranden: mit gedrückter Maustaste eng um das Toy bzw. den Körperteil fahren"
+                    if self.draw_mode == "outline" else
+                    "Hub-Richtung: Pfeil entlang der Stoßrichtung ziehen, Spitze = raus")
+            tw = p.fontMetrics().horizontalAdvance(hint) + 16
+            p.fillRect(QRectF(r.x() + 8, r.bottom() - 32, tw, 24), QColor(0, 0, 0, 160))
+            p.setPen(theme.qcolor(theme.TEXT))
+            p.drawText(QRectF(r.x() + 16, r.bottom() - 32, tw, 24), Qt.AlignLeft | Qt.AlignVCenter, hint)
+        if not boxes and self._drag_rect is None and not self._lasso:
             p.setPen(theme.qcolor(theme.TEXT))
             p.fillRect(QRectF(r.x() + 8, r.y() + 8, 330, 24), QColor(0, 0, 0, 150))
             p.drawText(QRectF(r.x() + 16, r.y() + 8, 330, 24), Qt.AlignLeft | Qt.AlignVCenter,
@@ -470,6 +598,16 @@ class VideoView(QWidget):
             return
         if ev.button() == Qt.RightButton:
             if self.mode == "track":
+                if self._lasso is not None or self._arrow is not None:     # cancel drawing
+                    self._lasso = self._arrow = None
+                    self.update()
+                    return
+                r = self._image_rect()
+                boxes = self._grab_boxes()
+                for i in reversed(range(len(boxes))):
+                    if self._contains(r, boxes[i], ev.position()):
+                        self.areaMenuRequested.emit(i, ev.globalPosition().toPoint())
+                        return
                 self.tracksCleared.emit()
             else:
                 self._roi = None
@@ -482,7 +620,14 @@ class VideoView(QWidget):
                     self.set_skeleton(None)
                     self.skeletonPicked.emit(pick[0], pick[1])
                     return
+            if self.mode == "track" and self.draw_mode == "stroke":
+                self._arrow = (ev.position(), ev.position())
+                return
             hit = self._hit(ev.position())
+            if self.mode == "track" and self.draw_mode == "outline" and (hit is None or hit[0] == "move"):
+                # drawing an outline may start inside another area (a toy in front of the body)
+                self._lasso = [ev.position()]
+                return
             if hit is not None:
                 kind, i, corner = hit
                 self._start_correction()
@@ -530,6 +675,19 @@ class VideoView(QWidget):
         self.update()
 
     def mouseMoveEvent(self, ev):
+        if self._lasso is not None:
+            q = ev.position()
+            last = self._lasso[-1]
+            if (q.x() - last.x()) ** 2 + (q.y() - last.y()) ** 2 >= 4:
+                r = self._image_rect()
+                self._lasso.append(QPointF(min(max(q.x(), r.left()), r.right()),
+                                           min(max(q.y(), r.top()), r.bottom())))
+                self.update()
+            return
+        if self._arrow is not None:
+            self._arrow = (self._arrow[0], ev.position())
+            self.update()
+            return
         if self._pan_from is not None:
             start, (cx, cy) = self._pan_from
             r = self._image_rect()
@@ -577,6 +735,23 @@ class VideoView(QWidget):
             self.setCursor(QCursor(shape))
 
     def mouseReleaseEvent(self, ev):
+        if self._lasso is not None:
+            pts, self._lasso = self._lasso, None
+            norm = [(q.x(), q.y()) for q in (self._to_norm(q) for q in pts)]
+            aspect = self._img.width() / max(1, self._img.height()) if self._img is not None else 16 / 9
+            got = lasso_to_box(norm, aspect)
+            if got is not None:
+                self.outlineDrawn.emit(got[0], got[1])
+            self.update()
+            return
+        if self._arrow is not None:
+            a, b = (self._to_norm(q) for q in self._arrow)
+            self._arrow = None
+            r = self._image_rect()
+            if math.hypot((b.x() - a.x()) * r.width(), (b.y() - a.y()) * r.height()) >= 12:
+                self.strokeDrawn.emit((round(a.x(), 4), round(a.y(), 4), round(b.x(), 4), round(b.y(), 4)))
+            self.update()
+            return
         if self._pan_from is not None:
             self._pan_from = None
             self.unsetCursor()

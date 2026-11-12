@@ -139,6 +139,16 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
         ein Hub aus Körperpunkten nicht; sinnvoll erst für Ganzkörper-Szenen.
         Toys und Maschinen erkennt das Modell ohnehin nicht. Eine KI-Abfrage
         kostet etwa 0,3 s (CPU, 640 px).
+- [x] **Umranden, Rollen, Hub-Richtung** (0.10.15): Toy mit einer Umrandung
+      statt Rechteck markieren (Punkte nur innen, ein paar Pixel vom Rand
+      weg), Rollen „Toy“ / „Bezug“ per Rechtsklick, Pfeil für die
+      Stoßrichtung. Gemessen: Neben einem stillen Finger bleibt ein Rechteck
+      hängen, die Umrandung folgt dem Toy genau (Testvideo). An den zwei
+      echten Clips ist die Umrandung etwa gleich gut wie ein gut gesetztes
+      großes Kästchen und besser als ein kleines; nur den Bildvergleich auf
+      das Innere zu beschränken machte es schlechter (glattes, glänzendes Toy
+      sieht allein Schatten zu ähnlich), deshalb nutzt er weiter die Umgebung.
+      Der Pfeil senkt bei Clip 2 die Abweichung von 4,5 auf 1,8 Positionen.
 - [x] **Bildrand und kurze Verdeckungen** (0.10.8): Strecke außerhalb des
       Bildes und unter einer Hand wird weich überbrückt.
 - [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,

@@ -6,6 +6,12 @@ off; the area moves by the median of the remaining points, and lost points are
 searched again inside the area. Points outside all areas measure the camera
 motion.
 
+An area can also be an outline (a polygon drawn around the thing, e.g. a toy):
+then only points inside it, a few pixels away from its edge, are followed.
+Comparing its look still uses the whole rectangle around it: measured on real
+videos, a plain or shiny toy alone looks too much like a shadow, the things
+next to it make the look unique.
+
 Result per frame: the centre of every area (for the overlay and for angles,
 e.g. roll) and one motion vector for the script:
 
@@ -30,6 +36,28 @@ LOST_REACH_FRAC = 0.1    # after a loss look at least this part of the picture w
 FEW_POINTS = 6           # fewer than this: follow the area by its look (template), not by points
 FB_MAX_ERR = 1.0         # px, forward-backward consistency
 MAX_AREAS = 3
+OUTLINE_INSET = 0.06     # outline: points stay this part of the area's smaller side inside
+OUTLINE_INSET_PX = (2, 6)  # ... but at least / at most this many px of the analysis picture
+
+
+def outline_inset(w: float, h: float) -> float:
+    """How far (px) inside an outline of an area w x h px its points are taken."""
+    lo, hi = OUTLINE_INSET_PX
+    return float(np.clip(OUTLINE_INSET * min(w, h), lo, hi))
+
+
+def _fill_inside(shape: tuple[int, int], poly: np.ndarray, inset: float) -> np.ndarray:
+    """Mask of the polygon, shrunk by `inset` px; if that leaves too little, less shrunk."""
+    m = np.zeros(shape, np.uint8)
+    cv2.fillPoly(m, [np.round(poly).astype(np.int32)], 255)
+    full = int(np.count_nonzero(m))
+    k = int(round(inset))
+    while k > 0:
+        e = cv2.erode(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1)))
+        if np.count_nonzero(e) >= max(20, 0.25 * full):
+            return e
+        k -= 1
+    return m
 
 
 def _features(gray: np.ndarray, mask: np.ndarray | None, n: int,
@@ -118,8 +146,12 @@ class AreaTracker:
     EDGE_VISIBLE = 0.85           # less than this: partly out, its look cannot be compared
 
     def __init__(self, box, shape: tuple[int, int], first: np.ndarray | None = None,
-                 turn: bool = True):
+                 turn: bool = True, outline=None):
         self.h, self.w = shape
+        # outline: polygon in the area's own coordinates (-0.5..0.5 of its width/height,
+        # turned with it); None = the whole rectangle
+        o = None if outline is None or len(outline) < 3 else np.asarray(outline, np.float64).reshape(-1, 2)
+        self.outline = o
         # turn = follow turning and size too; off: the area only moves (machines, rigid things)
         self.turn = turn
         x, y, bw, bh = box[:4]
@@ -200,8 +232,23 @@ class AreaTracker:
         inter, _poly = cv2.intersectConvexConvex(c, frame)
         return float(np.clip(inter / full, 0.0, 1.0))
 
+    def outline_px(self) -> np.ndarray | None:
+        """The outline in image px (None without one)."""
+        if self.outline is None:
+            return None
+        a = np.radians(self.angle)
+        c, s = np.cos(a), np.sin(a)
+        loc = self.outline * (self.size * self.scale)
+        return loc @ np.array([[c, s], [-s, c]]) + self.center
+
+    def inset(self) -> float:
+        w, h = self.size * self.scale
+        return outline_inset(w, h)
+
     def _local_mask(self, rect) -> np.ndarray:
         x0, y0, x1, y1 = rect
+        if self.outline is not None:
+            return _fill_inside((y1 - y0, x1 - x0), self.outline_px() - [x0, y0], self.inset())
         m = np.zeros((y1 - y0, x1 - x0), np.uint8)
         cv2.fillConvexPoly(m, np.round(self.corners() - [x0, y0]).astype(np.int32), 255)
         return m
@@ -212,7 +259,13 @@ class AreaTracker:
         return m
 
     def inside(self, pts: np.ndarray, margin: float = 1.25) -> np.ndarray:
-        """Which points lie in the (slightly enlarged) rotated area."""
+        """Which points lie in the (slightly enlarged) rotated area. With an outline:
+        inside it (1 px slack), points that slid onto what lies around it are dropped."""
+        if self.outline is not None:
+            poly = self.outline_px().astype(np.float32).reshape(-1, 1, 2)
+            p = np.asarray(pts, np.float32).reshape(-1, 2)
+            return np.array([cv2.pointPolygonTest(poly, (float(x), float(y)), True) >= -1.0
+                             for x, y in p], bool)
         a = np.radians(self.angle)
         c, s = np.cos(a), np.sin(a)
         rel = pts - self.center
@@ -575,7 +628,8 @@ class MultiTracker:
     """Tracks up to MAX_AREAS areas plus the background (camera)."""
 
     def __init__(self, boxes_px: list, shape: tuple[int, int], compensate_camera: bool = True,
-                 first: np.ndarray | None = None, turn: bool = True, anchor: bool = False):
+                 first: np.ndarray | None = None, turn: bool = True, anchor: bool = False,
+                 outlines=()):
         self.turn = turn
         # anchor: areas 2 and 3 are not followed, they stay where they were marked (moving
         # only with the camera, if that is compensated) - nothing can drag them away
@@ -583,7 +637,9 @@ class MultiTracker:
         if not boxes_px:
             raise ValueError("mindestens ein Tracking-Bereich nötig")
         self.shape = shape
-        self.areas = [AreaTracker(b, shape, first, turn) for b in boxes_px[:MAX_AREAS]]
+        self.outlines = [outlines[i] if i < len(outlines) and outlines[i] else None
+                         for i in range(min(len(boxes_px), MAX_AREAS))]
+        self.areas = [AreaTracker(b, shape, first, turn, o) for b, o in zip(boxes_px[:MAX_AREAS], self.outlines)]
         self.compensate = compensate_camera
         self._bg: np.ndarray | None = None     # background points, kept from frame to frame
 
@@ -593,7 +649,7 @@ class MultiTracker:
     def reset_area(self, index: int, box_px, gray: np.ndarray) -> None:
         """Put area `index` where the user says it is (a correction) and start over there.
         The appearances known so far are kept for comparing."""
-        new = AreaTracker(box_px, self.shape, gray, self.turn)
+        new = AreaTracker(box_px, self.shape, gray, self.turn, self.outlines[index])
         new.inherit(self.areas[index])
         self.areas[index] = new
 
