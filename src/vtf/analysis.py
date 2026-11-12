@@ -40,6 +40,14 @@ class TrackSection:
     ``calib_in_ms`` / ``calib_out_ms`` are the moments that are "fully in"
     (position 0) and "fully out" (100); they only affect the script, not the
     analysis.
+
+    Area 1 is the part that moves (toy, machine), areas 2 and 3 are what it is
+    measured against (the body, which moves little). ``outlines`` holds, per
+    area, an optional polygon drawn around the thing, in the area's own
+    coordinates (-0.5..0.5 of its width and height, turned with it); empty = the
+    whole rectangle. ``stroke`` is the stroke direction drawn as an arrow
+    (x0, y0, x1, y1, normalized; the head points "out" = position 100); it only
+    affects the script.
     """
     start_ms: int
     boxes: tuple = ()                      # normalized (x, y, w, h), up to 3
@@ -47,15 +55,25 @@ class TrackSection:
     calib_in_ms: int | None = None
     calib_out_ms: int | None = None
     keys: tuple = ()                       # corrections: (ms, area index, box) - "nachjustieren"
+    outlines: tuple = ()                   # per area: ((u, v), ...) or () = rectangle
+    stroke: tuple | None = None            # arrow (x0, y0, x1, y1): stroke direction, head = out
+
+    def outline(self, area: int) -> tuple:
+        return tuple(self.outlines[area]) if area < len(self.outlines) and self.outlines[area] else ()
 
     @property
     def calibrated(self) -> bool:
         return self.calib_in_ms is not None and self.calib_out_ms is not None
 
     def analysis_key(self) -> tuple:
-        return (int(self.start_ms), None if self.end_ms is None else int(self.end_ms),
-                tuple(tuple(round(v, 4) for v in b) for b in self.boxes),
-                tuple((int(ms), int(a), tuple(round(v, 4) for v in b)) for ms, a, b in self.keys))
+        key = (int(self.start_ms), None if self.end_ms is None else int(self.end_ms),
+               tuple(tuple(round(v, 4) for v in b) for b in self.boxes),
+               tuple((int(ms), int(a), tuple(round(v, 4) for v in b)) for ms, a, b in self.keys))
+        lines = tuple(tuple((round(u, 4), round(v, 4)) for u, v in self.outline(i))
+                      for i in range(len(self.boxes)))
+        if any(lines):                    # without outlines: the same key as before they existed
+            key += (lines,)
+        return key
 
 
 def section_ranges(sections, duration_ms: float) -> list[tuple[int, float, float]]:
@@ -404,7 +422,8 @@ def _bridge_gaps(centers, gaps, outs, losts, owner, dx, dy, k: int, fps: float,
         dx[i], dy[i] = float(d[0]), float(d[1])
 
 
-def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: bool = True) -> np.ndarray:
+def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: bool = True,
+                outline=None) -> np.ndarray:
     """Follow one area backwards from frame b (where the user put it) to frame a.
     Returns its centre per frame a..b (NaN where it was lost)."""
     from .tracking import AreaTracker
@@ -413,7 +432,7 @@ def _track_back(frames: dict, a: int, b: int, box_px, shape, cancel=None, turn: 
         return cv2.imdecode(frames[j], cv2.IMREAD_GRAYSCALE)
 
     nxt = dec(b)
-    t = AreaTracker(box_px, shape, nxt, turn)
+    t = AreaTracker(box_px, shape, nxt, turn, outline or None)
     out = np.full((b - a + 1, 2), np.nan)
     out[-1] = t.center
     for j in range(b - 1, a - 1, -1):
@@ -568,7 +587,8 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                 boxes = sections[sec].boxes[:MAX_AREAS]
                 boxes_px = [(b[0] * w, b[1] * h, b[2] * w, b[3] * h, *b[4:5]) for b in boxes]
                 tracker = MultiTracker(boxes_px, cur.shape, settings.compensate_camera, first=cur,
-                                       turn=settings.track_turn, anchor=settings.track_anchor)
+                                       turn=settings.track_turn, anchor=settings.track_anchor,
+                                       outlines=[sections[sec].outline(q) for q in range(len(boxes))])
                 active = sec
                 sec_start = i
                 d = np.zeros(2)
@@ -591,7 +611,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
                         seg = back_segs.get((sec, area, i))
                         if seg is not None and all(j in frames for j in range(seg[0], i + 1)):
                             back = _track_back(frames, seg[0], i, box_px, cur.shape, cancel,
-                                               settings.track_turn)
+                                               settings.track_turn, sections[sec].outline(area))
                         events.append((i, sec, area, tracker.areas[area].center - before, back))
                         if estimator is not None and area < len(anchors):
                             from .pose import Anchor

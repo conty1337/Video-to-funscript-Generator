@@ -321,6 +321,10 @@ class MainWindow(QMainWindow):
         self.view.boxEdited.connect(self._box_edited)
         self.view.boxCorrected.connect(self._box_corrected)
         self.view.skeletonPicked.connect(self._skeleton_picked)
+        self.view.outlineDrawn.connect(self._outline_drawn)
+        self.view.strokeDrawn.connect(self._stroke_drawn)
+        self.view.areaMenuRequested.connect(self._area_menu)
+        self.panel.tracking.drawModeChanged.connect(self.view.set_draw_mode)
         self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
@@ -420,6 +424,8 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
         self._act(m, "KI-Vorschlag für Kästchen", self.suggest_boxes, "K")
+        self._act(m, "Umranden statt Rechteck an/aus", lambda: self._toggle_draw("outline"), "U")
+        self._act(m, "Hub-Richtung ziehen", lambda: self._toggle_draw("stroke"), "H")
         self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
         m = self.menuBar().addMenu("&Gerät")
         self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
@@ -1033,10 +1039,10 @@ class MainWindow(QMainWindow):
         self.view.set_skeleton(None)
         self._box_drawn(box, keep_first=True)
 
-    def _box_drawn(self, box, keep_first: bool = False):
+    def _box_drawn(self, box, keep_first: bool = False, outline=()):
         """keep_first: a box from the KI, it never replaces or corrects area 1."""
         shown = self.view._overlay if self.view._overlay is not None else self.view.tracks()
-        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown, keep_first=keep_first)
+        msg = self.panel.tracking.add_box(box, self._cur_ms(), shown, keep_first=keep_first, outline=outline)
         img = self.view._img
         if img is not None:     # how big the area is in the analysis picture
             aw = self.panel.width.currentData()
@@ -1045,6 +1051,57 @@ class MainWindow(QMainWindow):
                 msg += (f" · kleines Kästchen ({px:.0f} px bei {aw} px Auflösung): unter Optionen "
                         "eine höhere Auflösung wählen")
         self._status(msg)
+
+    def _outline_drawn(self, box, outline):
+        self._box_drawn(box, outline=outline)
+
+    def _stroke_drawn(self, line):
+        tb = self.panel.tracking
+        self._status(tb.set_stroke(self._cur_ms(), line))
+        tb.set_draw_mode("outline" if tb.outline_btn.isChecked() else "box")
+
+    def _toggle_draw(self, mode: str):
+        if self.panel.mode != "track":
+            self._status("Nur bei Analyse-Methode „Tracking“")
+            return
+        tb = self.panel.tracking
+        tb.set_draw_mode("box" if tb.draw_mode() == mode else mode)
+
+    def _area_menu(self, area: int, pos):
+        """Right click on an area: its role, outline, remove."""
+        tb = self.panel.tracking
+        ms = self._cur_ms()
+        i = tb.index_at(ms)
+        if i is None or area >= len(tb.sections[i].boxes):
+            return
+        sec = tb.sections[i]
+        menu = QMenu(self)
+        head = menu.addAction(f"Bereich {area + 1}")
+        head.setEnabled(False)
+        menu.addSeparator()
+        toy = menu.addAction("Das ist das Toy / die Maschine (bewegt sich)")
+        toy.setCheckable(True)
+        toy.setChecked(area == 0)
+        body = menu.addAction("Das ist der Körper / Bezug (bewegt sich wenig)")
+        body.setCheckable(True)
+        body.setChecked(area > 0)
+        body.setEnabled(len(sec.boxes) > 1)
+        menu.addSeparator()
+        flat = menu.addAction("Umrandung entfernen (wieder Rechteck)")
+        flat.setEnabled(bool(sec.outline(area)))
+        rm = menu.addAction("Bereich entfernen")
+        chosen = self._run_menu(menu, pos)
+        if chosen is toy:
+            self._status(tb.set_role(ms, area, "toy"))
+        elif chosen is body:
+            self._status(tb.set_role(ms, area, "body"))
+        elif chosen is flat:
+            self._status(tb.clear_outline(ms, area))
+        elif chosen is rm:
+            self._status(tb.remove_area(ms, area))
+
+    def _run_menu(self, menu: QMenu, pos):
+        return menu.exec(pos)
 
     def _box_rotated(self, area: int, angle: float):
         self._status(self.panel.tracking.rotate_box(self._cur_ms(), area, angle))
@@ -1125,6 +1182,9 @@ class MainWindow(QMainWindow):
         # at a section start or a correction the marked areas can be edited
         editable = any(abs(k - ms) <= 1000 / self.fps * 0.6 for k in self._edit_points())
         self.view.set_editable(editable)
+        tb = self.panel.tracking
+        self.view.analysis_width = int(self.panel.width.currentData() or 320)
+        self.view.set_area_info(tb.outlines_at(ms), tb.stroke_at(ms))
         m = self.motion
         if (m is not None and m.tracks is not None and m.track_section is not None and len(m.tracks)
                 and not editable and self.panel.tracking.index_at(ms) is not None):

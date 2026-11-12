@@ -1564,3 +1564,142 @@ def test_ai_boxes_leave_area_1_alone(app):
     tb2.add_box((0.1, 0.1, 0.1, 0.1), 3000, shown, keep_first=True)   # over area 1: no correction
     assert all(k[1] != 0 for k in tb2.sections[0].keys)
     assert len(tb2.sections) == 2 and tb2.sections[1].boxes[0] == one  # area 1 goes on as it is
+
+
+def test_roles_outlines_and_stroke_in_the_sections(app):
+    """Choosing the toy makes it area 1 (corrections and outlines follow), areas can be
+    removed, outlines dropped, a stroke arrow set per section."""
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    changes, gens = [], []
+    tb.analysisChanged.connect(lambda: changes.append(1))
+    tb.generatorChanged.connect(lambda: gens.append(1))
+    body, toy = (0.1, 0.1, 0.3, 0.3), (0.6, 0.6, 0.1, 0.1)
+    line = ((-0.5, -0.5), (0.5, -0.4), (0.0, 0.5))
+    tb.add_box(body, 0)
+    tb.add_box(toy, 0, outline=line)
+    s = tb.sections[0]
+    assert s.boxes == (body, toy) and s.outlines == ((), line)
+    tb.correct_area(3000, 1, (0.62, 0.6, 0.1, 0.1))                # a correction of the toy
+    assert tb.outlines_at(3000) == [(), line]
+    msg = tb.set_role(1000, 1, "toy")
+    s = tb.sections[0]
+    assert "Rollen" in msg and s.boxes == (toy, body) and s.outlines == (line,)
+    assert s.keys[0][1] == 0                                       # the correction moved along
+    assert "schon" in tb.set_role(1000, 0, "toy")
+    tb.set_role(1000, 0, "body")
+    assert tb.sections[0].boxes == (body, toy) and tb.sections[0].keys[0][1] == 1
+    assert "Rechteck" in tb.clear_outline(1000, 1) and tb.sections[0].outlines == ()
+    n = len(changes)
+    assert "entfernt" in tb.remove_area(1000, 0)
+    assert tb.sections[0].boxes == (toy,) and tb.sections[0].keys[0][1] == 0 and len(changes) == n + 1
+    assert "Abschnitt" in tb.set_stroke(1000, (0.5, 0.6, 0.4, 0.5))
+    assert tb.stroke_at(500) == (0.5, 0.6, 0.4, 0.5) and gens
+    assert "↕" in tb.list.item(0).text()
+    tb.set_stroke(1000, None)
+    assert tb.stroke_at(500) is None
+    # a new section after a scene cut keeps the arrow of the one it splits
+    tb.set_stroke(1000, (0.5, 0.6, 0.4, 0.5))
+    tb.add_box(body, 5000)
+    assert tb.stroke_at(6000) == (0.5, 0.6, 0.4, 0.5)
+    # draw mode buttons exclude each other
+    modes = []
+    tb.drawModeChanged.connect(modes.append)
+    tb.outline_btn.setChecked(True)
+    tb.stroke_btn.setChecked(True)
+    assert modes[-1] == "stroke" and not tb.outline_btn.isChecked()
+    tb.set_draw_mode("box")
+    assert modes[-1] == "box" and not tb.stroke_btn.isChecked()
+
+
+def test_full_section_drops_the_corrections_of_the_area_it_drops(app):
+    from vtf.gui.tracking_ui import TrackingBox
+
+    tb = TrackingBox()
+    tb.reset(10_000, 30)
+    a, b, c, d = ((0.1, 0.1, 0.05, 0.05), (0.2, 0.2, 0.05, 0.05), (0.3, 0.3, 0.05, 0.05), (0.4, 0.4, 0.05, 0.05))
+    for box in (a, b, c):
+        tb.add_box(box, 0)
+    tb.correct_area(2000, 0, (0.11, 0.1, 0.05, 0.05))
+    tb.correct_area(2500, 2, (0.31, 0.3, 0.05, 0.05))
+    tb.add_box(d, 0)                                              # area 1 (a) goes
+    s = tb.sections[0]
+    assert s.boxes == (b, c, d) and [k[1] for k in s.keys] == [1]   # c's correction, now area 2
+
+
+def test_outline_and_arrow_are_drawn_in_the_video(app):
+    from PySide6.QtCore import QPoint, Qt
+    import numpy as np
+    from PySide6.QtTest import QTest
+
+    from vtf.gui.video_view import VideoView, lasso_to_box
+
+    assert lasso_to_box([(0.1, 0.1), (0.2, 0.1)], 1.0) is None
+    box, line = lasso_to_box([(0.1, 0.2), (0.3, 0.2), (0.3, 0.6), (0.2, 0.7)], 1.0)
+    assert box == (0.1, 0.2, 0.2, 0.5) and line[0] == (-0.5, -0.5) and line[-1] == (0.0, 0.5)
+
+    v = VideoView()
+    v.resize(400, 300)
+    v.set_frame(np.zeros((300, 400, 3), np.uint8))
+    v.set_mode("track")
+    v.show()
+    outs, arrows, menus, drawn = [], [], [], []
+    v.outlineDrawn.connect(lambda b, o: outs.append((b, o)))
+    v.strokeDrawn.connect(arrows.append)
+    v.areaMenuRequested.connect(lambda i, p: menus.append(i))
+    v.boxDrawn.connect(drawn.append)
+    v.set_draw_mode("outline")
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(100, 100))
+    for x, y in ((140, 95), (180, 110), (190, 160), (150, 200), (110, 170), (100, 120)):
+        QTest.mouseMove(v, QPoint(x, y))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(100, 120))
+    assert len(outs) == 1 and not drawn
+    b, o = outs[0]
+    assert abs(b[0] - 0.25) < 0.01 and abs(b[2] - 0.225) < 0.01 and len(o) >= 4
+    v.set_tracks([b])
+    v.set_area_info([o], (0.1, 0.9, 0.2, 0.8))
+    v.grab()                                                       # paints outline, band, arrow
+    QTest.mouseClick(v, Qt.RightButton, Qt.NoModifier, QPoint(145, 150))
+    assert menus == [0]
+    v.set_draw_mode("stroke")
+    QTest.mousePress(v, Qt.LeftButton, Qt.NoModifier, QPoint(300, 250))
+    QTest.mouseMove(v, QPoint(340, 200))
+    QTest.mouseRelease(v, Qt.LeftButton, Qt.NoModifier, QPoint(340, 200))
+    assert arrows and abs(arrows[0][0] - 0.75) < 0.01 and arrows[0][3] < arrows[0][1]
+    v.close()
+    v.deleteLater()
+
+
+def test_main_window_roles_outline_and_arrow(app, tmp_path, monkeypatch):
+    """In the main window: an outline drawn becomes an area, the area menu sets the role,
+    H draws the arrow once, everything is kept in the preparation file."""
+    from test_tracking import _video
+
+    from vtf.gui.main_window import MainWindow
+    from vtf.prep import load_prep
+
+    path, a, b = _video(tmp_path / "r.avi", seconds=1.0, pan=False)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(path))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    line = ((-0.5, -0.5), (0.5, -0.5), (0.0, 0.5))
+    w._box_drawn(a)
+    w._outline_drawn(b, line)
+    assert w.view._outlines == [(), line]
+    # area menu: choose "toy" for area 2
+    monkeypatch.setattr(w, "_run_menu", lambda menu, pos: next(x for x in menu.actions() if "Toy" in x.text()))
+    w._area_menu(1, None)
+    sec = w.panel.tracking.sections[0]
+    assert sec.boxes[0] == tuple(round(v, 4) for v in b) and sec.outlines == (line,)
+    w._toggle_draw("stroke")
+    assert w.view.draw_mode == "stroke"
+    w._stroke_drawn((0.5, 0.6, 0.6, 0.4))
+    assert w.view.draw_mode == "box" and w.view._stroke == (0.5, 0.6, 0.6, 0.4)
+    saved = load_prep(path)[0]
+    assert saved.stroke == (0.5, 0.6, 0.6, 0.4) and saved.outlines == (line,)
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()

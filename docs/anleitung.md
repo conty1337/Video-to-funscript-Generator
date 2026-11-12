@@ -25,10 +25,21 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    - *Tracking*: du markierst, was verfolgt wird. Genauer, empfohlen.
 3. **Markieren** (bei Tracking): an eine Stelle spulen, wo alles gut zu sehen
    ist, und Kästchen ins Video ziehen.
-   - **Kästchen 1** auf das Teil, das sich bewegt.
+   - **Kästchen 1** auf das Teil, das sich bewegt (im Bild „1 Toy“).
    - **Kästchen 2** (und 3) auf ein Gegenstück, das stillhält oder sich
-     anders bewegt. Gemessen wird der Abstand zwischen 1 und den anderen,
-     deshalb stört die Kamera dann kaum.
+     anders bewegt (im Bild „Bezug“, z.B. der Körper). Gemessen wird der
+     Abstand zwischen 1 und den anderen, deshalb stört die Kamera dann kaum.
+   - Falsch herum markiert? **Rechtsklick aufs Kästchen** → „Das ist das Toy“
+     bzw. „Das ist der Körper / Bezug“. Die Nummern tauschen dann.
+   - **Umranden** (Knopf oder Taste U): statt eines Rechtecks mit gedrückter
+     Maustaste eng um das Toy fahren. Verfolgt wird nur, was innen liegt, mit
+     ein paar Pixeln Abstand zum Rand (im Bild rot schraffiert). Gut, wenn
+     direkt daneben etwas liegt, das sich anders bewegt, z.B. Finger, Hand
+     oder Fuß. Rechtsklick → „Umrandung entfernen“ macht wieder ein Rechteck.
+   - **Hub-Richtung** (Knopf oder Taste H): einen Pfeil entlang der
+     Stoßrichtung ziehen, die Spitze zeigt nach *raus*. Gemessen wird dann nur
+     entlang des Pfeils, seitliches Wackeln zählt nicht. Gut bei Maschinen, die
+     schräg im Bild stoßen. Wirkt sofort, ohne neue Analyse.
    - Stellen mit **Muster oder Kanten** nehmen, keine glatten Flächen. Kein
      Hintergrund und nichts, was später verdeckt wird, mit ins Kästchen.
    - Kleine Stellen: **Strg+Mausrad** zoomt ins Video, mit gedrücktem Mausrad
@@ -65,7 +76,7 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
 
 | Einstellung | Wirkung |
 |---|---|
-| Richtung | welche Bewegung im Bild zum Hub wird (bei 2 Kästchen egal) |
+| Richtung | welche Bewegung im Bild zum Hub wird (ein Hub-Richtungs-Pfeil im Abschnitt geht vor) |
 | Empfindlichkeit | höher = auch kleine Hübe |
 | Glättung | bügelt Zittern aus |
 | Mindestabstand | kürzeste Zeit zwischen zwei Punkten |
@@ -115,6 +126,9 @@ Muster-Steuerung für einen Bereich ein.
 | Kästchen wandert langsam weg | Stelle mit mehr Muster markieren, an der Stelle anpacken und zurückschieben |
 | Kästchen wird schief oder lang | „Kästchen drehen und skalieren mit“ ausschalten |
 | Hand oder Gegenstand zieht Kästchen 2/3 weg | „Bereich 2 und 3 fest verankern“ einschalten |
+| Kästchen springt auf Finger, Hand oder Fuß neben dem Toy | Toy **umranden** (U) statt Rechteck |
+| Kurve verkehrt herum | Rollen prüfen: Rechtsklick aufs Toy → „Das ist das Toy“ |
+| Maschine stößt schräg, Hübe ungleich | **Hub-Richtung** (H) als Pfeil entlang des Stoßes ziehen |
 | Zu viele kleine Zitter-Hübe | Empfindlichkeit runter, Glättung rauf |
 | Hübe zu flach | kalibrieren (D/A) oder Normalisierung nutzen |
 | Kurve läuft nicht mit | nach dem Scrollen 3 s warten, sie folgt wieder |

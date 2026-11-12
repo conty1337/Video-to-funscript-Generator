@@ -59,3 +59,16 @@ def test_bookmarks_share_the_file(tmp_path):
     assert load_prep(v) == secs                        # sections stay
     save_prep(v, [])
     assert not prep_path(v).exists()
+
+
+def test_outlines_and_stroke_are_kept(tmp_path):
+    v = tmp_path / "b.mp4"
+    v.write_bytes(b"x")
+    line = ((-0.4, -0.5), (0.5, -0.3), (0.2, 0.5))
+    secs = [TrackSection(0, ((0.1, 0.1, 0.2, 0.2), (0.5, 0.5, 0.2, 0.2)), outlines=(line,),
+                         stroke=(0.4, 0.6, 0.3, 0.4))]
+    save_prep(v, secs)
+    assert load_prep(v) == secs
+    # files written before outlines existed still load
+    save_prep(v, [TrackSection(0, ((0.1, 0.1, 0.2, 0.2),))])
+    assert "outlines" not in prep_path(v).read_text() and load_prep(v)[0].outlines == ()

@@ -23,6 +23,10 @@ def _box(b) -> tuple:
     return tuple(round(float(v), 4) for v in b)
 
 
+def _outlines(lines) -> tuple:
+    return tuple(tuple((round(float(u), 4), round(float(v), 4)) for u, v in o) for o in lines)
+
+
 def _opt_int(d: dict, key: str) -> int | None:
     return None if d.get(key) is None else int(d[key])
 
@@ -81,6 +85,9 @@ def save_prep(video: str | Path, sections) -> Path | None:
             "calib_in_ms": s.calib_in_ms,
             "calib_out_ms": s.calib_out_ms,
             "keys": [[int(ms), int(a), list(_box(b))] for ms, a, b in s.keys],
+            **({"outlines": [[list(pt) for pt in o] for o in _outlines(s.outlines)]}
+               if any(s.outlines) else {}),
+            **({"stroke": list(_box(s.stroke))} if s.stroke else {}),
         } for s in secs],
     }
     if old.get("bookmarks"):
@@ -102,6 +109,8 @@ def load_prep(video: str | Path) -> list[TrackSection]:
                 calib_in_ms=_opt_int(d, "calib_in_ms"),
                 calib_out_ms=_opt_int(d, "calib_out_ms"),
                 keys=tuple((int(k[0]), int(k[1]), _box(k[2])) for k in d.get("keys", [])),
+                outlines=_outlines(d.get("outlines", [])),
+                stroke=_box(d["stroke"]) if d.get("stroke") else None,
             ))
         return [s for s in out if s.boxes]
     except (OSError, ValueError, KeyError, TypeError, IndexError):

@@ -606,7 +606,8 @@ def test_drift_check_goes_to_a_clear_match_further_away():
 
 
 # tracking.py + analysis.py as they were when TRACKER_VERSION was last raised
-TRACKER_SOURCES = {"4df57bcbbf193570": 9}
+TRACKER_SOURCES = {"4df57bcbbf193570": 9,
+                   "fdb229caa5b1553c": 9}   # outlines: rectangles track exactly as before
 
 
 def test_tracker_version_raised_with_tracker_changes():
@@ -624,3 +625,87 @@ def test_tracker_version_raised_with_tracker_changes():
     assert TRACKER_SOURCES.get(h) == an.TRACKER_VERSION, (
         f"tracker sources changed (hash {h}): raise TRACKER_VERSION if results can change, "
         "then record the hash in TRACKER_SOURCES")
+
+
+def _finger_video(path, n=120):
+    """A textured toy stroking up and down, a still textured finger right next to it.
+    Returns the true toy centre per frame (px)."""
+    rng = np.random.default_rng(7)
+    W, H = 480, 270
+    bg = cv2.GaussianBlur(rng.integers(90, 160, (H, W)).astype(np.uint8), (0, 0), 6)
+    toy = cv2.GaussianBlur(rng.integers(0, 255, (60, 44)).astype(np.uint8), (0, 0), 1.2)
+    finger = cv2.GaussianBlur(rng.integers(0, 255, (70, 40)).astype(np.uint8), (0, 0), 1.2)
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 30, (W, H))
+    truth = []
+    for i in range(n):
+        y0 = int(round(80 + 40 * np.sin(2 * np.pi * 1.5 * i / 30)))
+        f = bg.copy()
+        f[y0:y0 + 60, 200:244] = toy
+        f[95:165, 246:286] = finger
+        vw.write(cv2.cvtColor(f, cv2.COLOR_GRAY2BGR))
+        truth.append((222.0, y0 + 30.0))
+    vw.release()
+    return np.array(truth), (W, H)
+
+
+def test_outline_leaves_out_what_lies_next_to_the_toy(tmp_path):
+    """A rectangle over the toy also takes the still finger next to it and sticks to it;
+    an outline around the toy only follows the toy."""
+    path = tmp_path / "finger.avi"
+    truth, (W, H) = _finger_video(path)
+    cx, cy = truth[0]
+    box = ((cx - 26) / W, (cy - 34) / H, (290 - (cx - 26)) / W, 68 / H)
+    bx, by, bw, bh = box
+    corners = np.array([[cx - 23, cy - 31], [cx + 23, cy - 31], [cx + 23, cy + 31], [cx - 23, cy + 31]])
+    uv = (corners - [(bx + bw / 2) * W, (by + bh / 2) * H]) / [bw * W, bh * H]
+    outline = tuple(tuple(round(float(v), 4) for v in p) for p in uv)
+    out = {}
+    for name, sec in (("rect", TrackSection(0, (box,))), ("outline", TrackSection(0, (box,), outlines=(outline,)))):
+        m = analyze_motion(path, AnalysisSettings(mode="track", track_sections=(sec,), width=W, hwaccel="none"))
+        tr = m.tracks[:, 0] * [W, H]
+        out[name] = np.nanpercentile(np.hypot(*((tr - tr[0]) - (truth - truth[0])).T), 90)
+    assert out["rect"] > 20 and out["outline"] < 3, out
+
+
+def test_outline_points_stay_inside_away_from_the_edge():
+    from vtf.tracking import AreaTracker, outline_inset
+
+    img = np.random.default_rng(1).integers(0, 255, (200, 200)).astype(np.uint8)
+    tri = ((-0.5, -0.5), (0.5, -0.5), (-0.5, 0.5))           # upper left half of the box
+    t = AreaTracker((50, 50, 100, 100), img.shape, img, outline=tri)
+    t._refill(img)
+    pts = t.pts.reshape(-1, 2)
+    assert len(pts) > 10
+    # all on the triangle (x + y below 200), at least the inset away from its slanted edge
+    assert np.all((pts[:, 0] - 50) + (pts[:, 1] - 50) <= 100 - outline_inset(100, 100) * 1.41 + 1)
+    assert t.inside(np.array([[60.0, 60.0], [140.0, 140.0]])).tolist() == [True, False]
+
+
+def test_cache_key_unchanged_without_outlines():
+    a = TrackSection(0, ((0.1, 0.1, 0.2, 0.2),), stroke=(0.1, 0.1, 0.2, 0.2))
+    assert a.analysis_key() == (0, None, ((0.1, 0.1, 0.2, 0.2),), ())     # as before outlines
+    b = TrackSection(0, ((0.1, 0.1, 0.2, 0.2),), outlines=(((-0.5, -0.5), (0.5, -0.5), (0, 0.5)),))
+    assert b.analysis_key() != a.analysis_key()
+
+
+def test_stroke_arrow_measures_along_the_stroke():
+    """A diagonal stroke with sideways wobble: measured along the arrow the curve follows
+    the stroke, straight up/down it is diluted by the wobble."""
+    fps, n = 30.0, 300
+    t = np.arange(n) / fps
+    u = np.array([0.8, -0.6])                                   # stroke direction (up right)
+    along = 40 * np.sin(2 * np.pi * 1.2 * t)
+    side = 25 * np.sin(2 * np.pi * 3.1 * t + 1)                 # wobble across it
+    pos = along[:, None] * u + side[:, None] * np.array([0.6, 0.8])
+    d = np.diff(np.vstack([pos[:1], pos]), axis=0)
+    m = MotionData("x", fps, d[:, 0].astype(np.float32), d[:, 1].astype(np.float32),
+                   {"width": 320, "height": 180}, track_section=np.zeros(n, np.int16))
+    from vtf.generator import build_signal
+
+    gs = GeneratorSettings(drift_window_ms=0, normalize_window_ms=0)
+    truth = (along - along.min()) / np.ptp(along)
+    arrow = (0.5, 0.5, 0.5 + 0.8 * 0.1 / 320 * 180, 0.5 - 0.6 * 0.1)   # same direction in px
+    plain = build_signal(m, gs, (TrackSection(0, ((0, 0, 1, 1),)),))[1]
+    along_sig = build_signal(m, gs, (TrackSection(0, ((0, 0, 1, 1),), stroke=arrow),))[1]
+    assert np.corrcoef(along_sig, truth)[0, 1] > 0.99
+    assert np.corrcoef(plain, truth)[0, 1] < 0.9
