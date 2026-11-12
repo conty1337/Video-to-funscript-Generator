@@ -1942,3 +1942,21 @@ def test_script_line_is_not_filled_when_check_marks_are_shown(app):
         y = int(r.top() + r.height() * 0.6)
         hits += orange(x, y)
     assert hits == 0, hits
+
+
+def test_leaving_saves_settings_and_skips_the_teardown(monkeypatch):
+    """After the window closed, the process ends at once (no Qt/Python teardown, where it
+    crashed on closing) - but only after the settings are on disk."""
+    from vtf.gui import app as gui_app
+
+    calls = []
+
+    class Win:
+        class qsettings:
+            @staticmethod
+            def sync():
+                calls.append("sync")
+
+    monkeypatch.setattr(gui_app.os, "_exit", lambda code: calls.append(("exit", code)))
+    gui_app._leave(Win(), 3)
+    assert calls == ["sync", ("exit", 3)]
