@@ -122,41 +122,48 @@ def test_accent_colours():
         theme.set_accent(theme.DEFAULT_ACCENT)
 
 
-def test_accent_menu_changes_the_app(tmp_path, monkeypatch):
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-    from vtf.gui import theme
-    from vtf.gui.look_ui import LookMenus
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+def test_accent_menu_changes_the_app(tmp_path):
+    """Runs in its own process: restyling the app re-polishes every widget, and the GUI
+    tests before this one leave thousands behind (minutes instead of a second)."""
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    code = r"""
+from PySide6 import QtWidgets
+from vtf import i18n
+from vtf.gui import theme
+from vtf.gui.look_ui import LookMenus
+app = QtWidgets.QApplication([])
+theme.apply(app)
 
-    class Win(QtWidgets.QMainWindow):
-        said: list = []
+class Win(QtWidgets.QMainWindow):
+    said = []
 
-        def _status(self, text):
-            self.said.append(text)
+    def _status(self, text):
+        self.said.append(text)
 
-    w = Win()
-    btn = theme.accent_icon(QtWidgets.QPushButton(), "play", "Start")
-    look = LookMenus(w, w.menuBar().addMenu("Ansicht"))
-    try:
-        blue = theme.ACCENTS["blue"][1]
-        look.set_accent(blue)
-        assert theme.ACCENT == blue and blue in app.styleSheet()
-        assert i18n.load_ui()["accent"] == blue
-        assert btn.text() == "Start" and not btn.icon().isNull()
-        look._fill_accents()
-        checked = [a.text() for a in look.accent_menu.actions() if a.isChecked()]
-        assert checked == [theme.ACCENTS["blue"][0]]
-        look.set_accent("#3a1f5c")                   # own colour: "Eigene Farbe…" is ticked
-        look._fill_accents()
-        assert [a.text() for a in look.accent_menu.actions() if a.isChecked()] == ["Eigene Farbe…"]
-        monkeypatch.setattr(QtWidgets.QColorDialog, "exec", lambda self: 0)   # cancelled
-        look.pick_accent()
-        assert theme.ACCENT == "#3a1f5c"
-    finally:
-        theme.change_accent(app, theme.DEFAULT_ACCENT)
-        w.deleteLater()
+w = Win()
+btn = theme.accent_icon(QtWidgets.QPushButton(), "play", "Start")
+look = LookMenus(w, w.menuBar().addMenu("Ansicht"))
+blue = theme.ACCENTS["blue"][1]
+look.set_accent(blue)
+assert theme.ACCENT == blue and blue in app.styleSheet()
+assert i18n.load_ui()["accent"] == blue
+assert w.said[-1] == "Akzentfarbe: Blau", w.said
+assert btn.text() == "Start" and not btn.icon().isNull()
+look._fill_accents()
+assert [a.text() for a in look.accent_menu.actions() if a.isChecked()] == ["Blau"]
+look.set_accent("#3a1f5c")                   # own colour: "Eigene Farbe…" is ticked
+assert theme.ON_ACCENT == "#ffffff"
+look._fill_accents()
+assert [a.text() for a in look.accent_menu.actions() if a.isChecked()] == ["Eigene Farbe…"]
+QtWidgets.QColorDialog.exec = lambda self: 0  # cancelled
+look.pick_accent()
+assert theme.ACCENT == "#3a1f5c"
+print("ok")
+"""
+    env = dict(os.environ, VTF_LANG="de", QT_QPA_PLATFORM="offscreen", XDG_CONFIG_HOME=str(tmp_path / "c"),
+               XDG_CACHE_HOME=str(tmp_path / "cache"), PYTHONPATH=str(SRC))
+    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+    assert "ok" in r.stdout, r.stdout + r.stderr
 
 
 def test_language_menu_stores_the_choice(tmp_path, monkeypatch):
