@@ -6,22 +6,31 @@ import threading
 import time
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLayout,
-                               QLineEdit, QPushButton, QSpinBox, QVBoxLayout)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLayout,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+)
 
 from .. import players as PL
 from ..device.sync import ScriptSync
 from ..funscript import Funscript
+from ..i18n import tr
 from . import theme
 
 HINTS = {
-    "mpv": "mpv so starten:  mpv --input-ipc-server=/tmp/mpvsocket video.mp4\n"
-           "Oder dauerhaft in ~/.config/mpv/mpv.conf die Zeile  input-ipc-server=/tmp/mpvsocket  eintragen.",
-    "vlc": "In VLC: Werkzeuge → Einstellungen → unten „Alle“ → Schnittstellen → Hauptschnittstellen → „Web“ "
-           "anhaken, dann unter Hauptschnittstellen → Lua ein Passwort setzen und VLC neu starten. "
-           "VLC meldet die Zeit nur grob, mpv ist genauer.",
-    "deovr": "In DeoVR: Einstellungen → „Remote control“ einschalten. Adresse = IP der Brille im WLAN.",
-    "heresphere": "In HereSphere: Einstellungen → „DeoVR Remote“ einschalten. Adresse = IP der Brille im WLAN.",
+    "mpv": tr("mpv so starten:  mpv --input-ipc-server=/tmp/mpvsocket video.mp4\nOder dauerhaft in ~/.config/mpv/mpv.conf die Zeile  input-ipc-server=/tmp/mpvsocket  eintragen."),
+    "vlc": tr("In VLC: Werkzeuge → Einstellungen → unten „Alle“ → Schnittstellen → Hauptschnittstellen → „Web“ anhaken, dann unter Hauptschnittstellen → Lua ein Passwort setzen und VLC neu starten. VLC meldet die Zeit nur grob, mpv ist genauer."),
+    "deovr": tr("In DeoVR: Einstellungen → „Remote control“ einschalten. Adresse = IP der Brille im WLAN."),
+    "heresphere": tr("In HereSphere: Einstellungen → „DeoVR Remote“ einschalten. Adresse = IP der Brille im WLAN."),
 }
 
 
@@ -38,7 +47,7 @@ class ExternalSync(QObject):
         self.sync = ScriptSync(ctl.device, ctl.sync.settings)
         self.player = None
         self.clock = PL.SmoothClock()
-        self.status = "Nicht verbunden"
+        self.status = tr("Nicht verbunden")
         self.path = ""
         self.script = ""
         self.points = 0
@@ -77,7 +86,7 @@ class ExternalSync(QObject):
         self.path = self.script = ""
         self._error = ""
         self._latest = None
-        self.status = f"Verbunden mit {player.name}, warte auf ein Video…"
+        self.status = tr("Verbunden mit {0}, warte auf ein Video…", player.name)
         self._thread = threading.Thread(target=self._poll_loop, args=(player,), name="player-poll", daemon=True)
         self._thread.start()
         self.timer.start()
@@ -90,7 +99,7 @@ class ExternalSync(QObject):
         self.sync.stop()
         if p is not None:
             p.close()
-            self.status = "Getrennt"
+            self.status = tr("Getrennt")
             self.changed.emit()
 
     def _poll_loop(self, player) -> None:
@@ -138,7 +147,7 @@ class ExternalSync(QObject):
         self.script, self.points = "", 0
         self.sync.stop()
         if not path:
-            self.status = f"{self.player.name}: kein Video"
+            self.status = tr("{0}: kein Video", self.player.name)
         else:
             found = PL.find_script(path, self.folders())
             name = PL.media_name(path)
@@ -146,19 +155,19 @@ class ExternalSync(QObject):
                 try:
                     acts = Funscript.load(found).actions
                 except (OSError, ValueError) as e:
-                    self.status = f"{name}: Script nicht lesbar ({e})"
+                    self.status = tr("{0}: Script nicht lesbar ({1})", name, e)
                 else:
                     self.sync.set_actions(acts)
                     self.script, self.points = found, len(acts)
-                    self.status = f"{name}: Script gefunden ({len(acts)} Punkte)"
+                    self.status = tr("{0}: Script gefunden ({1} Punkte)", name, len(acts))
             else:
-                self.status = f"{name}: kein Script gefunden (neben dem Video oder im Script-Ordner)"
+                self.status = tr("{0}: kein Script gefunden (neben dem Video oder im Script-Ordner)", name)
         self.changed.emit()
 
     def emergency_stop(self) -> None:
         if self.running:
             self.disconnect_player()
-            self.status = "Not-Aus: vom Player getrennt"
+            self.status = tr("Not-Aus: vom Player getrennt")
             self.changed.emit()
 
     # safety timer source
@@ -186,13 +195,12 @@ class PlayersDialog(QDialog):
         super().__init__(parent)
         self.ext = ext
         qs = ext.qs
-        self.setWindowTitle("Andere Player")
+        self.setWindowTitle(tr("Andere Player"))
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(12)
         lay.setSizeConstraint(QLayout.SetMinimumSize)     # never smaller than the content
-        cap = QLabel("Spielt Scripts zu Videos ab, die du in einem anderen Player schaust. Das Script wird neben "
-                     "dem Video gesucht (gleicher Name, .funscript) oder im Script-Ordner.")
+        cap = QLabel(tr("Spielt Scripts zu Videos ab, die du in einem anderen Player schaust. Das Script wird neben dem Video gesucht (gleicher Name, .funscript) oder im Script-Ordner."))
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         cap.setFixedWidth(TEXT_W)          # fixed width: wrapped text gets its real height
@@ -204,7 +212,7 @@ class PlayersDialog(QDialog):
         for code, label in PL.KINDS:
             self.kind.addItem(label, code)
         self.kind.setCurrentIndex(max(0, self.kind.findData(qs.value("players/kind", "mpv"))))
-        form.addRow("Player", self.kind)
+        form.addRow(tr("Player"), self.kind)
         self.form = form
         self.mpv_socket = QLineEdit(str(qs.value("players/mpv", PL.DEFAULT_MPV_SOCKET)))
         self.vlc_addr = QLineEdit(str(qs.value("players/vlc", PL.DEFAULT_VLC)))
@@ -215,11 +223,11 @@ class PlayersDialog(QDialog):
         self.port.setRange(1, 65535)
         self.port.setValue(int(qs.value("players/port", PL.DEOVR_PORT)))
         self.port.setMinimumWidth(120)
-        form.addRow("Socket", self.mpv_socket)
-        form.addRow("Adresse", self.vlc_addr)
-        form.addRow("Passwort", self.vlc_pw)
-        form.addRow("Adresse", self.host)
-        form.addRow("Port", self.port)
+        form.addRow(tr("Socket"), self.mpv_socket)
+        form.addRow(tr("Adresse"), self.vlc_addr)
+        form.addRow(tr("Passwort"), self.vlc_pw)
+        form.addRow(tr("Adresse"), self.host)
+        form.addRow(tr("Port"), self.port)
         self._rows = {"mpv": (self.mpv_socket,), "vlc": (self.vlc_addr, self.vlc_pw),
                       "deovr": (self.host, self.port), "heresphere": (self.host, self.port)}
         lay.addLayout(form)
@@ -231,16 +239,16 @@ class PlayersDialog(QDialog):
         lay.addWidget(self.hint)
         row = QHBoxLayout()
         self.folder = QLineEdit(";".join(ext.folders()))
-        self.folder.setPlaceholderText("Script-Ordner (optional)")
-        pick = QPushButton("Ordner…")
+        self.folder.setPlaceholderText(tr("Script-Ordner (optional)"))
+        pick = QPushButton(tr("Ordner…"))
         pick.clicked.connect(self._pick)
         row.addWidget(self.folder, 1)
         row.addWidget(pick)
         lay.addLayout(row)
         row = QHBoxLayout()
-        self.connect_btn = QPushButton(theme.icon("play", theme.ON_ACCENT), "Verbinden")
+        self.connect_btn = theme.accent_icon(QPushButton(), "play", tr("Verbinden"))
         self.connect_btn.setObjectName("primary")
-        self.disc_btn = QPushButton("Trennen")
+        self.disc_btn = QPushButton(tr("Trennen"))
         row.addWidget(self.connect_btn)
         row.addWidget(self.disc_btn)
         lay.addLayout(row)
@@ -257,7 +265,7 @@ class PlayersDialog(QDialog):
         self.refresh()
 
     def _pick(self):
-        d = QFileDialog.getExistingDirectory(self, "Script-Ordner")
+        d = QFileDialog.getExistingDirectory(self, tr("Script-Ordner"))
         if d:
             self.folder.setText(d)
 

@@ -13,6 +13,7 @@ import json
 import threading
 from dataclasses import dataclass, field
 
+from ..i18n import tr
 from .base import Device, DeviceError
 
 DEFAULT_URL = "ws://127.0.0.1:12345"
@@ -53,7 +54,7 @@ def _parse_device(d: dict) -> RemoteDevice:
 
 
 #: how a vibrating (or rotating) device follows the script
-VIBE_MODES = (("speed", "Tempo (schnelle Hübe = stark)"), ("depth", "Tiefe (tief = stark)"))
+VIBE_MODES = (("speed", tr("Tempo (schnelle Hübe = stark)")), ("depth", tr("Tiefe (tief = stark)")))
 VIBE_FULL_SPEED = 400.0               # positions per second that mean full strength
 
 
@@ -98,21 +99,20 @@ class ButtplugDevice(Device):
         try:
             from websockets.sync.client import connect
         except ImportError as e:  # pragma: no cover - dependency is declared
-            raise DeviceError("Python-Paket 'websockets' fehlt") from e
+            raise DeviceError(tr("Python-Paket 'websockets' fehlt")) from e
         try:
             self._cm = connect(self.url, open_timeout=5, close_timeout=2, max_size=2**22)
             self._ws = self._cm.__enter__() if hasattr(self._cm, "__enter__") else self._cm
         except Exception as e:
             self._ws = None
-            raise DeviceError(f"Intiface Central nicht erreichbar unter {self.url}. "
-                              "Läuft Intiface und ist der Server gestartet?") from e
+            raise DeviceError(tr("Intiface Central nicht erreichbar unter {0}. Läuft Intiface und ist der Server gestartet?", self.url)) from e
         self._stop.clear()
         self._reader = threading.Thread(target=self._read_loop, name="buttplug-reader", daemon=True)
         self._reader.start()
         info = self._request({"RequestServerInfo": {"ClientName": CLIENT_NAME, "MessageVersion": SPEC_VERSION}})
         if "ServerInfo" not in info:
             self.disconnect()
-            raise DeviceError(f"Unerwartete Antwort von Intiface: {info}")
+            raise DeviceError(tr("Unerwartete Antwort von Intiface: {0}", info))
         si = info["ServerInfo"]
         self.server_name = si.get("ServerName", "Intiface")
         ping = int(si.get("MaxPingTime") or 0)
@@ -123,7 +123,7 @@ class ButtplugDevice(Device):
         lst = self._request({"RequestDeviceList": {}})
         for d in (lst.get("DeviceList") or {}).get("Devices", []):
             self._add_device(d)
-        self._emit(f"Verbunden mit {self.server_name}")
+        self._emit(tr("Verbunden mit {0}", self.server_name))
 
     def disconnect(self) -> None:
         if self._ws is None:
@@ -140,12 +140,12 @@ class ButtplugDevice(Device):
         self._ws = None
         self.devices.clear()
         self.selected = None
-        self._emit("Getrennt")
+        self._emit(tr("Getrennt"))
 
     # ------------------------------------------------------------ scanning
     def start_scanning(self) -> None:
         self._check(self._request({"StartScanning": {}}))
-        self._emit("Suche Geräte… (Gerät einschalten)")
+        self._emit(tr("Suche Geräte… (Gerät einschalten)"))
 
     def stop_scanning(self) -> None:
         if self.connected:
@@ -154,7 +154,7 @@ class ButtplugDevice(Device):
     def select(self, index: int) -> None:
         if index in self.devices:
             self.selected = index
-            self._emit(f"Gerät gewählt: {self.devices[index].name}")
+            self._emit(tr("Gerät gewählt: {0}", self.devices[index].name))
 
     # ------------------------------------------------------------ motion
     def move(self, position: float, duration_ms: int) -> None:
@@ -203,13 +203,13 @@ class ButtplugDevice(Device):
             self.selected = dev.index         # a stroker wins over a vibrator
         elif dev.usable and current is None:
             self.selected = dev.index
-        kind = ("Hub-Gerät" if dev.is_linear else "Vibration/Drehung" if dev.scalars
-                else "ohne Steuerung")
-        self._emit(f"Gefunden: {dev.name} ({kind})")
+        kind = (tr("Hub-Gerät") if dev.is_linear else "Vibration/Drehung" if dev.scalars
+                else tr("ohne Steuerung"))
+        self._emit(tr("Gefunden: {0} ({1})", dev.name, kind))
 
     def _send(self, msg: dict) -> int:
         if self._ws is None:
-            raise DeviceError("nicht verbunden")
+            raise DeviceError(tr("nicht verbunden"))
         mid = next(self._ids)
         name = next(iter(msg))
         body = dict(msg[name], Id=mid)
@@ -218,7 +218,7 @@ class ButtplugDevice(Device):
                 self._ws.send(json.dumps([{name: body}]))
         except Exception as e:
             self._connection_lost(e)
-            raise DeviceError(f"Verbindung zu Intiface verloren: {e}") from e
+            raise DeviceError(tr("Verbindung zu Intiface verloren: {0}", e)) from e
         return mid
 
     def _request(self, msg: dict) -> dict:
@@ -229,19 +229,19 @@ class ButtplugDevice(Device):
         try:
             with self._send_lock:
                 if self._ws is None:
-                    raise DeviceError("nicht verbunden")
+                    raise DeviceError(tr("nicht verbunden"))
                 self._ws.send(json.dumps([{name: dict(msg[name], Id=mid)}]))
             if not ev.wait(REPLY_TIMEOUT):
-                raise DeviceError(f"Keine Antwort von Intiface auf {name}")
+                raise DeviceError(tr("Keine Antwort von Intiface auf {0}", name))
         except DeviceError:
             raise
         except Exception as e:
             self._connection_lost(e)
-            raise DeviceError(f"Verbindung zu Intiface verloren: {e}") from e
+            raise DeviceError(tr("Verbindung zu Intiface verloren: {0}", e)) from e
         finally:
             self._pending.pop(mid, None)
         if not box:
-            raise DeviceError("Verbindung zu Intiface verloren")
+            raise DeviceError(tr("Verbindung zu Intiface verloren"))
         return box[0]
 
     @staticmethod
@@ -281,9 +281,9 @@ class ButtplugDevice(Device):
                 if self.selected == dev.index:
                     self.selected = next((d.index for d in self.devices.values() if d.is_linear),
                                          next((d.index for d in self.devices.values() if d.usable), None))
-                self._emit(f"Gerät getrennt: {dev.name}")
+                self._emit(tr("Gerät getrennt: {0}", dev.name))
         elif name == "ScanningFinished":
-            self._emit("Suche beendet")
+            self._emit(tr("Suche beendet"))
         elif name == "Error" and mid:
             self._emit(f"Intiface: {body.get('ErrorMessage')}")
 
@@ -303,4 +303,4 @@ class ButtplugDevice(Device):
         self.selected = None
         for ev, _box in list(self._pending.values()):
             ev.set()
-        self._emit(f"Verbindung zu Intiface verloren ({err})")
+        self._emit(tr("Verbindung zu Intiface verloren ({0})", err))

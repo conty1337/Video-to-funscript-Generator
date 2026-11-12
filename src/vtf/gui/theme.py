@@ -1,10 +1,12 @@
-"""Visual system: graphite ramp, one amber accent, lucide line icons.
+"""Visual system: graphite ramp, one accent (amber unless the user picks another), lucide line icons.
 
 Direction (see docs/design.md): an edit bay at night. The chrome stays
 quiet, the stroke curve is the one element that carries colour.
 """
 
 from __future__ import annotations
+
+import weakref
 
 from PySide6.QtCore import QByteArray, QEvent, QObject, QRectF, Qt, QTimer
 from PySide6.QtGui import (
@@ -28,6 +30,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..i18n import tr
+
 # ------------------------------------------------------------ tokens
 DEEP = "#0f0f10"       # toolbar, sidebar
 BG = "#141415"         # page
@@ -37,10 +41,44 @@ HAIRLINE = "rgba(237, 237, 237, 0.08)"
 TEXT = "#ededed"
 TEXT_2 = "#a1a1a6"
 MUTED = "#85858b"
-ACCENT = "#e5a043"     # amber tally light
+ACCENT = "#e5a043"     # amber tally light; set_accent() changes the three accent tokens
 ACCENT_HOVER = "#eeb25e"
 ON_ACCENT = "#141415"
 NEGATIVE = "#e5484d"
+
+#: accent colours to choose from (key -> label, colour); any other colour can be picked too.
+#: All bright enough for dark text on them and far enough from NEGATIVE (stop, errors).
+ACCENTS = {
+    "amber": (tr("Bernstein"), "#e5a043"),
+    "blue": (tr("Blau"), "#5b9cf5"),
+    "teal": (tr("Türkis"), "#3cc2b4"),
+    "green": (tr("Grün"), "#7cc35a"),
+    "violet": (tr("Violett"), "#a688f7"),
+    "pink": (tr("Pink"), "#ec6fb0"),
+}
+DEFAULT_ACCENT = ACCENTS["amber"][1]
+
+
+def _luminance(c: QColor) -> float:
+    def lin(v: float) -> float:
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * lin(c.redF()) + 0.7152 * lin(c.greenF()) + 0.0722 * lin(c.blueF())
+
+
+def set_accent(color: str) -> str:
+    """Make `color` the accent (invalid -> default). Text and icons on the accent turn
+    white when the colour is too dark for dark text. Returns the colour used."""
+    global ACCENT, ACCENT_HOVER, ON_ACCENT
+    c = QColor(color)
+    if not c.isValid():
+        c = QColor(DEFAULT_ACCENT)
+    c.setAlpha(255)
+    ACCENT = c.name()
+    dark_text = (_luminance(c) + 0.05) / (_luminance(QColor(BG)) + 0.05)
+    light_text = 1.05 / (_luminance(c) + 0.05)
+    ON_ACCENT = BG if dark_text >= light_text else "#ffffff"
+    ACCENT_HOVER = (c.lighter(112) if ON_ACCENT == BG else c.darker(112)).name()
+    return ACCENT
 
 
 def qcolor(hex_or_rgba: str, alpha: float | None = None) -> QColor:
@@ -123,6 +161,19 @@ def icon_pixmap(name: str, color: str = TEXT_2, px: int = 16, ratio: float = 2.0
     return pm
 
 
+_accent_icons: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()   # button -> icon name
+
+
+def accent_icon(button, name: str, text: str | None = None):
+    """Give a button on the accent (primary) an icon in the colour on the accent; it is
+    redrawn when the accent changes. Returns the button."""
+    _accent_icons[button] = name
+    button.setIcon(icon(name, ON_ACCENT))
+    if text is not None:
+        button.setText(text)
+    return button
+
+
 def icon(name: str, color: str = TEXT_2, px: int = 16) -> QIcon:
     ic = QIcon()
     ic.addPixmap(icon_pixmap(name, color, px), QIcon.Normal)
@@ -132,7 +183,8 @@ def icon(name: str, color: str = TEXT_2, px: int = 16) -> QIcon:
 
 
 # ------------------------------------------------------------ application style
-QSS = f"""
+def build_qss() -> str:
+    return f"""
 * {{ font-size: 13px; }}
 QWidget {{ color: {TEXT}; background: {BG}; }}
 QMainWindow::separator, QSplitter::handle {{ background: {BG}; }}
@@ -262,6 +314,7 @@ QDialog, QMessageBox {{ background: {BG}; }}
 
 
 def apply(app: QApplication) -> None:
+    """Style the whole app with the current tokens; called again when the accent changes."""
     app.setStyle("Fusion")
     pal = QPalette()
     for role, col in (
@@ -280,21 +333,35 @@ def apply(app: QApplication) -> None:
     pal.setColor(QPalette.Dark, QColor(DEEP))
     pal.setColor(QPalette.Shadow, QColor("#000000"))
     app.setPalette(pal)
-    app.setStyleSheet(QSS.replace("%CHECK%", _icon_file("check", ON_ACCENT))
+    app.setStyleSheet(build_qss().replace("%CHECK%", _icon_file("check", ON_ACCENT))
                          .replace("%CHEVRON%", _icon_file("chevron-down", TEXT_2)))
     if not hasattr(app, "_vtf_fit"):
         app._vtf_fit = DialogFitter(app)
         app.installEventFilter(app._vtf_fit)
 
 
+def change_accent(app: QApplication, color: str) -> str:
+    """Switch the accent while the app runs: style, palette, accent icons, repaint."""
+    used = set_accent(color)
+    apply(app)
+    for button, name in list(_accent_icons.items()):
+        try:
+            button.setIcon(icon(name, ON_ACCENT))
+        except RuntimeError:          # widget already deleted
+            pass
+    for w in app.allWidgets():
+        w.update()
+    return used
+
+
 # ------------------------------------------------------------ reset to defaults
-def reset_button(on_click, tip: str = "Alles in diesem Bereich auf Standard zurücksetzen") -> QToolButton:
+def reset_button(on_click, tip: str | None = None) -> QToolButton:
     b = QToolButton()
     b.setObjectName("reset")
-    b.setText("Standard")
+    b.setText(tr("Standard"))
     b.setIcon(icon("rotate-ccw", MUTED, 14))
     b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-    b.setToolTip(tip)
+    b.setToolTip(tip or tr("Alles in diesem Bereich auf Standard zurücksetzen"))
     b.setCursor(Qt.PointingHandCursor)
     b.clicked.connect(lambda *_: on_click())
     return b
@@ -334,7 +401,7 @@ def double_click_reset(slider: QSlider, default: int) -> None:
     slider.installEventFilter(f)
     slider._reset_filter = f
     tip = slider.toolTip()
-    slider.setToolTip((tip + "\n" if tip else "") + "Doppelklick = Standard")
+    slider.setToolTip((tip + "\n" if tip else "") + tr("Doppelklick = Standard"))
 
 
 class DialogFitter(QObject):

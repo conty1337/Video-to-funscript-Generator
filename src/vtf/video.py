@@ -19,6 +19,8 @@ from typing import Iterator
 import cv2
 import numpy as np
 
+from .i18n import tr
+
 
 @dataclass
 class VideoInfo:
@@ -98,7 +100,7 @@ def _probe_ffprobe(path: str) -> VideoInfo | None:
 def _probe_cv2(path: str) -> VideoInfo:
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
-        raise IOError(f"Video kann nicht geöffnet werden: {path}")
+        raise IOError(tr("Video kann nicht geöffnet werden: {0}", path))
     try:
         info = VideoInfo(
             path,
@@ -176,13 +178,13 @@ def _iter_ffmpeg(info: VideoInfo, w: int, h: int, hwaccel: str, step: int) -> It
         proc.wait()
     if produced == 0:
         err = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
-        raise RuntimeError(f"FFmpeg lieferte keine Frames: {err.strip()[:500]}")
+        raise RuntimeError(tr("FFmpeg lieferte keine Frames: {0}", err.strip()[:500]))
 
 
 def _iter_cv2(info: VideoInfo, w: int, h: int, step: int) -> Iterator[np.ndarray]:
     cap = cv2.VideoCapture(info.path)
     if not cap.isOpened():
-        raise IOError(f"Video kann nicht geöffnet werden: {info.path}")
+        raise IOError(tr("Video kann nicht geöffnet werden: {0}", info.path))
     try:
         idx = 0
         while True:
@@ -201,11 +203,11 @@ def _iter_cv2(info: VideoInfo, w: int, h: int, step: int) -> Iterator[np.ndarray
 
 
 DECODER_LABELS = {
-    "vaapi-gpu": "Grafikkarte (VAAPI: dekodieren und verkleinern)",
-    "vaapi": "Grafikkarte dekodiert, CPU verkleinert (VAAPI)",
-    "auto": "FFmpeg mit automatischer Hardware-Beschleunigung",
-    "none": "CPU (FFmpeg)",
-    "opencv": "CPU (OpenCV, ohne FFmpeg)",
+    "vaapi-gpu": tr("Grafikkarte (VAAPI: dekodieren und verkleinern)"),
+    "vaapi": tr("Grafikkarte dekodiert, CPU verkleinert (VAAPI)"),
+    "auto": tr("FFmpeg mit automatischer Hardware-Beschleunigung"),
+    "none": tr("CPU (FFmpeg)"),
+    "opencv": tr("CPU (OpenCV, ohne FFmpeg)"),
 }
 
 
@@ -222,7 +224,7 @@ def iter_gray_frames(info: VideoInfo, width: int, hwaccel: str = "auto",
     if report is not None:
         report.setdefault("errors", [])
     if backend in ("auto", "ffmpeg") and not has_ffmpeg() and report is not None:
-        report["errors"].append(("ffmpeg", "ffmpeg/ffprobe nicht gefunden"))
+        report["errors"].append(("ffmpeg", tr("ffmpeg/ffprobe nicht gefunden")))
     if backend in ("auto", "ffmpeg") and has_ffmpeg():
         attempts = decode_attempts(hwaccel, os.path.exists(VAAPI_DEVICE))
         for k, mode in enumerate(attempts):
@@ -231,7 +233,7 @@ def iter_gray_frames(info: VideoInfo, width: int, hwaccel: str = "auto",
                 first = next(gen)
             except (RuntimeError, StopIteration) as e:
                 if report is not None:
-                    report["errors"].append((mode, str(e) or "keine Bilder"))
+                    report["errors"].append((mode, str(e) or tr("keine Bilder")))
                 if backend == "ffmpeg" and k == len(attempts) - 1:
                     raise
                 continue
@@ -241,7 +243,7 @@ def iter_gray_frames(info: VideoInfo, width: int, hwaccel: str = "auto",
             yield from gen
             return
         if backend == "ffmpeg":
-            raise RuntimeError("FFmpeg konnte das Video nicht dekodieren")
+            raise RuntimeError(tr("FFmpeg konnte das Video nicht dekodieren"))
     if report is not None:
         report["decoder"] = "opencv"
     yield from _iter_cv2(info, w, h, step)
@@ -268,5 +270,5 @@ def test_decoders(info: VideoInfo, width: int = 640, frames: int = 90) -> list[d
                     "fps": n / dt if n else 0.0, "error": err})
     if not has_ffmpeg():
         out.append({"mode": "ffmpeg", "label": "FFmpeg", "ok": False, "fps": 0.0,
-                    "error": "ffmpeg/ffprobe nicht gefunden – sudo dnf install ffmpeg"})
+                    "error": tr("ffmpeg/ffprobe nicht gefunden – sudo dnf install ffmpeg")})
     return out

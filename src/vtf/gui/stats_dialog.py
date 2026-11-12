@@ -15,15 +15,16 @@ from PySide6.QtWidgets import (
 )
 
 from .. import stats as S
+from ..i18n import tr
 from . import theme
 
-PERIODS = (("Heute", 1), ("7 Tage", 7), ("30 Tage", 30), ("Gesamt", None))
+PERIODS = ((tr("Heute"), 1), (tr("7 Tage"), 7), (tr("30 Tage"), 30), (tr("Gesamt"), None))
 
 
 class StatsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Statistik")
+        self.setWindowTitle(tr("Statistik"))
         self.setMinimumWidth(560)
         self.lay = QVBoxLayout(self)
         self.lay.setContentsMargins(24, 24, 24, 24)
@@ -32,11 +33,11 @@ class StatsDialog(QDialog):
         self.body.setSpacing(16)
         self.lay.addLayout(self.body)
         foot = QHBoxLayout()
-        note = QLabel("Nur auf diesem Rechner gespeichert, nichts wird verschickt")
+        note = QLabel(tr("Nur auf diesem Rechner gespeichert, nichts wird verschickt"))
         note.setObjectName("caption")
-        reset = QPushButton("Zurücksetzen")
+        reset = QPushButton(tr("Zurücksetzen"))
         reset.clicked.connect(self._reset)
-        close = QPushButton("Schließen")
+        close = QPushButton(tr("Schließen"))
         close.clicked.connect(self.accept)
         foot.addWidget(note, 1)
         foot.addWidget(reset)
@@ -69,9 +70,9 @@ class StatsDialog(QDialog):
             h.setAlignment(Qt.AlignRight)
             grid.addWidget(h, 0, c)
         sums = [S.summary(data, d) for _l, d in PERIODS]
-        rows = (("Spielzeit", lambda s: S.fmt_duration(s["seconds"])),
-                ("Hübe", lambda s: f"{s['strokes']:,}".replace(",", ".")),
-                ("Tage", lambda s: str(s["days"])))
+        rows = ((tr("Spielzeit"), lambda s: S.fmt_duration(s["seconds"])),
+                (tr("Hübe"), lambda s: f"{s['strokes']:,}".replace(",", ".")),
+                (tr("Tage"), lambda s: str(s["days"])))
         for r, (label, fn) in enumerate(rows, start=1):
             lb = QLabel(label)
             lb.setObjectName("formLabel")
@@ -83,12 +84,13 @@ class StatsDialog(QDialog):
                 grid.addWidget(v, r, c)
         self.body.addLayout(grid)
         total = sums[-1]
-        for title, items in (("Lieblingsvideos", total["videos"]), ("Lieblingsmuster", total["patterns"])):
+        for title, items, shown in ((tr("Lieblingsvideos"), total["videos"], str),
+                                    (tr("Lieblingsmuster"), total["patterns"], tr)):    # built-in patterns translated
             head = QLabel(title)
             head.setObjectName("section")
             self.body.addWidget(head)
             if not items:
-                empty = QLabel("Noch nichts gespielt")
+                empty = QLabel(tr("Noch nichts gespielt"))
                 empty.setObjectName("caption")
                 self.body.addWidget(empty)
                 continue
@@ -96,7 +98,7 @@ class StatsDialog(QDialog):
             top.setHorizontalSpacing(16)
             top.setVerticalSpacing(4)
             for r, (name, sec) in enumerate(items[:5]):
-                n = QLabel(name)
+                n = QLabel(shown(name))
                 t = QLabel(S.fmt_duration(sec))
                 t.setFont(theme.mono_font(12))
                 t.setObjectName("meta")
@@ -107,7 +109,7 @@ class StatsDialog(QDialog):
             self.body.addLayout(top)
 
     def _reset(self):
-        if QMessageBox.question(self, "Statistik zurücksetzen",
-                                "Alle gespeicherten Zeiten und Zählungen löschen?") == QMessageBox.Yes:
+        if QMessageBox.question(self, tr("Statistik zurücksetzen"),
+                                tr("Alle gespeicherten Zeiten und Zählungen löschen?")) == QMessageBox.Yes:
             S.reset()
             self.refresh()

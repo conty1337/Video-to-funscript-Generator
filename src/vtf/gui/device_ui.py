@@ -28,11 +28,12 @@ from ..device.buttplug import DEFAULT_URL, VIBE_MODES, ButtplugDevice
 from ..device.sync import ScriptSync, SyncSettings
 from ..device.tcode import DEFAULT_PORT as TCODE_PORT
 from ..device.tcode import AxisProxy, TCodeDevice
+from ..i18n import tr
 from ..safety import SafetyGuard, SafetySettings
 from . import theme
 
-KINDS = [("Simulation (ohne Gerät)", "sim"), ("Intiface Central (Bluetooth)", "intiface"),
-         ("OSR2/SR6 u.a. (TCode, USB oder WLAN)", "tcode")]
+KINDS = [(tr("Simulation (ohne Gerät)"), "sim"), (tr("Intiface Central (Bluetooth)"), "intiface"),
+         (tr("OSR2/SR6 u.a. (TCode, USB oder WLAN)"), "tcode")]
 
 
 def default_address(kind: str) -> str:
@@ -53,7 +54,7 @@ class DeviceController(QObject):
         self.axis_syncs: dict = {}
         self._axis_actions: dict = {}
         self._connecting = False
-        self.status = QLabel("Gerät · nicht verbunden")
+        self.status = QLabel(tr("Gerät · nicht verbunden"))
         self.status.setFont(theme.mono_font(11))
         window.statusBar().addPermanentWidget(self.status)
         self.message.connect(self._on_message)
@@ -138,12 +139,12 @@ class DeviceController(QObject):
             elif ev[0] == "break":
                 self._paused_by_safety = [src for src in self.sources if _call(src, "safety_pause")]
                 self.sync.stop()
-                self.message.emit(f"Sicherheits-Timer: {ev[1]} s Pause, danach geht es weiter")
+                self.message.emit(tr("Sicherheits-Timer: {0} s Pause, danach geht es weiter", ev[1]))
             elif ev[0] == "resume":
                 for src in self._paused_by_safety:
                     _call(src, "safety_resume")
                 self._paused_by_safety = []
-                self.message.emit("Pause vorbei, weiter geht's")
+                self.message.emit(tr("Pause vorbei, weiter geht's"))
         text = self.safety.status(now)
         self.safety_label.setText(text)
         self.safety_label.setVisible(bool(text))
@@ -170,7 +171,7 @@ class DeviceController(QObject):
         dev.add_listener(self.message.emit)
         self.qs.setValue("device/kind", kind)
         self._connecting = True
-        self.message.emit("Verbinde…")
+        self.message.emit(tr("Verbinde…"))
 
         def run():
             try:
@@ -181,7 +182,7 @@ class DeviceController(QObject):
                 self.sync.set_device(dev)
                 self._make_axis_syncs(dev)
             except DeviceError as e:
-                self.message.emit(f"Fehler: {e}")
+                self.message.emit(tr("Fehler: {0}", e))
             finally:
                 self._connecting = False
                 self.changed.emit()
@@ -229,7 +230,7 @@ class DeviceController(QObject):
                 sync.settings.offset_ms, sync.settings.max_speed = main.offset_ms, main.max_speed
                 sync.tick(media_ms, playing)
         except DeviceError as e:
-            self.message.emit(f"Fehler: {e}")
+            self.message.emit(tr("Fehler: {0}", e))
 
     def device_position(self) -> float | None:
         return self.device.current_position() if self.device is not None else None
@@ -254,9 +255,9 @@ class DeviceController(QObject):
             name = self.device.name
             if isinstance(self.device, ButtplugDevice) and self.device.selected in self.device.devices:
                 name = self.device.devices[self.device.selected].name
-            self.status.setText(f"Gerät · {name}")
+            self.status.setText(tr("Gerät · {0}", name))
         else:
-            self.status.setText("Gerät · nicht verbunden")
+            self.status.setText(tr("Gerät · nicht verbunden"))
         self.status.setToolTip(msg)
         self.win._status(msg)
         if self.dialog is not None:
@@ -296,7 +297,7 @@ class DeviceDialog(QDialog):
     def __init__(self, ctl: DeviceController, parent=None):
         super().__init__(parent)
         self.ctl = ctl
-        self.setWindowTitle("Gerät")
+        self.setWindowTitle(tr("Gerät"))
         # the content scrolls when the screen is too low for it; the window opens as tall as it needs
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -310,11 +311,10 @@ class DeviceDialog(QDialog):
         lay.setContentsMargins(24, 24, 24, 24)
         lay.setSpacing(8)
 
-        title = QLabel("Verbindung")
+        title = QLabel(tr("Verbindung"))
         title.setObjectName("section")
         lay.addWidget(title)
-        cap = QLabel("Für den Fredorch F21S: Intiface Central starten, Server starten, dann hier verbinden. "
-                     "Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde.")
+        cap = QLabel(tr("Für den Fredorch F21S: Intiface Central starten, Server starten, dann hier verbinden. Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde."))
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         cap.setMinimumWidth(412)          # 460 px dialog minus margins
@@ -327,43 +327,42 @@ class DeviceDialog(QDialog):
             self.kind.addItem(label, val)
         i = self.kind.findData(ctl.qs.value("device/kind", "sim"))
         self.kind.setCurrentIndex(max(0, i))
-        f.addRow(self._label("Art"), self.kind)
+        f.addRow(self._label(tr("Art")), self.kind)
         self.url = QLineEdit(self._address_for(self.kind.currentData()))
         self.url.setFont(theme.mono_font(12))
-        self.url_label = self._label("Intiface-Adresse")
+        self.url_label = self._label(tr("Intiface-Adresse"))
         self._shown_kind = None
         f.addRow(self.url_label, self.url)
         self.device_box = QComboBox()
-        f.addRow(self._label("Gerät"), self.device_box)
+        f.addRow(self._label(tr("Gerät")), self.device_box)
         lay.addLayout(f)
         row = QHBoxLayout()
-        self.connect_btn = QPushButton(theme.icon("bluetooth", theme.ON_ACCENT), "Verbinden")
+        self.connect_btn = theme.accent_icon(QPushButton(), "bluetooth", tr("Verbinden"))
         self.connect_btn.setObjectName("primary")
-        self.scan_btn = QPushButton("Geräte suchen")
-        self.disconnect_btn = QPushButton("Trennen")
+        self.scan_btn = QPushButton(tr("Geräte suchen"))
+        self.disconnect_btn = QPushButton(tr("Trennen"))
         row.addWidget(self.connect_btn)
         row.addWidget(self.scan_btn)
         row.addWidget(self.disconnect_btn)
         lay.addLayout(row)
-        self.wizard_btn = QPushButton("Einrichtungs-Assistent…")
-        self.wizard_btn.setToolTip("Schritt für Schritt: Verbindung, Richtung, Hubbereich, Höchsttempo, Verzögerung")
+        self.wizard_btn = QPushButton(tr("Einrichtungs-Assistent…"))
+        self.wizard_btn.setToolTip(tr("Schritt für Schritt: Verbindung, Richtung, Hubbereich, Höchsttempo, Verzögerung"))
         self.wizard_btn.clicked.connect(ctl.open_wizard)
         lay.addWidget(self.wizard_btn)
 
         lay.addSpacing(16)
-        lay.addWidget(theme.section_title("Wiedergabe", self.reset_playback,
-                                          "Zeitversatz, Tempo, Hubbereich, Richtung und Vibration auf Standard"))
+        lay.addWidget(theme.section_title(tr("Wiedergabe"), self.reset_playback,
+                                          tr("Zeitversatz, Tempo, Hubbereich, Richtung und Vibration auf Standard")))
         f = QFormLayout()
         f.setHorizontalSpacing(12)
         f.setVerticalSpacing(12)
         s = ctl.sync.settings
         self.offset = self._slider(-300, 600, s.offset_ms, " ms")
-        self.offset[1].setToolTip("Positiv = Gerät bekommt Befehle früher (gleicht die Bluetooth-Verzögerung aus)")
-        f.addRow(self._label("Zeitversatz"), self.offset[0])
+        self.offset[1].setToolTip(tr("Positiv = Gerät bekommt Befehle früher (gleicht die Bluetooth-Verzögerung aus)"))
+        f.addRow(self._label(tr("Zeitversatz")), self.offset[0])
         self.speed = self._slider(50, 1000, int(s.max_speed), " /s")
-        self.speed[1].setToolTip("Höchstgeschwindigkeit in Positionen pro Sekunde. "
-                                 "F21S: voller Hub frühestens in ca. 200 ms = 500 /s")
-        f.addRow(self._label("Max. Tempo"), self.speed[0])
+        self.speed[1].setToolTip(tr("Höchstgeschwindigkeit in Positionen pro Sekunde. F21S: voller Hub frühestens in ca. 200 ms = 500 /s"))
+        f.addRow(self._label(tr("Max. Tempo")), self.speed[0])
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -374,28 +373,28 @@ class DeviceDialog(QDialog):
             sp.setButtonSymbols(QSpinBox.NoButtons)
             sp.setAlignment(Qt.AlignRight)
             sp.setFont(theme.mono_font(12))
-        bis = QLabel("bis")
+        bis = QLabel(tr("bis"))
         bis.setObjectName("caption")
         rl.addWidget(self.pmin, 1)
         rl.addWidget(bis)
         rl.addWidget(self.pmax, 1)
-        f.addRow(self._label("Hubbereich"), rng)
-        self.invert = QCheckBox("Richtung umkehren")
+        f.addRow(self._label(tr("Hubbereich")), rng)
+        self.invert = QCheckBox(tr("Richtung umkehren"))
         self.invert.setChecked(s.invert)
         f.addRow(QLabel(), self.invert)
         self.vibe = QComboBox()
         for code, label in VIBE_MODES:
             self.vibe.addItem(label, code)
         self.vibe.setCurrentIndex(max(0, self.vibe.findData(ctl.qs.value("device/vibe", "speed"))))
-        self.vibe.setToolTip("Nur für Vibratoren und andere Geräte ohne Hub: woraus die Stärke wird")
+        self.vibe.setToolTip(tr("Nur für Vibratoren und andere Geräte ohne Hub: woraus die Stärke wird"))
         self.vibe.currentIndexChanged.connect(lambda _i: ctl.set_vibe_mode(self.vibe.currentData()))
-        f.addRow(self._label("Vibration folgt"), self.vibe)
+        f.addRow(self._label(tr("Vibration folgt")), self.vibe)
         lay.addLayout(f)
 
         lay.addSpacing(16)
-        lay.addWidget(theme.section_title("Sicherheit", self.reset_safety, "Sicherheits-Timer auf Standard"))
+        lay.addWidget(theme.section_title(tr("Sicherheit"), self.reset_safety, tr("Sicherheits-Timer auf Standard")))
         g = ctl.safety.settings
-        self.safe_on = QCheckBox("Sicherheits-Timer an")
+        self.safe_on = QCheckBox(tr("Sicherheits-Timer an"))
         self.safe_on.setChecked(g.enabled)
         lay.addWidget(self.safe_on)
         f = QFormLayout()
@@ -408,15 +407,14 @@ class DeviceDialog(QDialog):
         self.safe_secs.setRange(5, 600)
         self.safe_secs.setSuffix(" s")
         self.safe_secs.setValue(max(5, g.break_seconds))
-        f.addRow(self._label("Höchstens"), self._row(self.safe_max, "am Stück, dann Stopp"))
-        f.addRow(self._label("Ohne Bedienung"), self._row(self.safe_idle, "dann Stopp"))
-        f.addRow(self._label("Pause alle"), self._row(self.safe_every, "für", self.safe_secs))
+        f.addRow(self._label(tr("Höchstens")), self._row(self.safe_max, tr("am Stück, dann Stopp")))
+        f.addRow(self._label(tr("Ohne Bedienung")), self._row(self.safe_idle, tr("dann Stopp")))
+        f.addRow(self._label(tr("Pause alle")), self._row(self.safe_every, tr("für"), self.safe_secs))
         self.safe_form = QWidget()
         f.setContentsMargins(0, 0, 0, 0)
         self.safe_form.setLayout(f)
         lay.addWidget(self.safe_form)
-        cap = QLabel("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, "
-                     "Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy.")
+        cap = QLabel(tr("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy."))
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         lay.addWidget(cap)
@@ -426,13 +424,13 @@ class DeviceDialog(QDialog):
         self.safe_form.setEnabled(g.enabled)
 
         lay.addSpacing(16)
-        title = QLabel("Test")
+        title = QLabel(tr("Test"))
         title.setObjectName("section")
         lay.addWidget(title)
         row = QHBoxLayout()
-        self.up_btn = QPushButton(theme.icon("arrow-up"), "Oben")
-        self.down_btn = QPushButton(theme.icon("arrow-down"), "Unten")
-        self.stop_btn = QPushButton(theme.icon("x"), "Stopp  (Esc)")
+        self.up_btn = QPushButton(theme.icon("arrow-up"), tr("Oben"))
+        self.down_btn = QPushButton(theme.icon("arrow-down"), tr("Unten"))
+        self.stop_btn = QPushButton(theme.icon("x"), tr("Stopp  (Esc)"))
         for b in (self.up_btn, self.down_btn, self.stop_btn):
             row.addWidget(b)
         lay.addLayout(row)
@@ -512,7 +510,7 @@ class DeviceDialog(QDialog):
         sp = QSpinBox()
         sp.setRange(0, maximum)
         sp.setSuffix(" min")
-        sp.setSpecialValueText("aus")
+        sp.setSpecialValueText(tr("aus"))
         sp.setValue(v)
         sp.setFixedHeight(INPUT_H)
         return sp
@@ -581,7 +579,7 @@ class DeviceDialog(QDialog):
             try:
                 dev.start_scanning()
             except DeviceError as e:
-                self.log(f"Fehler: {e}")
+                self.log(tr("Fehler: {0}", e))
 
     def _select(self, i: int):
         dev = self.ctl.device
@@ -625,7 +623,7 @@ class DeviceDialog(QDialog):
         if not connected and kind != self._shown_kind:
             self._shown_kind = kind
             self.url.setText(self._address_for(kind))
-            self.url_label.setText("Port / Adresse" if kind == "tcode" else "Intiface-Adresse")
+            self.url_label.setText(tr("Port / Adresse") if kind == "tcode" else tr("Intiface-Adresse"))
         self.kind.setEnabled(not connected)
         self.connect_btn.setEnabled(not connected)
         self.disconnect_btn.setEnabled(connected)
@@ -635,8 +633,8 @@ class DeviceDialog(QDialog):
         self.device_box.clear()
         if isinstance(dev, ButtplugDevice) and connected:
             for d in dev.devices.values():
-                self.device_box.addItem(d.name + ("" if d.is_linear else "  (Vibration)" if d.scalars
-                                                  else "  (nicht steuerbar)"), d.index)
+                self.device_box.addItem(d.name + ("" if d.is_linear else tr("  (Vibration)") if d.scalars
+                                                  else tr("  (nicht steuerbar)")), d.index)
             if dev.selected is not None:
                 self.device_box.setCurrentIndex(max(0, self.device_box.findData(dev.selected)))
         elif connected:

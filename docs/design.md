@@ -22,7 +22,13 @@ Icons, Texte, Schrift, Layout, Details, Visuals und Bewegung in dieser Reihenfol
   `#141415` Fenster, `#19191b` Video und Kurve, `#232325` Eingabefelder
 - Drei Textrollen: `#ededed`, `#a1a1a6`, `#85858b`
 - Ein Akzent, Bernstein `#e5a043` (wie eine Tally-Lampe): Script-Kurve, primäre
-  Aktion, Fortschritt, Abspielposition, Hubschiene. Sonst nirgends
+  Aktion, Fortschritt, Abspielposition, Hubschiene, Bereich 1 beim Tracking. Sonst
+  nirgends. Wählbar sind fünf weitere Vorgaben (alle hell genug für dunkle Schrift
+  und weit genug vom Rot für Stopp und Fehler) oder eine eigene Farbe; ist sie zu
+  dunkel, wird Text und Icon darauf weiß (`set_accent`)
+- Texte: Deutsch ist der Schlüssel im Code (`tr("…")`), Englisch steht in
+  `src/vtf/locale_en.py`; Werte als `{0}`, Mehrzahl über `plural()`, Dezimalzeichen
+  über `dec()`
 - Trennlinien sind Haarlinien mit 8 % der Textfarbe
 - Linien-Icons von lucide, 16 px, Strichstärke 1,5, in der Farbe ihres Textes
 - Zahlen, Zeiten und Werte in der Monospace-Schrift des Systems

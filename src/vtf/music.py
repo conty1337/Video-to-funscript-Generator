@@ -17,6 +17,7 @@ from collections.abc import Callable
 import numpy as np
 
 from .funscript import Action, position_at  # noqa: F401  (position_at used by the GUI)
+from .i18n import tr
 
 RATE = 22050
 FRAME = 1024
@@ -179,7 +180,7 @@ class BeatTracker:
         return tempo(list(self.beats))
 
 
-SOURCES = (("system", "Systemton"), ("mic", "Mikrofon"))
+SOURCES = (("system", tr("Systemton")), ("mic", tr("Mikrofon")))
 
 
 def capture_command(source: str = "system") -> list[str] | None:
@@ -216,8 +217,7 @@ class AudioCapture:
         if self.proc is not None:
             return
         if not self.command:
-            raise RuntimeError("Kein Aufnahme-Programm gefunden (parec oder pw-record). "
-                               "Unter Fedora/Nobara: sudo dnf install pulseaudio-utils")
+            raise RuntimeError(tr("Kein Aufnahme-Programm gefunden (parec oder pw-record). Unter Fedora/Nobara: sudo dnf install pulseaudio-utils"))
         from .video import system_env
 
         self.proc = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -240,7 +240,7 @@ class AudioCapture:
         if self.proc is proc:
             err = proc.stderr.read().decode(errors="replace").strip() if proc.stderr else ""
             self.proc = None
-            self.on_error(err or "Aufnahme beendet")
+            self.on_error(err or tr("Aufnahme beendet"))
 
     def stop(self) -> None:
         proc, self.proc = self.proc, None

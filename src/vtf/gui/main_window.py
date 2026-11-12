@@ -45,8 +45,17 @@ from ..funscript import (
     position_at,
 )
 from ..generator import generate, generate_axes
+from ..i18n import plural, tr
 from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, skip_target
-from ..prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
+from ..prep import (
+    load_bookmarks,
+    load_cuts,
+    load_prep,
+    prep_path,
+    save_bookmarks,
+    save_cuts,
+    save_prep,
+)
 from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
@@ -57,6 +66,7 @@ from .batch_dialog import BatchDialog
 from .curve_widget import CurveWidget
 from .device_ui import DeviceController
 from .heatbar import HeatBar
+from .look_ui import LookMenus
 from .player_panel import PlayerPanel
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
@@ -64,7 +74,6 @@ from .timeline import TimelineSlider
 from .update_ui import UpdateController
 from .video_view import VideoView
 from .workers import AnalysisWorker
-
 
 TRACK_UNDO = "tracking"      # undo entry holding the tracking sections, not script points
 
@@ -83,7 +92,7 @@ class ElidedLabel(QLabel):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Video-to-Funscript Generator {__version__}")
+        self.setWindowTitle(tr("Video-to-Funscript Generator {0}", __version__))
         self.resize(1400, 900)
         self.qsettings = QSettings("video-to-funscript", "vtf")
 
@@ -113,25 +122,25 @@ class MainWindow(QMainWindow):
         self.time_label = QLabel("0:00.00 / 0:00.00")
         self.time_label.setFont(theme.mono_font(12))
         self.time_label.setObjectName("value")
-        self.play_btn = self._transport("play", "Abspielen (Leertaste)")
-        self.back_btn = self._transport("chevron-left", "Frame zurück (←)")
-        self.fwd_btn = self._transport("chevron-right", "Frame vor (→)")
-        self.prev_btn = self._transport("skip-back", "Vorheriges Video (Bild ↑)")
-        self.next_btn = self._transport("skip-forward", "Nächstes Video (Bild ↓)")
-        self.full_btn = self._transport("maximize", "Vollbild (F11)")
+        self.play_btn = self._transport("play", tr("Abspielen (Leertaste)"))
+        self.back_btn = self._transport("chevron-left", tr("Frame zurück (←)"))
+        self.fwd_btn = self._transport("chevron-right", tr("Frame vor (→)"))
+        self.prev_btn = self._transport("skip-back", tr("Vorheriges Video (Bild ↑)"))
+        self.next_btn = self._transport("skip-forward", tr("Nächstes Video (Bild ↓)"))
+        self.full_btn = self._transport("maximize", tr("Vollbild (F11)"))
         self.full_btn.setEnabled(True)
         self.audio = AudioPlayer(self)
-        self.mute_btn = self._transport("volume", "Ton an/aus (M)")
+        self.mute_btn = self._transport("volume", tr("Ton an/aus (M)"))
         self.mute_btn.setEnabled(self.audio.available)
         self.volume = QSlider(Qt.Horizontal)
         self.volume.setObjectName("volume")
         self.volume.setRange(0, 100)
-        self.volume.setToolTip("Lautstärke")
+        self.volume.setToolTip(tr("Lautstärke"))
         self.volume.setEnabled(self.audio.available)
-        self.analyze_btn = QPushButton(theme.icon("activity", theme.ON_ACCENT), "Analysieren")
+        self.analyze_btn = theme.accent_icon(QPushButton(), "activity", tr("Analysieren"))
         self.analyze_btn.setObjectName("primary")
         self.analyze_btn.setEnabled(False)
-        self.cancel_btn = QPushButton(theme.icon("x"), "Abbrechen")
+        self.cancel_btn = QPushButton(theme.icon("x"), tr("Abbrechen"))
         self.cancel_btn.setVisible(False)
         self.progress = QProgressBar()
         self.progress.setTextVisible(False)
@@ -141,7 +150,7 @@ class MainWindow(QMainWindow):
         self.progress_label.setFont(theme.mono_font(12))
         self.progress_label.setVisible(False)
         self.status_label = QLabel()
-        self.curve_title = QLabel("Zeitleiste")
+        self.curve_title = QLabel(tr("Zeitleiste"))
         self.curve_title.setObjectName("section")
         self.axis = "L0"                       # axis shown in the curve
         self.bookmarks: list[tuple[int, str]] = []   # (ms, name), saved next to the video
@@ -157,17 +166,15 @@ class MainWindow(QMainWindow):
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
-        self.axis_box.setToolTip("Script-Achse. Der Fredorch F21S nutzt nur „Hub“, die anderen Achsen "
-                                 "werden als <Video>.roll.funscript usw. für Mehrachsen-Geräte gespeichert")
+        self.axis_box.setToolTip(tr("Script-Achse. Der Fredorch F21S nutzt nur „Hub“, die anderen Achsen werden als <Video>.roll.funscript usw. für Mehrachsen-Geräte gespeichert"))
         for code, (label, _suffix) in AXES.items():
             self.axis_box.addItem(f"{label} ({code})", code)
         self.axis_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.axis_box.setStyleSheet("QComboBox { padding-right: 28px; }")
-        self.curve_meta = QLabel("Noch nicht analysiert")
+        self.curve_meta = QLabel(tr("Noch nicht analysiert"))
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
-        curve_hint = self.curve_hint = ElidedLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
-                           "Rechtsklick löscht · Mausrad zoomt")
+        curve_hint = self.curve_hint = ElidedLabel(tr("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · Rechtsklick löscht · Mausrad zoomt"))
         curve_hint.setObjectName("caption")
         # long hint must not widen the window: shortened with … when there is no room
         curve_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
@@ -258,24 +265,24 @@ class MainWindow(QMainWindow):
         tools = QHBoxLayout(self.edit_tools)
         tools.setContentsMargins(0, 0, 0, 0)
         tools.setSpacing(8)
-        self.cut_btn = self._tool("scissors", "Schnitt", self.toggle_cut,
-                                  "Schnitt: Anfang hier, nochmal am Ende drücken (X). Der Player springt darüber")
+        self.cut_btn = self._tool("scissors", tr("Schnitt"), self.toggle_cut,
+                                  tr("Schnitt: Anfang hier, nochmal am Ende drücken (X). Der Player springt darüber"))
         self.cut_btn.setCheckable(True)
-        self._tool("skip-forward", "Bis zum nächsten Hub", self.cut_to_next_move,
-                   "Schnitt von hier bis zum Countdown vor dem nächsten Hub (Umschalt+X)", tools)
-        self._tool("x", "Schnitt weg", self.remove_cut_here, "Schnitt an der Abspielposition entfernen", tools)
+        self._tool("skip-forward", tr("Bis zum nächsten Hub"), self.cut_to_next_move,
+                   tr("Schnitt von hier bis zum Countdown vor dem nächsten Hub (Umschalt+X)"), tools)
+        self._tool("x", tr("Schnitt weg"), self.remove_cut_here, tr("Schnitt an der Abspielposition entfernen"), tools)
         tools.insertWidget(0, self.cut_btn)
         tools.addSpacing(12)                        # cuts, then the other edits
-        self._tool("waves", "Glätten", self.smooth_points, "Ausgewählte Punkte glätten (Strg+G)", tools)
-        self._tool("bookmark", "Lesezeichen", self.add_bookmark, "Lesezeichen an der Abspielposition (B)", tools)
-        self._tool("plus", "Rhythmus", self.insert_rhythm, "Rhythmus oder Muster einfügen (Strg+T)", tools)
+        self._tool("waves", tr("Glätten"), self.smooth_points, tr("Ausgewählte Punkte glätten (Strg+G)"), tools)
+        self._tool("bookmark", tr("Lesezeichen"), self.add_bookmark, tr("Lesezeichen an der Abspielposition (B)"), tools)
+        self._tool("plus", tr("Rhythmus"), self.insert_rhythm, tr("Rhythmus oder Muster einfügen (Strg+T)"), tools)
         tools.addSpacing(12)
-        self.check_btn = self._tool("alert", "Prüfung", self._issue_menu,
-                                    "Stellen, die einen zweiten Blick wert sind (F3 springt zur nächsten)", tools)
+        self.check_btn = self._tool("alert", tr("Prüfung"), self._issue_menu,
+                                    tr("Stellen, die einen zweiten Blick wert sind (F3 springt zur nächsten)"), tools)
         head.addWidget(self.edit_tools)
         head.addWidget(curve_hint, 1)
         cl.addLayout(head)
-        for label, widget in (("Video", self.slider), ("Tempo", self.heat)):
+        for label, widget in ((tr("Video"), self.slider), (tr("Tempo"), self.heat)):
             lane = QHBoxLayout()
             # lanes line up with the plot of the curve below (its left/right margins)
             lane.setContentsMargins(0, 0, 16, 0)
@@ -319,7 +326,7 @@ class MainWindow(QMainWindow):
         self.statusBar().setSizeGripEnabled(False)
         ocl = gpu.opencl_device_name()
         if ocl:
-            ocl_label = QLabel(f"OpenCL · {ocl}")
+            ocl_label = QLabel(tr("OpenCL · {0}", ocl))
             ocl_label.setFont(theme.mono_font(11))
             self.statusBar().addPermanentWidget(ocl_label)
         else:                    # nothing to choose: keep the option out of sight
@@ -403,132 +410,133 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ menu
     def _build_menu(self):
-        m = self.menuBar().addMenu("&Datei")
-        self._act(m, "Video öffnen…", self.open_dialog, QKeySequence.Open)
-        self._act(m, "Video schließen", self.close_video, "Ctrl+W")
-        self._act(m, "Funscript exportieren", self.export, QKeySequence.Save)
-        self._act(m, "Funscript exportieren unter…", self.export_as, QKeySequence.SaveAs)
-        self._act(m, "Funscript laden…", self.load_funscript_dialog)
+        m = self.menuBar().addMenu(tr("&Datei"))
+        self._act(m, tr("Video öffnen…"), self.open_dialog, QKeySequence.Open)
+        self._act(m, tr("Video schließen"), self.close_video, "Ctrl+W")
+        self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
+        self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
+        self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
         m.addSeparator()
-        self._act(m, "Stapelverarbeitung…", self.open_batch, "Ctrl+B")
-        self._act(m, "Bibliothek…", self.open_library, "Ctrl+L")
+        self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
+        self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
         m.addSeparator()
-        self._act(m, "Beenden", self.close, QKeySequence.Quit)
-        m = self.menuBar().addMenu("&Bearbeiten")
-        self._act(m, "Rückgängig", self.undo, QKeySequence.Undo)
-        self._act(m, "Wiederholen", self.redo, QKeySequence.Redo)
+        self._act(m, tr("Beenden"), self.close, QKeySequence.Quit)
+        m = self.menuBar().addMenu(tr("&Bearbeiten"))
+        self._act(m, tr("Rückgängig"), self.undo, QKeySequence.Undo)
+        self._act(m, tr("Wiederholen"), self.redo, QKeySequence.Redo)
         m.addSeparator()
-        self._act(m, "Alle Punkte auswählen", self.select_all_points, "Ctrl+A")
-        self._act(m, "Ausschneiden", self.cut_points, "Ctrl+X")
-        self._act(m, "Kopieren", self.copy_points, "Ctrl+C")
-        self._act(m, "Einfügen an Abspielposition", self.paste_points, "Ctrl+V")
-        self._act(m, "Auswahl löschen  (Entf)", self.delete_points)
+        self._act(m, tr("Alle Punkte auswählen"), self.select_all_points, "Ctrl+A")
+        self._act(m, tr("Ausschneiden"), self.cut_points, "Ctrl+X")
+        self._act(m, tr("Kopieren"), self.copy_points, "Ctrl+C")
+        self._act(m, tr("Einfügen an Abspielposition"), self.paste_points, "Ctrl+V")
+        self._act(m, tr("Auswahl löschen  (Entf)"), self.delete_points)
         m.addSeparator()
-        self._act(m, "Auswahl glätten", self.smooth_points, "Ctrl+G")
-        self._act(m, "Hub verstärken", lambda: self.scale_points(1.2), "Ctrl+Up")
-        self._act(m, "Hub abschwächen", lambda: self.scale_points(1 / 1.2), "Ctrl+Down")
+        self._act(m, tr("Auswahl glätten"), self.smooth_points, "Ctrl+G")
+        self._act(m, tr("Hub verstärken"), lambda: self.scale_points(1.2), "Ctrl+Up")
+        self._act(m, tr("Hub abschwächen"), lambda: self.scale_points(1 / 1.2), "Ctrl+Down")
         m.addSeparator()
-        self._act(m, "Script aus Analyse neu erzeugen", self.regenerate_manual, "Ctrl+R")
-        self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
-        self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
-        self._act(m, "Script aus Musik…", self.music_script)
+        self._act(m, tr("Script aus Analyse neu erzeugen"), self.regenerate_manual, "Ctrl+R")
+        self._act(m, tr("Weitere Achsen aus Analyse erzeugen (Sway, Roll)"), self.generate_more_axes)
+        self._act(m, tr("Rhythmus einfügen…"), self.insert_rhythm, "Ctrl+T")
+        self._act(m, tr("Script aus Musik…"), self.music_script)
         m.addSeparator()
-        self._act(m, "Schnitt: Anfang / Ende hier", self.toggle_cut, "X")
-        self._act(m, "Schnitt bis zur nächsten Bewegung", self.cut_to_next_move, "Shift+X")
-        self._act(m, "Schnitt hier entfernen", self.remove_cut_here)
+        self._act(m, tr("Schnitt: Anfang / Ende hier"), self.toggle_cut, "X")
+        self._act(m, tr("Schnitt bis zur nächsten Bewegung"), self.cut_to_next_move, "Shift+X")
+        self._act(m, tr("Schnitt hier entfernen"), self.remove_cut_here)
         m.addSeparator()
-        self._act(m, "Nächste Stelle zum Prüfen", lambda: self.jump_issue(1), "F3")
-        self._act(m, "Vorige Stelle zum Prüfen", lambda: self.jump_issue(-1), "Shift+F3")
-        m = self.menuBar().addMenu("&Wiedergabe")
-        self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
-        self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
-        self._act(m, "Frame zurück", lambda: self.step_frames(-1), "Left")
-        self._act(m, "1 s vor", lambda: self.step_frames(int(self.fps)), "Shift+Right")
-        self._act(m, "1 s zurück", lambda: self.step_frames(-int(self.fps)), "Shift+Left")
+        self._act(m, tr("Nächste Stelle zum Prüfen"), lambda: self.jump_issue(1), "F3")
+        self._act(m, tr("Vorige Stelle zum Prüfen"), lambda: self.jump_issue(-1), "Shift+F3")
+        m = self.menuBar().addMenu(tr("&Wiedergabe"))
+        self._act(m, tr("Abspielen/Pause"), self.toggle_play, "Space")
+        self._act(m, tr("Frame vor"), lambda: self.step_frames(1), "Right")
+        self._act(m, tr("Frame zurück"), lambda: self.step_frames(-1), "Left")
+        self._act(m, tr("1 s vor"), lambda: self.step_frames(int(self.fps)), "Shift+Right")
+        self._act(m, tr("1 s zurück"), lambda: self.step_frames(-int(self.fps)), "Shift+Left")
         m.addSeparator()
-        self._act(m, "Ton an/aus", self.toggle_mute, "M")
+        self._act(m, tr("Ton an/aus"), self.toggle_mute, "M")
         m.addSeparator()
-        self._act(m, "Nächstes Video", self.play_next, "PgDown")
-        self._act(m, "Nächstes Video im Ordner", lambda: self.open_sibling(1), "Ctrl+PgDown")
-        self._act(m, "Vorheriges Video im Ordner", lambda: self.open_sibling(-1), "Ctrl+PgUp")
-        self._act(m, "Vorheriges Video", self.play_prev, "PgUp")
-        m = self.menuBar().addMenu("&Ansicht")
-        self.player_action = self._act(m, "Player-Modus", lambda on: self.set_player_mode(on), "Ctrl+P")
+        self._act(m, tr("Nächstes Video"), self.play_next, "PgDown")
+        self._act(m, tr("Nächstes Video im Ordner"), lambda: self.open_sibling(1), "Ctrl+PgDown")
+        self._act(m, tr("Vorheriges Video im Ordner"), lambda: self.open_sibling(-1), "Ctrl+PgUp")
+        self._act(m, tr("Vorheriges Video"), self.play_prev, "PgUp")
+        m = self.menuBar().addMenu(tr("&Ansicht"))
+        self.player_action = self._act(m, tr("Player-Modus"), lambda on: self.set_player_mode(on), "Ctrl+P")
         self.player_action.setCheckable(True)
-        self._act(m, "Vollbild", self.toggle_fullscreen, "F11")
-        self._act(m, "Video-Zoom zurücksetzen (Strg+Mausrad zoomt)", self.view.reset_zoom, "Ctrl+0")
+        self._act(m, tr("Vollbild"), self.toggle_fullscreen, "F11")
+        self._act(m, tr("Video-Zoom zurücksetzen (Strg+Mausrad zoomt)"), self.view.reset_zoom, "Ctrl+0")
         m.addSeparator()
-        self.left_action = self._act(m, "Linke Leiste (Analyse, Playlist)", self._sides_toggled, "Ctrl+1")
-        self.right_action = self._act(m, "Rechte Leiste (Script)", self._sides_toggled, "Ctrl+2")
+        self.left_action = self._act(m, tr("Linke Leiste (Analyse, Playlist)"), self._sides_toggled, "Ctrl+1")
+        self.right_action = self._act(m, tr("Rechte Leiste (Script)"), self._sides_toggled, "Ctrl+2")
         for a, key in ((self.left_action, "show_left"), (self.right_action, "show_right")):
             a.setCheckable(True)
             a.setChecked(str(self.qsettings.value(key, "true")).lower() == "true")
         m.addSeparator()
-        m = self.menuBar().addMenu("&Lesezeichen")
-        self._act(m, "Lesezeichen setzen…", self.add_bookmark, "B")
-        self._act(m, "Nächstes Lesezeichen", lambda: self.jump_bookmark(1), "Alt+Right")
-        self._act(m, "Vorheriges Lesezeichen", lambda: self.jump_bookmark(-1), "Alt+Left")
-        self._act(m, "Lesezeichen hier löschen", self.delete_bookmark)
+        self.look = LookMenus(self, m)
+        m = self.menuBar().addMenu(tr("&Lesezeichen"))
+        self._act(m, tr("Lesezeichen setzen…"), self.add_bookmark, "B")
+        self._act(m, tr("Nächstes Lesezeichen"), lambda: self.jump_bookmark(1), "Alt+Right")
+        self._act(m, tr("Vorheriges Lesezeichen"), lambda: self.jump_bookmark(-1), "Alt+Left")
+        self._act(m, tr("Lesezeichen hier löschen"), self.delete_bookmark)
         m.addSeparator()
         self._bookmark_menu = m
         self._bookmark_items: list = []
         m.aboutToShow.connect(self._fill_bookmark_menu)
-        m = self.menuBar().addMenu("&Tracking")
-        self._act(m, "Abschnitt-Ende hier", lambda: self._track_cmd(self.panel.tracking.set_end), "E")
-        self._act(m, "Ganz drin hier (Position 0)",
+        m = self.menuBar().addMenu(tr("&Tracking"))
+        self._act(m, tr("Abschnitt-Ende hier"), lambda: self._track_cmd(self.panel.tracking.set_end), "E")
+        self._act(m, tr("Ganz drin hier (Position 0)"),
                   lambda: self._track_cmd(self.panel.tracking.calibrate, "in"), "D")
-        self._act(m, "Ganz draußen hier (Position 100)",
+        self._act(m, tr("Ganz draußen hier (Position 100)"),
                   lambda: self._track_cmd(self.panel.tracking.calibrate, "out"), "A")
         m.addSeparator()
-        self._act(m, "Abschnitt hier löschen", lambda: self._track_cmd(self.panel.tracking.delete_at))
-        self._act(m, "KI-Vorschlag für Kästchen", self.suggest_boxes, "K")
-        self._act(m, "Bereiche automatisch finden", self.auto_find, "F")
-        self._act(m, "Umranden statt Rechteck an/aus", lambda: self._toggle_draw("outline"), "U")
-        self._act(m, "Hub-Richtung ziehen", lambda: self._toggle_draw("stroke"), "H")
-        self._act(m, "Alle Abschnitte löschen…", self._clear_tracking)
-        m = self.menuBar().addMenu("&Gerät")
-        self._act(m, "Verbinden…", lambda: self.devices.open_dialog(), "Ctrl+D")
-        self._act(m, "Einrichtungs-Assistent…", lambda: self.devices.open_wizard())
-        self._act(m, "Trennen", lambda: self.devices.disconnect_device())
+        self._act(m, tr("Abschnitt hier löschen"), lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self._act(m, tr("KI-Vorschlag für Kästchen"), self.suggest_boxes, "K")
+        self._act(m, tr("Bereiche automatisch finden"), self.auto_find, "F")
+        self._act(m, tr("Umranden statt Rechteck an/aus"), lambda: self._toggle_draw("outline"), "U")
+        self._act(m, tr("Hub-Richtung ziehen"), lambda: self._toggle_draw("stroke"), "H")
+        self._act(m, tr("Alle Abschnitte löschen…"), self._clear_tracking)
+        m = self.menuBar().addMenu(tr("&Gerät"))
+        self._act(m, tr("Verbinden…"), lambda: self.devices.open_dialog(), "Ctrl+D")
+        self._act(m, tr("Einrichtungs-Assistent…"), lambda: self.devices.open_wizard())
+        self._act(m, tr("Trennen"), lambda: self.devices.disconnect_device())
         m.addSeparator()
-        self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
-        self._act(m, "Handy-Fernbedienung…", self.open_remote)
-        self._act(m, "Statistik…", self.open_stats)
-        self._act(m, "Andere Player (mpv, VLC, VR)…", self.open_players)
+        self._act(m, tr("Muster-Steuerung…"), self.open_patterns, "Ctrl+M")
+        self._act(m, tr("Handy-Fernbedienung…"), self.open_remote)
+        self._act(m, tr("Statistik…"), self.open_stats)
+        self._act(m, tr("Andere Player (mpv, VLC, VR)…"), self.open_players)
         m.addSeparator()
-        self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
-        m = self.menuBar().addMenu("&Hilfe")
-        self._act(m, "Bedienung", self.show_help, QKeySequence.HelpContents)
-        self._act(m, "Dekodierung testen…", self.test_decoding)
+        self._act(m, tr("Not-Aus (Gerät stoppen)"), self.emergency_stop, "Esc")
+        m = self.menuBar().addMenu(tr("&Hilfe"))
+        self._act(m, tr("Bedienung"), self.show_help, QKeySequence.HelpContents)
+        self._act(m, tr("Dekodierung testen…"), self.test_decoding)
         self.updates.add_menu_entries(m)
         self._setup_desktop_integration(m)
 
     def _build_toolbar(self):
-        tb = self.addToolBar("Werkzeuge")
+        tb = self.addToolBar(tr("Werkzeuge"))
         tb.setMovable(False)
         tb.setFloatable(False)
         tb.setIconSize(QSize(16, 16))
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         tb.toggleViewAction().setVisible(False)
-        tb.addAction(theme.icon("folder-open"), "Öffnen", self.open_dialog)
-        self.save_action = tb.addAction(theme.icon("save"), "Speichern", self.export)
-        tb.addAction(theme.icon("folders"), "Stapel", self.open_batch)
-        tb.addAction(theme.icon("library"), "Bibliothek", self.open_library).setToolTip(
-            "Alle Scripts eines Ordners mit Heatmap, Suche und Bewertung (Strg+L)")
-        tb.addAction(theme.icon("bluetooth"), "Gerät", self.devices.open_dialog)
-        tb.addAction(theme.icon("activity"), "Muster", self.open_patterns).setToolTip(
-            "Muster-Steuerung: fertige und eigene Muster auf dem Gerät abspielen (Strg+M)")
+        tb.addAction(theme.icon("folder-open"), tr("Öffnen"), self.open_dialog)
+        self.save_action = tb.addAction(theme.icon("save"), tr("Speichern"), self.export)
+        tb.addAction(theme.icon("folders"), tr("Stapel"), self.open_batch)
+        tb.addAction(theme.icon("library"), tr("Bibliothek"), self.open_library).setToolTip(
+            tr("Alle Scripts eines Ordners mit Heatmap, Suche und Bewertung (Strg+L)"))
+        tb.addAction(theme.icon("bluetooth"), tr("Gerät"), self.devices.open_dialog)
+        tb.addAction(theme.icon("activity"), tr("Muster"), self.open_patterns).setToolTip(
+            tr("Muster-Steuerung: fertige und eigene Muster auf dem Gerät abspielen (Strg+M)"))
         tb.addSeparator()
-        self.mode_edit = tb.addAction(theme.icon("pencil"), "Bearbeiten", lambda: self.set_player_mode(False))
-        self.mode_player = tb.addAction(theme.icon("list-video"), "Player", lambda: self.set_player_mode(True))
-        for a, tip in ((self.mode_edit, "Scripts erstellen und bearbeiten"),
-                       (self.mode_player, "Videos mit Script abspielen, mit Playlist (Strg+P)")):
+        self.mode_edit = tb.addAction(theme.icon("pencil"), tr("Bearbeiten"), lambda: self.set_player_mode(False))
+        self.mode_player = tb.addAction(theme.icon("list-video"), tr("Player"), lambda: self.set_player_mode(True))
+        for a, tip in ((self.mode_edit, tr("Scripts erstellen und bearbeiten")),
+                       (self.mode_player, tr("Videos mit Script abspielen, mit Playlist (Strg+P)"))):
             a.setCheckable(True)
             a.setToolTip(tip)
         self.mode_edit.setChecked(True)
         tb.addSeparator()
-        tb.addAction(theme.icon("undo"), "", self.undo).setToolTip("Rückgängig (Strg+Z)")
-        tb.addAction(theme.icon("redo"), "", self.redo).setToolTip("Wiederholen (Strg+Umschalt+Z)")
+        tb.addAction(theme.icon("undo"), "", self.undo).setToolTip(tr("Rückgängig (Strg+Z)"))
+        tb.addAction(theme.icon("redo"), "", self.redo).setToolTip(tr("Wiederholen (Strg+Umschalt+Z)"))
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         tb.addWidget(spacer)
@@ -536,7 +544,7 @@ class MainWindow(QMainWindow):
         self.file_label.setObjectName("meta")
         tb.addWidget(self.file_label)
         self.close_act = tb.addAction(theme.icon("x"), "", self.close_video)
-        self.close_act.setToolTip("Video schließen (Strg+W)")
+        self.close_act.setToolTip(tr("Video schließen (Strg+W)"))
         self.close_act.setVisible(False)
         self._toolbar = tb
 
@@ -569,8 +577,8 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ video
     def open_dialog(self):
         exts = " ".join(f"*{e}" for e in sorted(VIDEO_EXTS))
-        path, _ = QFileDialog.getOpenFileName(self, "Video öffnen", self.qsettings.value("last_dir", ""),
-                                              f"Videos ({exts});;Alle Dateien (*)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Video öffnen"), self.qsettings.value("last_dir", ""),
+                                              tr("Videos ({0});;Alle Dateien (*)", exts))
         if path:
             self.open_video(path)
 
@@ -582,11 +590,11 @@ class MainWindow(QMainWindow):
         try:
             info = probe(path)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler", f"Video kann nicht geöffnet werden:\n{e}")
+            QMessageBox.critical(self, tr("Fehler"), tr("Video kann nicht geöffnet werden:\n{0}", e))
             return
         cap = cv2.VideoCapture(path)
         if not cap.isOpened():
-            QMessageBox.critical(self, "Fehler", "OpenCV kann dieses Video nicht öffnen.")
+            QMessageBox.critical(self, tr("Fehler"), tr("OpenCV kann dieses Video nicht öffnen."))
             return
         if self.cap:
             self.cap.release()
@@ -625,8 +633,8 @@ class MainWindow(QMainWindow):
         self._skip_resume = None
         self._show_cuts()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
-        self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
-        self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
+        self.setWindowTitle(tr("{0} – Video-to-Funscript Generator", Path(path).name))
+        self.file_label.setText(tr("{0}  ·  {1}×{2}  ·  {3:.2f} fps", Path(path).name, info.width, info.height, info.fps))
         self.close_act.setVisible(True)
         self._l0_signal = None
         loaded = load_axes(path)
@@ -637,9 +645,9 @@ class MainWindow(QMainWindow):
         self._update_axis_labels()
         if loaded:
             extra = [AXES[a][0] for a in loaded if a != "L0"]
-            self._status("Vorhandenes Funscript geladen" + (f" (+ {', '.join(extra)})" if extra else ""))
+            self._status(tr("Vorhandenes Funscript geladen") + (f" (+ {', '.join(extra)})" if extra else ""))
         else:
-            self._status("Bereit zur Analyse")
+            self._status(tr("Bereit zur Analyse"))
         self.seek_frame(0)
         self._update_heat()
         self._update_issues()
@@ -685,12 +693,12 @@ class MainWindow(QMainWindow):
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], 0)
         self._update_axis_labels()
         self._update_section_marks()
-        self.setWindowTitle(f"Video-to-Funscript Generator {__version__}")
+        self.setWindowTitle(tr("Video-to-Funscript Generator {0}", __version__))
         self.file_label.setText("")
         self.close_act.setVisible(False)
         self.time_label.setText("0:00.00 / 0:00.00")
         self._refresh_position()
-        self._status("Video geschlossen – neues Video öffnen (Strg+O) oder hierher ziehen")
+        self._status(tr("Video geschlossen – neues Video öffnen (Strg+O) oder hierher ziehen"))
 
     def _read_frame(self):
         if not self.cap:
@@ -743,13 +751,13 @@ class MainWindow(QMainWindow):
         self.issues = check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost) if acts else []
         self.curve.set_issues([(it.start_ms, it.end_ms) for it in self.issues])
         n = len(self.issues)
-        self.check_btn.setText(f"{n} prüfen" if n else ("Prüfung ok" if acts else "Prüfung"))
-        self.check_btn.setToolTip(issue_summary(self.issues) + " · F3 springt zur nächsten Stelle"
-                                  if acts else "Noch kein Script")
+        self.check_btn.setText(tr("{0} prüfen", n) if n else (tr("Prüfung ok") if acts else tr("Prüfung")))
+        self.check_btn.setToolTip(issue_summary(self.issues) + tr(" · F3 springt zur nächsten Stelle")
+                                  if acts else tr("Noch kein Script"))
 
     def jump_issue(self, direction: int):
         if not self.issues:
-            self._status("Prüfung: nichts aufgefallen" if self.stroke_actions() else "Noch kein Script")
+            self._status(tr("Prüfung: nichts aufgefallen") if self.stroke_actions() else tr("Noch kein Script"))
             return
         cur = self._cur_ms()
         if direction > 0:
@@ -761,11 +769,11 @@ class MainWindow(QMainWindow):
     def _show_issue(self, it):
         self.seek_ms(max(0, it.start_ms - 1000))            # a second before, to see it coming
         k = self.issues.index(it) + 1 if it in self.issues else 0
-        self._status(f"Prüfung {k}/{len(self.issues)}: {describe_issue(it)}")
+        self._status(tr("Prüfung {0}/{1}: {2}", k, len(self.issues), describe_issue(it)))
 
     def _issue_menu(self):
         menu = QMenu(self)
-        head = menu.addAction(issue_summary(self.issues) if self.stroke_actions() else "Noch kein Script")
+        head = menu.addAction(issue_summary(self.issues) if self.stroke_actions() else tr("Noch kein Script"))
         head.setEnabled(False)
         if self.issues:
             menu.addSeparator()
@@ -773,7 +781,7 @@ class MainWindow(QMainWindow):
                 menu.addAction(describe_issue(it)).triggered.connect(
                     lambda _c=False, x=it: self._show_issue(x))
             if len(self.issues) > 40:
-                more = menu.addAction(f"… und {len(self.issues) - 40} weitere (F3)")
+                more = menu.addAction(tr("… und {0} weitere (F3)", len(self.issues) - 40))
                 more.setEnabled(False)
         self._run_menu(menu, self.check_btn.mapToGlobal(self.check_btn.rect().bottomLeft()))
 
@@ -781,7 +789,7 @@ class MainWindow(QMainWindow):
     def _show_cuts(self):
         self.curve.set_cuts(self.cuts, self._cut_start)
         self.cut_btn.setChecked(self._cut_start is not None)          # a cut waits for its end
-        self.cut_btn.setText("Schnitt-Ende" if self._cut_start is not None else "Schnitt")
+        self.cut_btn.setText(tr("Schnitt-Ende") if self._cut_start is not None else tr("Schnitt"))
 
     def _cuts_changed(self):
         self._show_cuts()
@@ -790,13 +798,13 @@ class MainWindow(QMainWindow):
             try:
                 save_cuts(self.video_path, self.cuts)
             except OSError as e:
-                self._status(f"Schnitte nicht gespeichert: {e}")
+                self._status(tr("Schnitte nicht gespeichert: {0}", e))
 
     def add_cut(self, a: float, b: float) -> str:
         """Cut from a to b (ms); overlapping cuts become one."""
         a, b = sorted((int(a), int(b)))
         if b - a < 200:
-            return "Schnitt zu kurz – erst zum Ende spulen"
+            return tr("Schnitt zu kurz – erst zum Ende spulen")
         merged = []
         for c in sorted([*self.cuts, (a, b)]):
             if merged and c[0] <= merged[-1][1]:
@@ -805,7 +813,7 @@ class MainWindow(QMainWindow):
                 merged.append(c)
         self.cuts = merged
         self._cuts_changed()
-        return f"Schnitt {_fmt(a)} – {_fmt(b)}: der Player springt darüber"
+        return tr("Schnitt {0} – {1}: der Player springt darüber", _fmt(a), _fmt(b))
 
     def toggle_cut(self):
         """X: first press marks where the cut starts, the second where it ends."""
@@ -816,7 +824,7 @@ class MainWindow(QMainWindow):
         if self._cut_start is None:
             self._cut_start = ms
             self._show_cuts()
-            self._status(f"Schnitt beginnt bei {_fmt(ms)} – zum Ende spulen und nochmal X")
+            self._status(tr("Schnitt beginnt bei {0} – zum Ende spulen und nochmal X", _fmt(ms)))
             return
         start, self._cut_start = self._cut_start, None
         self._status(self.add_cut(start, ms))
@@ -839,11 +847,11 @@ class MainWindow(QMainWindow):
         ms = self._cur_ms()
         keep = [c for c in self.cuts if not c[0] <= ms <= c[1]]
         if len(keep) == len(self.cuts):
-            self._status("Hier ist kein Schnitt")
+            self._status(tr("Hier ist kein Schnitt"))
             return
         self.cuts = keep
         self._cuts_changed()
-        self._status("Schnitt entfernt")
+        self._status(tr("Schnitt entfernt"))
 
     def _player_skip(self, media_ms: float) -> bool:
         """Player: jump over cuts and (if wanted) long stretches without strokes."""
@@ -868,7 +876,7 @@ class MainWindow(QMainWindow):
         else:
             self.seek_ms(to)
             self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
-            self._status(f"Übersprungen bis {_fmt(to)}")
+            self._status(tr("Übersprungen bis {0}", _fmt(to)))
         return True
 
     # ------------------------------------------------------------ bookmarks
@@ -882,14 +890,14 @@ class MainWindow(QMainWindow):
             try:
                 save_bookmarks(self.video_path, self.bookmarks)
             except OSError as e:
-                self._status(f"Lesezeichen nicht gespeichert: {e}")
+                self._status(tr("Lesezeichen nicht gespeichert: {0}", e))
 
     def add_bookmark_at(self, ms: float, name: str) -> None:
         ms = int(ms)
         keep = [b for b in self.bookmarks if abs(b[0] - ms) > 500]
-        self.bookmarks = sorted([*keep, (ms, name.strip() or "Lesezeichen")])
+        self.bookmarks = sorted([*keep, (ms, name.strip() or tr("Lesezeichen"))])
         self._bookmarks_changed()
-        self._status(f"Lesezeichen „{name}“ bei {_fmt(ms)}")
+        self._status(tr("Lesezeichen „{0}“ bei {1}", name, _fmt(ms)))
 
     def add_bookmark(self):
         if not self.cap:
@@ -897,14 +905,14 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QInputDialog
 
         ms = self._cur_ms()
-        name, ok = QInputDialog.getText(self, "Lesezeichen setzen", f"Name für {_fmt(ms)}:",
-                                        text=f"Kapitel {len(self.bookmarks) + 1}")
+        name, ok = QInputDialog.getText(self, tr("Lesezeichen setzen"), tr("Name für {0}:", _fmt(ms)),
+                                        text=tr("Kapitel {0}", len(self.bookmarks) + 1))
         if ok:
             self.add_bookmark_at(ms, name)
 
     def jump_bookmark(self, direction: int):
         if not self.bookmarks:
-            self._status("Noch keine Lesezeichen – mit B setzen")
+            self._status(tr("Noch keine Lesezeichen – mit B setzen"))
             return
         cur = self._cur_ms()
         if direction > 0:
@@ -912,10 +920,10 @@ class MainWindow(QMainWindow):
         else:   # a bit of slack so pressing again while playing goes further back
             nxt = next((b for b in reversed(self.bookmarks) if b[0] < cur - 1000), None)
         if nxt is None:
-            self._status("Kein weiteres Lesezeichen")
+            self._status(tr("Kein weiteres Lesezeichen"))
             return
         self.seek_ms(nxt[0])
-        self._status(f"Lesezeichen: {nxt[1]} ({_fmt(nxt[0])})")
+        self._status(tr("Lesezeichen: {0} ({1})", nxt[1], _fmt(nxt[0])))
 
     def delete_bookmark(self):
         if not self.bookmarks:
@@ -923,18 +931,18 @@ class MainWindow(QMainWindow):
         cur = self._cur_ms()
         b = min(self.bookmarks, key=lambda x: abs(x[0] - cur))
         if abs(b[0] - cur) > 2000:
-            self._status("Hier ist kein Lesezeichen (bis 2 s Abstand)")
+            self._status(tr("Hier ist kein Lesezeichen (bis 2 s Abstand)"))
             return
         self.bookmarks.remove(b)
         self._bookmarks_changed()
-        self._status(f"Lesezeichen „{b[1]}“ gelöscht")
+        self._status(tr("Lesezeichen „{0}“ gelöscht", b[1]))
 
     def _fill_bookmark_menu(self):
         for a in self._bookmark_items:
             self._bookmark_menu.removeAction(a)
         self._bookmark_items = []
         if not self.bookmarks:
-            a = self._bookmark_menu.addAction("(keine Lesezeichen)")
+            a = self._bookmark_menu.addAction(tr("(keine Lesezeichen)"))
             a.setEnabled(False)
             self._bookmark_items.append(a)
         for ms, name in self.bookmarks:
@@ -992,7 +1000,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ rhythm
     def insert_rhythm(self):
         if not self.cap or not self.curve.editable:
-            self._status("Rhythmus einfügen geht im Modus „Bearbeiten“ mit geladenem Video")
+            self._status(tr("Rhythmus einfügen geht im Modus „Bearbeiten“ mit geladenem Video"))
             return
         from .rhythm_dialog import RhythmDialog
 
@@ -1009,7 +1017,7 @@ class MainWindow(QMainWindow):
 
     def music_script(self):
         if not self.cap or not self.curve.editable or not self.video_path:
-            self._status("Script aus Musik geht im Modus „Bearbeiten“ mit geladenem Video")
+            self._status(tr("Script aus Musik geht im Modus „Bearbeiten“ mit geladenem Video"))
             return
         from .music_dialog import MusicScriptDialog
 
@@ -1029,13 +1037,13 @@ class MainWindow(QMainWindow):
             beats = music.beats_from_file(self.video_path, sensitivity, start_ms / 1000,
                                           (end_ms - start_ms) / 1000)
         except (RuntimeError, OSError) as e:
-            self._status(f"Tonspur nicht lesbar: {e}")
+            self._status(tr("Tonspur nicht lesbar: {0}", e))
             return
         finally:
             QApplication.restoreOverrideCursor()
         new = [x for x in music.script_from_beats(beats, every, lo, hi, offset_ms) if start_ms <= x.at <= end_ms]
         if not new:
-            self._status("Keine Schläge gefunden (keine Tonspur oder zu leise). Empfindlicher stellen?")
+            self._status(tr("Keine Schläge gefunden (keine Tonspur oder zu leise). Empfindlicher stellen?"))
             return
         self.curve.editStarted.emit()
         keep = [x for x in self.curve.actions if not start_ms <= x.at <= end_ms]
@@ -1044,14 +1052,14 @@ class MainWindow(QMainWindow):
         self.curve.actionsEdited.emit()
         self.curve.set_selection({i for i, x in enumerate(self.curve.actions) if id(x) in ids})
         bpm = music.tempo(beats)
-        self._status(f"Script aus Musik: {len(beats)} Schläge" + (f", ≈ {bpm:.0f} pro Minute" if bpm else ""))
+        self._status(tr("Script aus Musik: {0} Schläge", len(beats)) + (tr(", ≈ {0:.0f} pro Minute", bpm) if bpm else ""))
 
     def apply_rhythm(self, start_ms, end_ms, bpm, lo, hi, pattern):
         self.curve.editStarted.emit()
         self.curve.actions, sel = rhythm(self.curve.actions, start_ms, end_ms, bpm, lo, hi, pattern)
         self.curve.actionsEdited.emit()
         self.curve.set_selection(sel)
-        self._status(f"Rhythmus eingefügt: {len(sel)} Punkte, {bpm} Hübe/min")
+        self._status(tr("Rhythmus eingefügt: {0} Punkte, {1} Hübe/min", len(sel), bpm))
 
     def _section_edge_moved(self, idx: int, which: str, ms: int):
         tb = self.panel.tracking
@@ -1174,7 +1182,8 @@ class MainWindow(QMainWindow):
             return
         self.view.set_mode("track" if mode == "track" else "roi")
         if mode == "track":       # bring the section buttons into view
-            QTimer.singleShot(0, lambda: self._side_scroll.ensureWidgetVisible(self.panel.tracking, 0, 16))
+            QTimer.singleShot(0, self._side_scroll,       # context: dropped if the window is gone
+                              lambda: self._side_scroll.ensureWidgetVisible(self.panel.tracking, 0, 16))
         self._update_track_overlay(self._cur_ms())
         self._update_section_marks()
 
@@ -1184,21 +1193,20 @@ class MainWindow(QMainWindow):
     def auto_find(self):
         """Find toy, reference and stroke direction from the playhead on, as a new section."""
         if self.player_mode or not self.video_path or self.panel.mode != "track":
-            self._status("Automatisch finden: erst ein Video öffnen und „Tracking“ als Methode wählen")
+            self._status(tr("Automatisch finden: erst ein Video öffnen und „Tracking“ als Methode wählen"))
             return
         from ..autofind import find_in_video
 
         self.pause()
         ms = self._cur_ms()
-        self._status("Suche, was sich im Rhythmus bewegt …")
+        self._status(tr("Suche, was sich im Rhythmus bewegt …"))
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             found = find_in_video(self.video_path, ms)
         finally:
             QApplication.restoreOverrideCursor()
         if found is None:
-            self._status("Automatisch finden: hier bewegt sich nichts deutlich im Rhythmus – an eine Stelle "
-                         "mit gleichmäßigen Hüben spulen oder selbst markieren")
+            self._status(tr("Automatisch finden: hier bewegt sich nichts deutlich im Rhythmus – an eine Stelle mit gleichmäßigen Hüben spulen oder selbst markieren"))
             return
         tb = self.panel.tracking
         i = tb.index_at(ms)
@@ -1211,35 +1219,33 @@ class MainWindow(QMainWindow):
         if found.stroke is not None:
             tb.set_stroke(ms, found.stroke)
         self._update_track_overlay(ms)
-        sure = "sicher" if found.sure >= 0.7 else "unsicher – bitte genau prüfen"
-        self._status(f"Gefunden ({sure}): Toy umrandet{', Bezug' if found.body else ', kein Bezug'}, "
-                     f"Hub-Richtung, etwa {found.rate * 60:.0f} Hübe/min – prüfen, dann analysieren"
-                     + (" · die Kästchen von vorher ersetzt, Strg+Z holt sie zurück" if replaced else ""))
+        sure = tr("sicher") if found.sure >= 0.7 else tr("unsicher – bitte genau prüfen")
+        self._status(tr("Gefunden ({0}): Toy umrandet{1}, Hub-Richtung, etwa {2:.0f} Hübe/min – prüfen, dann analysieren", sure, tr(", Bezug") if found.body else tr(", kein Bezug"), found.rate * 60)
+                     + (tr(" · die Kästchen von vorher ersetzt, Strg+Z holt sie zurück") if replaced else ""))
 
     def suggest_boxes(self):
         """KI-Vorschlag: find body parts in the shown frame and offer them as boxes."""
         if self.player_mode or self._frame is None or self.panel.mode != "track":
-            self._status("KI-Vorschlag: erst ein Video öffnen und „Tracking“ als Methode wählen")
+            self._status(tr("KI-Vorschlag: erst ein Video öffnen und „Tracking“ als Methode wählen"))
             return
         if self._pose_worker is not None and self._pose_worker.isRunning():
-            self._status("KI-Vorschlag: die KI sucht noch, einen Moment …")
+            self._status(tr("KI-Vorschlag: die KI sucht noch, einen Moment …"))
             return
         if not pose_ui.ensure_models(self):
             return
         self.pause()
         frame, ms = self._frame.copy(), self._cur_ms()
         first = not pose_ui.PoseWorker.loaded()
-        self._status("KI-Vorschlag: KI wird gestartet (beim ersten Mal ein paar Sekunden) und sucht "
-                     "Körperteile …" if first else "KI-Vorschlag: suche Körperteile …")
+        self._status(tr("KI-Vorschlag: KI wird gestartet (beim ersten Mal ein paar Sekunden) und sucht Körperteile …") if first else tr("KI-Vorschlag: suche Körperteile …"))
         btn = self.panel.tracking.ai_btn
         btn.setEnabled(False)
-        btn.setText("KI startet …" if first else "KI sucht …")
+        btn.setText(tr("KI startet …") if first else tr("KI sucht …"))
         QApplication.setOverrideCursor(Qt.BusyCursor)
         self._pose_busy = True
         w = pose_ui.PoseWorker(frame)
         w.done.connect(lambda people: self._show_suggestions(people, frame.shape, ms))
         w.failed.connect(lambda e: (self._pose_search_ended(),
-                                    self._status(f"KI-Vorschlag fehlgeschlagen: {e}")))
+                                    self._status(tr("KI-Vorschlag fehlgeschlagen: {0}", e))))
         w.finished.connect(self._pose_search_ended)      # also when neither signal came
         self._pose_worker = w
         w.start()
@@ -1250,17 +1256,17 @@ class MainWindow(QMainWindow):
         self._pose_busy = False
         btn = self.panel.tracking.ai_btn
         btn.setEnabled(True)
-        btn.setText("KI-Vorschlag")
+        btn.setText(tr("KI-Vorschlag"))
         QApplication.restoreOverrideCursor()
 
     def _show_suggestions(self, people, shape, ms: float):
         self._pose_search_ended()            # before the menu opens: normal cursor, button back
         if abs(self._cur_ms() - ms) > 1:
-            self._status("KI-Vorschlag verworfen: das Video ist inzwischen weitergelaufen")
+            self._status(tr("KI-Vorschlag verworfen: das Video ist inzwischen weitergelaufen"))
             return
         menu = self._suggestion_menu(people, shape)
         if menu is None:
-            self._status("KI-Vorschlag: keine Person erkannt – Kästchen bitte selbst aufziehen")
+            self._status(tr("KI-Vorschlag: keine Person erkannt – Kästchen bitte selbst aufziehen"))
             return
         self._show_skeleton(people, shape)
         btn = self.panel.tracking.ai_btn
@@ -1273,8 +1279,7 @@ class MainWindow(QMainWindow):
         self._skel_people = people
         self._skel_shape = shape
         self.view.set_skeleton([(p.pts / np.array([w, h]), p.conf >= pose.SURE) for p in people])
-        self._status("KI-Vorschlag: aus der Liste wählen oder im Bild einen Punkt (Gelenk, Hand, "
-                     "Finger) bzw. eine Linie (z.B. Oberschenkel) anklicken")
+        self._status(tr("KI-Vorschlag: aus der Liste wählen oder im Bild einen Punkt (Gelenk, Hand, Finger) bzw. eine Linie (z.B. Oberschenkel) anklicken"))
 
     def _skeleton_picked(self, k: int, target) -> None:
         from .. import pose
@@ -1289,7 +1294,7 @@ class MainWindow(QMainWindow):
         box = (float(x / w), float(y / h), float(bw / w), float(bh / h)) + ((float(ang),) if ang else ())
         self._box_drawn(box, keep_first=True)
         name = pose.point_name(target) if isinstance(target, int) else pose.line_name(*target)
-        self._status(f"Kästchen auf „{name}“ · {self.status_label.text()}")
+        self._status(tr("Kästchen auf „{0}“ · {1}", name, self.status_label.text()))
 
     def _suggestion_menu(self, people, shape) -> QMenu | None:
         """Menu with one entry per visible body part; choosing one adds its box."""
@@ -1299,7 +1304,7 @@ class MainWindow(QMainWindow):
             return None
         h, w = shape[:2]
         menu = QMenu(self)
-        head = menu.addAction(f"{len(people)} Person{'en' if len(people) > 1 else ''} erkannt – Kästchen setzen:")
+        head = menu.addAction(plural(len(people), "{0} Person erkannt – Kästchen setzen:", "{0} Personen erkannt – Kästchen setzen:"))
         head.setEnabled(False)          # a heading (addSection shows no text in every style)
         menu.addSeparator()
         for i, region, (x, y, bw, bh) in found:
@@ -1308,11 +1313,11 @@ class MainWindow(QMainWindow):
             if x1 - x0 < 4 or y1 - y0 < 4:
                 continue
             box = (float(x0 / w), float(y0 / h), float((x1 - x0) / w), float((y1 - y0) / h))
-            who = f"Person {i + 1}: " if len(people) > 1 else ""
+            who = tr("Person {0}: ", i + 1) if len(people) > 1 else ""
             menu.addAction(who + region.label).triggered.connect(
                 lambda _c=False, b=box: self._pick_from_menu(b))
         menu.addSeparator()
-        menu.addAction("Selbst im Bild wählen (Punkt oder Linie anklicken)")
+        menu.addAction(tr("Selbst im Bild wählen (Punkt oder Linie anklicken)"))
         return menu
 
     def _pick_from_menu(self, box) -> None:
@@ -1328,8 +1333,7 @@ class MainWindow(QMainWindow):
             aw = self.panel.width.currentData()
             px = min(box[2] * aw, box[3] * aw * img.height() / max(1, img.width()))
             if px < 24:
-                msg += (f" · kleines Kästchen ({px:.0f} px bei {aw} px Auflösung): unter Optionen "
-                        "eine höhere Auflösung wählen")
+                msg += (tr(" · kleines Kästchen ({0:.0f} px bei {1} px Auflösung): unter Optionen eine höhere Auflösung wählen", px, aw))
         self._status(msg)
 
     def _outline_drawn(self, box, outline):
@@ -1342,7 +1346,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_draw(self, mode: str):
         if self.panel.mode != "track":
-            self._status("Nur bei Analyse-Methode „Tracking“")
+            self._status(tr("Nur bei Analyse-Methode „Tracking“"))
             return
         tb = self.panel.tracking
         tb.set_draw_mode("box" if tb.draw_mode() == mode else mode)
@@ -1356,20 +1360,20 @@ class MainWindow(QMainWindow):
             return
         sec = tb.sections[i]
         menu = QMenu(self)
-        head = menu.addAction(f"Bereich {area + 1}")
+        head = menu.addAction(tr("Bereich {0}", area + 1))
         head.setEnabled(False)
         menu.addSeparator()
-        toy = menu.addAction("Das ist das Toy / die Maschine (bewegt sich)")
+        toy = menu.addAction(tr("Das ist das Toy / die Maschine (bewegt sich)"))
         toy.setCheckable(True)
         toy.setChecked(area == 0)
-        body = menu.addAction("Das ist der Körper / Bezug (bewegt sich wenig)")
+        body = menu.addAction(tr("Das ist der Körper / Bezug (bewegt sich wenig)"))
         body.setCheckable(True)
         body.setChecked(area > 0)
         body.setEnabled(len(sec.boxes) > 1)
         menu.addSeparator()
-        flat = menu.addAction("Umrandung entfernen (wieder Rechteck)")
+        flat = menu.addAction(tr("Umrandung entfernen (wieder Rechteck)"))
         flat.setEnabled(bool(sec.outline(area)))
-        rm = menu.addAction("Bereich entfernen")
+        rm = menu.addAction(tr("Bereich entfernen"))
         chosen = self._run_menu(menu, pos)
         if chosen is toy:
             self._status(tb.set_role(ms, area, "toy"))
@@ -1378,7 +1382,7 @@ class MainWindow(QMainWindow):
         elif chosen is flat:
             self._status(tb.clear_outline(ms, area))
         elif chosen is rm:
-            self._status(tb.remove_area(ms, area) + " – Strg+Z holt ihn zurück")
+            self._status(tb.remove_area(ms, area) + tr(" – Strg+Z holt ihn zurück"))
 
     def _section_menu(self, pos):
         """Right click in the video beside the areas: delete only from a menu."""
@@ -1388,18 +1392,18 @@ class MainWindow(QMainWindow):
         ms = self._cur_ms()
         i = tb.index_at(ms)
         menu = QMenu(self)
-        head = menu.addAction(f"Abschnitt {i + 1}" if i is not None else "Kein Abschnitt an dieser Stelle")
+        head = menu.addAction(tr("Abschnitt {0}", i + 1) if i is not None else tr("Kein Abschnitt an dieser Stelle"))
         head.setEnabled(False)
         menu.addSeparator()
-        stroke = menu.addAction("Hub-Richtung entfernen")
+        stroke = menu.addAction(tr("Hub-Richtung entfernen"))
         stroke.setEnabled(i is not None and tb.sections[i].stroke is not None)
-        delete = menu.addAction("Abschnitt hier löschen")
+        delete = menu.addAction(tr("Abschnitt hier löschen"))
         delete.setEnabled(i is not None)
         chosen = self._run_menu(menu, pos)
         if chosen is stroke:
             self._status(tb.set_stroke(ms, None))
         elif chosen is delete:
-            self._status(tb.delete_at(ms) + " – Strg+Z holt ihn zurück")
+            self._status(tb.delete_at(ms) + tr(" – Strg+Z holt ihn zurück"))
 
     def _run_menu(self, menu: QMenu, pos):
         return menu.exec(pos)
@@ -1417,13 +1421,13 @@ class MainWindow(QMainWindow):
     def _track_cmd(self, fn, *args):
         """Tracking commands from the menu: only in mode Tracking."""
         if self.panel.mode != "track":
-            self._status("Nur bei Analyse-Methode „Tracking“")
+            self._status(tr("Nur bei Analyse-Methode „Tracking“"))
             return
         self._status(fn(*args, self._cur_ms()))
 
     def _clear_tracking(self):
         if self.panel.mode != "track":
-            self._status("Nur bei Analyse-Methode „Tracking“")
+            self._status(tr("Nur bei Analyse-Methode „Tracking“"))
             return
         self.panel.tracking._clear_clicked()
 
@@ -1467,7 +1471,7 @@ class MainWindow(QMainWindow):
             try:
                 save_prep(self.video_path, self.panel.tracking.sections)
             except OSError as e:
-                self._status(f"Tracking-Vorbereitung nicht gespeichert: {e}")
+                self._status(tr("Tracking-Vorbereitung nicht gespeichert: {0}", e))
 
     def _update_section_marks(self):
         """Sections and calibration moments as marks in the curve."""
@@ -1540,14 +1544,10 @@ class MainWindow(QMainWindow):
         self.prev_btn.setEnabled(on and has_list)
         self.next_btn.setEnabled(on and has_list)
         self.edit_tools.setVisible(not on)
-        self.curve_hint.setText("Nur ansehen" if on else "Umschalt+Ziehen wählt aus · Fläche ziehen scrollt")
+        self.curve_hint.setText(tr("Nur ansehen") if on else tr("Umschalt+Ziehen wählt aus · Fläche ziehen scrollt"))
         self.curve_hint.setToolTip(
-            "Zum Bearbeiten in den Modus „Bearbeiten“ wechseln" if on else
-            "Punkt ziehen = verschieben (alle ausgewählten zusammen)\n"
-            "Umschalt/Strg+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle\n"
-            "Fläche ziehen = scrollen, Klick = zur Stelle springen, Mausrad = Zoom\n"
-            "Doppelklick = Punkt hinzufügen, Rechtsklick/Entf = löschen\n"
-            "Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub verstärken/abschwächen")
+            tr("Zum Bearbeiten in den Modus „Bearbeiten“ wechseln") if on else
+            tr("Punkt ziehen = verschieben (alle ausgewählten zusammen)\nUmschalt/Strg+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle\nFläche ziehen = scrollen, Klick = zur Stelle springen, Mausrad = Zoom\nDoppelklick = Punkt hinzufügen, Rechtsklick/Entf = löschen\nStrg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub verstärken/abschwächen"))
         self.qsettings.setValue("mode", "player" if on else "edit")
 
     def play_index(self, index: int):
@@ -1568,8 +1568,8 @@ class MainWindow(QMainWindow):
                 self.seek_ms(skip)
             if not self.timer.isActive():
                 self.toggle_play()
-        self._status(f"Playlist {index + 1}/{len(pl.items)}: {Path(pl.items[index]).name}"
-                     + ("" if self.stroke_actions() else "  (kein Script)"))
+        self._status(tr("Playlist {0}/{1}: {2}", index + 1, len(pl.items), Path(pl.items[index]).name)
+                     + ("" if self.stroke_actions() else tr("  (kein Script)")))
 
     def open_sibling(self, direction: int):
         """Next/previous video in the same folder (quick preparing of many videos)."""
@@ -1582,15 +1582,15 @@ class MainWindow(QMainWindow):
         i = vids.index(cur) + direction
         if 0 <= i < len(vids):
             self.open_video(str(vids[i]))
-            prep = " · Tracking vorbereitet" if prep_path(vids[i]).is_file() else ""
-            self._status(f"Video {i + 1}/{len(vids)} im Ordner: {vids[i].name}{prep}")
+            prep = tr(" · Tracking vorbereitet") if prep_path(vids[i]).is_file() else ""
+            self._status(tr("Video {0}/{1} im Ordner: {2}{3}", i + 1, len(vids), vids[i].name, prep))
         else:
-            self._status("Kein weiteres Video in diesem Ordner")
+            self._status(tr("Kein weiteres Video in diesem Ordner"))
 
     def play_next(self):
         i = self.player.playlist.next_index()
         if i is None:
-            self._status("Ende der Playlist")
+            self._status(tr("Ende der Playlist"))
             return
         self.play_index(i)
 
@@ -1671,40 +1671,40 @@ class MainWindow(QMainWindow):
             self.pause()
         if self.isFullScreen():
             self.toggle_fullscreen()
-        self._status("Not-Aus: Gerät gestoppt")
+        self._status(tr("Not-Aus: Gerät gestoppt"))
 
     # ------------------------------------------------------------ analysis
     def start_analysis(self):
         if not self.video_path or (self.worker and self.worker.isRunning()):
             return
         if self.panel.mode == "track" and not self.panel.sections:
-            self._status("Tracking: erst im Video die Bereiche aufziehen, die verfolgt werden sollen")
+            self._status(tr("Tracking: erst im Video die Bereiche aufziehen, die verfolgt werden sollen"))
             return
         if self.curve.actions and self.dirty and QMessageBox.question(
-                self, "Analyse", "Manuelle Änderungen werden durch die neue Analyse ersetzt. Fortfahren?"
+                self, tr("Analyse"), tr("Manuelle Änderungen werden durch die neue Analyse ersetzt. Fortfahren?")
         ) != QMessageBox.Yes:
             return
         settings = self.panel.analysis_settings()
         if settings.mode == "track" and settings.ai_check and not pose_ui.ensure_models(self):
             settings = replace(settings, ai_check=False)
-            self._status("KI-Kontrolle aus: ohne KI-Modelle wird normal verfolgt")
+            self._status(tr("KI-Kontrolle aus: ohne KI-Modelle wird normal verfolgt"))
         self.worker = AnalysisWorker(self.video_path, settings)
         self.worker.progress.connect(self._progress)
         self.worker.finishedOk.connect(self._analysis_done)
         self.worker.failed.connect(self._analysis_failed)
-        self.worker.cancelled.connect(lambda: self._analysis_end("Analyse abgebrochen"))
+        self.worker.cancelled.connect(lambda: self._analysis_end(tr("Analyse abgebrochen")))
         self.progress.setValue(0)
         self.progress.setVisible(True)
-        self.progress_label.setText("Analyse  0 %")
+        self.progress_label.setText(tr("Analyse  0 %"))
         self.progress_label.setVisible(True)
         self.cancel_btn.setVisible(True)
         self.analyze_btn.setVisible(False)
-        self._status("Analysiere Bewegung")
+        self._status(tr("Analysiere Bewegung"))
         self.worker.start()
 
     def _progress(self, p: float):
         self.progress.setValue(int(p * 100))
-        self.progress_label.setText(f"Analyse {p * 100:3.0f} %")
+        self.progress_label.setText(tr("Analyse {0:3.0f} %", p * 100))
 
     def cancel_analysis(self):
         if self.worker and self.worker.isRunning():
@@ -1727,30 +1727,30 @@ class MainWindow(QMainWindow):
         self.regenerate()
         self._update_track_overlay(max(0, self._cur_idx) / self.fps * 1000)
         self._update_section_marks()
-        ocl = " (OpenCL)" if motion.meta.get("opencl") else ""
+        ocl = tr(" (OpenCL)") if motion.meta.get("opencl") else ""
         dec = motion.meta.get("decoder")
-        dec_txt = f" · Dekodierung: {DECODER_LABELS.get(dec, dec)}" if dec else " · aus dem Zwischenspeicher"
+        dec_txt = tr(" · Dekodierung: {0}", DECODER_LABELS.get(dec, dec)) if dec else tr(" · aus dem Zwischenspeicher")
         lost = [x for x in self._lost_stretches() if x[1] - x[0] >= 300]
         lost_txt = ""
         if lost:
             a, _b, areas = lost[0]
-            lost_txt = (f" · Bereich {', '.join(map(str, areas))} ab {_fmt(a)} verloren"
-                        + (f" (+{len(lost) - 1} weitere Stellen, rot in der Kurve)" if len(lost) > 1 else
-                           " (rot in der Kurve) – dort nachjustieren"))
+            lost_txt = (tr(" · Bereich {0} ab {1} verloren", ', '.join(map(str, areas)), _fmt(a))
+                        + (tr(" (+{0} weitere Stellen, rot in der Kurve)", len(lost) - 1) if len(lost) > 1 else
+                           tr(" (rot in der Kurve) – dort nachjustieren")))
         notes = motion.meta.get("notes") or []
-        note_txt = "".join(f" · {n}" for n in notes if "ausgefallen" in n or "Modelle" in n)
-        self._analysis_end(f"Analyse fertig{ocl}, {len(self.curve.actions)} Punkte erzeugt{lost_txt}{dec_txt}{note_txt}")
+        note_txt = "".join(f" · {n}" for n in notes)        # only the AI check writes notes
+        self._analysis_end(tr("Analyse fertig{0}, {1} Punkte erzeugt{2}{3}{4}", ocl, len(self.curve.actions), lost_txt, dec_txt, note_txt))
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")
 
     def _analysis_failed(self, msg: str):
-        self._analysis_end("Analyse fehlgeschlagen")
-        QMessageBox.critical(self, "Analyse fehlgeschlagen", msg)
+        self._analysis_end(tr("Analyse fehlgeschlagen"))
+        QMessageBox.critical(self, tr("Analyse fehlgeschlagen"), msg)
 
     def _analysis_outdated(self):
         if self.motion is not None:
-            self._status("Analyse-Einstellungen geändert, neu analysieren, um sie anzuwenden")
+            self._status(tr("Analyse-Einstellungen geändert, neu analysieren, um sie anzuwenden"))
 
     def regenerate(self):
         if self.motion is None:
@@ -1766,7 +1766,7 @@ class MainWindow(QMainWindow):
         self._update_axis_labels()
         self.dirty = True
         self._refresh_position()
-        self._status(f"{len(script.actions)} Punkte erzeugt")
+        self._status(tr("{0} Punkte erzeugt", len(script.actions)))
 
     def regenerate_manual(self):
         if self.motion is not None:
@@ -1778,7 +1778,7 @@ class MainWindow(QMainWindow):
     def generate_more_axes(self):
         """Sway (and roll with tracking) from the analysis."""
         if self.motion is None:
-            self._status("Erst analysieren")
+            self._status(tr("Erst analysieren"))
             return
         axes = generate_axes(self.motion, self.panel.generator_settings(), self.panel.sections)
         self._sync_axis()
@@ -1789,8 +1789,8 @@ class MainWindow(QMainWindow):
         self.dirty = True
         self._update_axis_labels()
         names = ", ".join(f"{AXES[c][0]} ({len(a)} Punkte)" for c, a in axes.items())
-        hint = "" if "R1" in axes else " · Roll braucht Tracking mit 2 Bereichen"
-        self._status(f"Erzeugt: {names}{hint}")
+        hint = "" if "R1" in axes else tr(" · Roll braucht Tracking mit 2 Bereichen")
+        self._status(tr("Erzeugt: {0}{1}", names, hint))
 
     # ------------------------------------------------------------ axes
     def _sync_axis(self):
@@ -1829,8 +1829,8 @@ class MainWindow(QMainWindow):
         self.axis_box.setCurrentIndex(self.axis_box.findData(axis))
         self._update_axis_labels()
         self._refresh_position()
-        self._status(f"Achse: {AXES[axis][0]} ({axis})"
-                     + ("" if axis == "L0" else " · das Gerät folgt weiter der Achse „Hub“"))
+        self._status(tr("Achse: {0} ({1})", AXES[axis][0], axis)
+                     + ("" if axis == "L0" else tr(" · das Gerät folgt weiter der Achse „Hub“")))
 
     def _update_axis_labels(self):
         for i in range(self.axis_box.count()):
@@ -1843,49 +1843,49 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ point editing
     def _need_selection(self) -> bool:
         if not self.curve.editable:
-            self._status("Im Player-Modus nicht möglich – zu „Bearbeiten“ wechseln")
+            self._status(tr("Im Player-Modus nicht möglich – zu „Bearbeiten“ wechseln"))
             return False
         if not self.curve.selection:
-            self._status("Erst Punkte auswählen: Umschalt+Ziehen, Strg+Klick oder Strg+A")
+            self._status(tr("Erst Punkte auswählen: Umschalt+Ziehen, Strg+Klick oder Strg+A"))
             return False
         return True
 
     def select_all_points(self):
         self.curve.select_all()
-        self._status(f"{len(self.curve.selection)} Punkte ausgewählt")
+        self._status(tr("{0} Punkte ausgewählt", len(self.curve.selection)))
 
     def copy_points(self):
         if self._need_selection():
-            self._status(f"{self.curve.copy_selection()} Punkte kopiert")
+            self._status(tr("{0} Punkte kopiert", self.curve.copy_selection()))
 
     def cut_points(self):
         if self._need_selection():
             n = self.curve.copy_selection()
             self.curve.delete_selection()
-            self._status(f"{n} Punkte ausgeschnitten")
+            self._status(tr("{0} Punkte ausgeschnitten", n))
 
     def paste_points(self):
         if not self.curve.editable:
             return
         n = self.curve.paste()
-        self._status(f"{n} Punkte eingefügt bei {_fmt(self.curve.playhead_ms)}" if n else
-                     "Nichts zum Einfügen – erst Punkte kopieren (Strg+C)")
+        self._status(tr("{0} Punkte eingefügt bei {1}", n, _fmt(self.curve.playhead_ms)) if n else
+                     tr("Nichts zum Einfügen – erst Punkte kopieren (Strg+C)"))
 
     def delete_points(self):
         if self._need_selection():
             n = len(self.curve.selection)
             self.curve.delete_selection()
-            self._status(f"{n} Punkte gelöscht")
+            self._status(tr("{0} Punkte gelöscht", n))
 
     def smooth_points(self):
         if self._need_selection():
             self.curve.apply(editing.smooth)
-            self._status("Auswahl geglättet (mehrmals anwenden für mehr Wirkung)")
+            self._status(tr("Auswahl geglättet (mehrmals anwenden für mehr Wirkung)"))
 
     def scale_points(self, factor: float):
         if self._need_selection():
             self.curve.apply(editing.scale, factor)
-            self._status("Hub verstärkt" if factor > 1 else "Hub abgeschwächt")
+            self._status(tr("Hub verstärkt") if factor > 1 else tr("Hub abgeschwächt"))
 
     def _push_undo(self):
         self.undo_stack.append((self.axis, [Action(a.at, a.pos) for a in self.curve.actions]))
@@ -1896,7 +1896,7 @@ class MainWindow(QMainWindow):
         self.dirty = True
         self._update_axis_labels()
         self._refresh_position()
-        self._status("Punkte bearbeitet")
+        self._status(tr("Punkte bearbeitet"))
 
     def _update_heat(self):
         dur = self.frame_count / self.fps * 1000 if self.cap else 0.0
@@ -1937,7 +1937,7 @@ class MainWindow(QMainWindow):
             (tb.generatorChanged if same else tb.analysisChanged).emit()
         finally:
             self._track_restoring = False
-        self._status("Tracking: " + ("rückgängig gemacht" if dst is self.redo_stack else "wiederhergestellt"))
+        self._status(tr("Tracking: ") + (tr("rückgängig gemacht") if dst is self.redo_stack else tr("wiederhergestellt")))
 
     def undo(self):
         if self.undo_stack:
@@ -1955,8 +1955,8 @@ class MainWindow(QMainWindow):
     def export_as(self):
         if not self.video_path:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Funscript speichern", str(funscript_path_for(self.video_path)),
-                                              "Funscript (*.funscript)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("Funscript speichern"), str(funscript_path_for(self.video_path)),
+                                              tr("Funscript (*.funscript)"))
         if path:
             self._save(Path(path))
 
@@ -1965,7 +1965,7 @@ class MainWindow(QMainWindow):
         (<name>.roll.funscript etc.)."""
         axes = {a: v for a, v in self.all_axes().items() if v}
         if not axes:
-            QMessageBox.information(self, "Export", "Noch keine Punkte vorhanden. Analysiere zuerst das Video.")
+            QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
             return
         meta = make_metadata(self.video_path)
         saved = []
@@ -1976,24 +1976,24 @@ class MainWindow(QMainWindow):
                 Funscript(acts, metadata=meta).save(target)
                 saved.append(target.name)
         except OSError as e:
-            QMessageBox.critical(self, "Fehler", f"Speichern fehlgeschlagen:\n{e}")
+            QMessageBox.critical(self, tr("Fehler"), tr("Speichern fehlgeschlagen:\n{0}", e))
             return
         self.dirty = False
-        self._status("Gespeichert: " + ", ".join(saved))
+        self._status(tr("Gespeichert: ") + ", ".join(saved))
 
     def load_funscript_dialog(self):
         start = str(funscript_path_for(self.video_path)) if self.video_path else ""
-        path, _ = QFileDialog.getOpenFileName(self, "Funscript laden", start, "Funscript (*.funscript)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Funscript laden"), start, tr("Funscript (*.funscript)"))
         if path:
             try:
                 fs = Funscript.load(path)
             except (OSError, ValueError, KeyError) as e:
-                QMessageBox.critical(self, "Fehler", str(e))
+                QMessageBox.critical(self, tr("Fehler"), str(e))
                 return
             self._push_undo()
             self.curve.set_actions(fs.actions)
             self._update_axis_labels()
-            self._status(f"Geladen in Achse {AXES[self.axis][0]}: {path}")
+            self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path))
 
     def open_library(self):
         from .library_dialog import LibraryDialog
@@ -2013,7 +2013,7 @@ class MainWindow(QMainWindow):
 
     def _library_queue(self, paths: list):
         n = self.player.add_paths(paths)
-        self._status(f"{n} Video{'s' if n != 1 else ''} zur Playlist hinzugefügt")
+        self._status(plural(n, "{0} Video zur Playlist hinzugefügt", "{0} Videos zur Playlist hinzugefügt"))
 
     def _library_edit(self, path: str):
         self.set_player_mode(False)
@@ -2029,24 +2029,24 @@ class MainWindow(QMainWindow):
         from .. import updater
 
         self._appimage = updater.running_appimage()
-        act = QAction("Im Startmenü anzeigen", self)
+        act = QAction(tr("Im Startmenü anzeigen"), self)
         act.setCheckable(True)
         v = self.qsettings.value("desktop_integration", True)
         enabled = v if isinstance(v, bool) else str(v).lower() == "true"
         act.setChecked(enabled and self._appimage is not None)
         act.setEnabled(self._appimage is not None)
         if self._appimage is None:
-            act.setToolTip("Nur verfügbar, wenn die App als AppImage läuft")
+            act.setToolTip(tr("Nur verfügbar, wenn die App als AppImage läuft"))
         menu.insertAction(menu.actions()[1] if len(menu.actions()) > 1 else None, act)
 
         def toggled(on: bool):
             self.qsettings.setValue("desktop_integration", on)
             if on:
                 di.install(self._appimage)
-                self._status("Ins Startmenü aufgenommen")
+                self._status(tr("Ins Startmenü aufgenommen"))
             else:
                 di.uninstall()
-                self._status("Aus dem Startmenü entfernt")
+                self._status(tr("Aus dem Startmenü entfernt"))
 
         act.toggled.connect(toggled)
         if enabled and self._appimage is not None:
@@ -2057,9 +2057,9 @@ class MainWindow(QMainWindow):
     def test_decoding(self):
         """Try every decoder on the open video and show which one works and how fast."""
         if not self.video_path:
-            QMessageBox.information(self, "Dekodierung testen", "Erst ein Video öffnen.")
+            QMessageBox.information(self, tr("Dekodierung testen"), tr("Erst ein Video öffnen."))
             return
-        self._status("Teste Dekodierung…")
+        self._status(tr("Teste Dekodierung…"))
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             results = test_decoders(probe(self.video_path), self.panel.analysis_settings().width)
@@ -2068,62 +2068,22 @@ class MainWindow(QMainWindow):
         lines = []
         for r in results:
             if r["ok"]:
-                lines.append(f"✓ {r['label']}: {r['fps']:.0f} Bilder/s")
+                lines.append(tr("✓ {0}: {1:.0f} Bilder/s", r['label'], r['fps']))
             else:
                 err = (r["error"] or "keine Bilder").replace("FFmpeg lieferte keine Frames: ", "")
                 lines.append(f"✗ {r['label']}:\n    {err[:300]}")
         gpu_ok = any(r["ok"] and r["mode"] == "vaapi-gpu" for r in results)
         lines.append("")
-        lines.append("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder "
-                     "„VAAPI“ wird das genutzt." if gpu_ok else
-                     "Die Grafikkarte kann dieses Video nicht dekodieren (Treiber, Codec oder "
-                     "ffmpeg ohne VAAPI). Unter Nobara hilft meist: sudo dnf install ffmpeg "
-                     "libva-utils mesa-va-drivers-freeworld")
+        lines.append(tr("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „VAAPI“ wird das genutzt.") if gpu_ok else
+                     tr("Die Grafikkarte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne VAAPI). Unter Nobara hilft meist: sudo dnf install ffmpeg libva-utils mesa-va-drivers-freeworld"))
         lines.append("")
-        lines.append("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das "
-                     "Dekodieren läuft im eigenen Video-Block der Karte (VCN) und taucht dort kaum "
-                     "auf – sichtbar z.B. mit amdgpu_top. Das Tracking selbst rechnet die CPU.")
-        QMessageBox.information(self, "Dekodierung testen", "\n".join(lines))
-        self._status("Dekodierungstest fertig")
+        lines.append(tr("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (VCN) und taucht dort kaum auf – sichtbar z.B. mit amdgpu_top. Das Tracking selbst rechnet die CPU."))
+        QMessageBox.information(self, tr("Dekodierung testen"), "\n".join(lines))
+        self._status(tr("Dekodierungstest fertig"))
 
     def show_help(self):
-        QMessageBox.information(self, "Bedienung", (
-            "Bearbeiten\n"
-            "1. Video öffnen (Strg+O oder Datei hierher ziehen).\n"
-            "2. Methode wählen: „Bewegung im Bild“ (optional Rechteck = Analysebereich)\n"
-            "   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n"
-            "   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n"
-            "   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n"
-            "   Kästchen (am Abschnitt-Start): innen ziehen = verschieben, Ecke = Größe,\n"
-            "   runder Griff oder Mausrad = drehen. Abgewandert: an der Stelle anpacken und\n"
-            "   richtig hinschieben (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n"
-            "   Kleine Stellen: Strg+Mausrad zoomt ins Video, mittlere Maustaste verschiebt,\n"
-            "   Strg+0 setzt zurück. Kleine Kästchen brauchen eine höhere Auflösung (Optionen).\n"
-            "   Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n"
-            "3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n"
-            "4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n"
-            "   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n"
-            "   Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub stärker/schwächer.\n"
-            "   Fläche ziehen = scrollen, Mausrad = Zoom.\n"
-            "   Strg+T = Rhythmus einfügen (gleichmäßiger Takt für einen Bereich).\n"
-            "   Tracking-Abschnitte: Anfang/Ende in der Kurve mit der Maus ziehen.\n"
-            "5. Achse über der Kurve wählen (Hub, Roll, Twist …).\n"
-            "   Lesezeichen: B = setzen, Alt+→/← = nächstes/voriges, Liste im Menü „Lesezeichen“.\n"
-            "6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\n"
-            "Player (Strg+P)\n"
-            "Videos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\n"
-            "Video, F11 = Vollbild. Ein ruhiger Anfang wird übersprungen (Start 10 s vor dem Script),\n"
-            "die letzten 10 s vor dem Start zählt ein Countdown herunter (beides abschaltbar).\n\n"
-            "Leertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\n"
-            "Muster-Steuerung (Strg+M)\n"
-            "Fertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\n"
-            "Tiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n"
-            "(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\n"
-            "Abläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\n"            "Zufall wechselt selbst, Musik folgt dem Takt der Musik am PC.\n\n"
-            "Gerät-Menü: Einrichtungs-Assistent, Handy-Fernbedienung, Andere Player (mpv, VLC, VR).\n"
-            "Im Fenster „Gerät“: Sicherheits-Timer (abschaltbar), Vibration folgt Tempo/Tiefe.\n"
-            "Eigene Muster gibt es auch bei Strg+T.\n\n"
-            "Esc = Not-Aus (Gerät stoppen)."))
+        QMessageBox.information(self, tr("Bedienung"), (
+            tr("Bearbeiten\n1. Video öffnen (Strg+O oder Datei hierher ziehen).\n2. Methode wählen: „Bewegung im Bild“ (optional Rechteck = Analysebereich)\n   oder „Tracking“: bis zu 3 Bereiche im Video aufziehen (z.B. die beiden Körperteile).\n   Tracking: E = Abschnitt-Ende hier, nach Szenenwechsel neu markieren;\n   D = ganz drin, A = ganz draußen (echte Tiefe statt gestreckter Hübe).\n   Kästchen (am Abschnitt-Start): innen ziehen = verschieben, Ecke = Größe,\n   runder Griff oder Mausrad = drehen. Abgewandert: an der Stelle anpacken und\n   richtig hinschieben (nachjustieren). Neu anfangen: Tracking → Alle Abschnitte löschen.\n   Kleine Stellen: Strg+Mausrad zoomt ins Video, mittlere Maustaste verschiebt,\n   Strg+0 setzt zurück. Kleine Kästchen brauchen eine höhere Auflösung (Optionen).\n   Strg+Bild↓/↑ = nächstes/voriges Video im Ordner.\n3. „Analysieren“ klicken, dann Empfindlichkeit, Glättung usw. anpassen.\n4. Punkte: ziehen = verschieben, Doppelklick = hinzufügen, Rechtsklick/Entf = löschen.\n   Umschalt+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle.\n   Strg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub stärker/schwächer.\n   Fläche ziehen = scrollen, Mausrad = Zoom.\n   Strg+T = Rhythmus einfügen (gleichmäßiger Takt für einen Bereich).\n   Tracking-Abschnitte: Anfang/Ende in der Kurve mit der Maus ziehen.\n5. Achse über der Kurve wählen (Hub, Roll, Twist …).\n   Lesezeichen: B = setzen, Alt+→/← = nächstes/voriges, Liste im Menü „Lesezeichen“.\n6. Strg+S speichert <Video>.funscript (und <Video>.roll.funscript usw.).\n\nPlayer (Strg+P)\nVideos in die Playlist ziehen und „Playlist abspielen“. Bild ↑/↓ = vorheriges/nächstes\nVideo, F11 = Vollbild. Ein ruhiger Anfang wird übersprungen (Start 10 s vor dem Script),\ndie letzten 10 s vor dem Start zählt ein Countdown herunter (beides abschaltbar).\n\nLeertaste = Abspielen, Pfeiltasten = Frame vor/zurück, M = Ton an/aus,\nMuster-Steuerung (Strg+M)\nFertige Muster oder eigene aus Bausteinen direkt auf dem Gerät abspielen.\nTiefe und Tempo bleiben gespeichert, ändern mit ↑/↓ und ←/→ oder per Controller\n(linker Stick Tiefe, rechter Stick Tempo, A Start/Stopp, B Stopp).\nAbläufe: mehrere Muster hintereinander mit eigener Dauer, Tempo und Tiefe.\nZufall wechselt selbst, Musik folgt dem Takt der Musik am PC.\n\nGerät-Menü: Einrichtungs-Assistent, Handy-Fernbedienung, Andere Player (mpv, VLC, VR).\nIm Fenster „Gerät“: Sicherheits-Timer (abschaltbar), Vibration folgt Tempo/Tiefe.\nEigene Muster gibt es auch bei Strg+T.\n\nEsc = Not-Aus (Gerät stoppen).")))
 
     # ------------------------------------------------------------ misc
     def _status(self, msg: str):
@@ -2133,18 +2093,18 @@ class MainWindow(QMainWindow):
     def _update_meta(self):
         n = len(self.curve.actions)
         if not n:
-            self.curve_meta.setText("Noch nicht analysiert" if self.motion is None else "Keine Punkte")
+            self.curve_meta.setText(tr("Noch nicht analysiert") if self.motion is None else tr("Keine Punkte"))
             return
         dur = self.curve.actions[-1].at - self.curve.actions[0].at
         rate = (n - 1) / 2 / (dur / 60000) if dur > 0 else 0
-        edited = " · nicht gespeichert" if self.dirty else ""
-        self.curve_meta.setText(f"{n} Punkte · {rate:.0f} Hübe/min{edited}")
+        edited = tr(" · nicht gespeichert") if self.dirty else ""
+        self.curve_meta.setText(tr("{0} Punkte · {1:.0f} Hübe/min{2}", n, rate, edited))
 
     def _confirm_discard(self) -> bool:
         if not self.dirty or not any(self.all_axes().values()):
             return True
-        r = QMessageBox.question(self, "Ungespeicherte Änderungen",
-                                 "Das aktuelle Funscript wurde nicht gespeichert. Verwerfen?")
+        r = QMessageBox.question(self, tr("Ungespeicherte Änderungen"),
+                                 tr("Das aktuelle Funscript wurde nicht gespeichert. Verwerfen?"))
         return r == QMessageBox.Yes
 
     def dragEnterEvent(self, ev):
@@ -2155,7 +2115,7 @@ class MainWindow(QMainWindow):
         urls = [u.toLocalFile() for u in ev.mimeData().urls() if u.isLocalFile()]
         if urls and self.player_mode:          # player: dropped videos go to the playlist
             n = self.player.add_paths(urls)
-            self._status(f"{n} Video{'s' if n != 1 else ''} zur Playlist hinzugefügt")
+            self._status(plural(n, "{0} Video zur Playlist hinzugefügt", "{0} Videos zur Playlist hinzugefügt"))
             return
         if urls:
             p = Path(urls[0])

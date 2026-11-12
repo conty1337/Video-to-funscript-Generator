@@ -17,6 +17,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .i18n import plural, tr
+
 DEFAULT_MAX_SPEED = 500      # positions per second: a full stroke in 200 ms (Fredorch F21S)
 GAP_MS = 4000                # no stroke for this long inside the script
 STROKE_MIN = 10              # a step of at least this many positions is a stroke
@@ -28,12 +30,12 @@ AROUND = 8                   # strokes on each side that count as "around"
 LOST_MIN_MS = 300            # shorter lost stretches are bridged anyway
 
 KIND_LABELS = {
-    "fast": "zu schnell",
-    "gap": "Lücke",
-    "lost": "Bereich verloren",
-    "jitter": "Zittern",
-    "small": "Hübe plötzlich klein",
-    "beat": "Takt setzt aus",
+    "fast": tr("zu schnell"),
+    "gap": tr("Lücke"),
+    "lost": tr("Bereich verloren"),
+    "jitter": tr("Zittern"),
+    "small": tr("Hübe plötzlich klein"),
+    "beat": tr("Takt setzt aus"),
 }
 
 
@@ -80,17 +82,17 @@ def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
     for a, b in zip(acts, acts[1:]):
         v = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
         if v > limit * 1.05 and not _in_cut(a.at, b.at, cuts):
-            issues.append(Issue("fast", a.at, b.at, f"{v:.0f} Pos./s, das Gerät schafft {limit:.0f}"))
+            issues.append(Issue("fast", a.at, b.at, tr("{0:.0f} Pos./s, das Gerät schafft {1:.0f}", v, limit)))
 
     # strokes: steps of at least STROKE_MIN
     strokes = [(a, b) for a, b in zip(acts, acts[1:]) if abs(b.pos - a.pos) >= STROKE_MIN]
     for a, b in strokes:            # a crawl over several seconds is no stroke either
         if b.at - a.at >= GAP_MS and not _in_cut(a.at, b.at, cuts):
-            issues.append(Issue("gap", a.at, b.at, f"{(b.at - a.at) / 1000:.0f} s nur langsames Gleiten"))
+            issues.append(Issue("gap", a.at, b.at, tr("{0:.0f} s nur langsames Gleiten", (b.at - a.at) / 1000)))
     for (a0, b0), (a1, b1) in zip(strokes, strokes[1:]):
         gap = a1.at - b0.at
         if gap >= GAP_MS and not _in_cut(b0.at, a1.at, cuts):
-            issues.append(Issue("gap", b0.at, a1.at, f"{gap / 1000:.0f} s ohne Hub"))
+            issues.append(Issue("gap", b0.at, a1.at, tr("{0:.0f} s ohne Hub", gap / 1000)))
 
     # trembling: many tiny steps in a row
     run: list = []
@@ -99,10 +101,10 @@ def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
             run.append((a, b))
             continue
         if len(run) >= JITTER_COUNT and not _in_cut(run[0][0].at, run[-1][1].at, cuts):
-            issues.append(Issue("jitter", run[0][0].at, run[-1][1].at, f"{len(run)} winzige Bewegungen"))
+            issues.append(Issue("jitter", run[0][0].at, run[-1][1].at, tr("{0} winzige Bewegungen", len(run))))
         run = []
     if len(run) >= JITTER_COUNT and not _in_cut(run[0][0].at, run[-1][1].at, cuts):
-        issues.append(Issue("jitter", run[0][0].at, run[-1][1].at, f"{len(run)} winzige Bewegungen"))
+        issues.append(Issue("jitter", run[0][0].at, run[-1][1].at, tr("{0} winzige Bewegungen", len(run))))
 
     # compared with the strokes around: suddenly small, or one much slower
     if len(strokes) >= 2 * AROUND + 1:
@@ -118,27 +120,27 @@ def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
             h = float(np.median(heights[others]))
             if heights[k] < SMALL_FRAC * h:
                 issues.append(Issue("small", a.at, b.at,
-                                    f"Hub {heights[k]:.0f} statt etwa {h:.0f} – Kästchen verrutscht?"))
+                                    tr("Hub {0:.0f} statt etwa {1:.0f} – Kästchen verrutscht?", heights[k], h)))
             L = float(np.median(lengths[others]))
             if lengths[k] > BEAT_FACTOR * L and lengths[k] < GAP_MS:
                 issues.append(Issue("beat", a.at, b.at,
-                                    f"ein Hub {lengths[k] / 1000:.1f} s statt etwa {L / 1000:.1f} s"))
+                                    tr("ein Hub {0:.1f} s statt etwa {1:.1f} s", lengths[k] / 1000, L / 1000)))
 
     for a, b in lost:
         if b - a >= LOST_MIN_MS and not _in_cut(a, b, cuts):
-            issues.append(Issue("lost", int(a), int(b), "Tracking hat hier einen Bereich verloren"))
+            issues.append(Issue("lost", int(a), int(b), tr("Tracking hat hier einen Bereich verloren")))
     return _merge(issues)
 
 
 def summary(issues: list[Issue]) -> str:
     """'3 Stellen: 2× zu schnell, 1× Lücke' (or that nothing was found)."""
     if not issues:
-        return "Prüfung: nichts aufgefallen"
+        return tr("Prüfung: nichts aufgefallen")
     counts: dict[str, int] = {}
     for it in issues:
         counts[it.label] = counts.get(it.label, 0) + 1
     parts = ", ".join(f"{n}× {k}" for k, n in counts.items())
-    return f"{len(issues)} Stelle{'n' if len(issues) > 1 else ''} prüfen: {parts}"
+    return plural(len(issues), "{0} Stelle prüfen: {1}", "{0} Stellen prüfen: {1}", parts)
 
 
 def describe(it: Issue) -> str:

@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 from . import gpu
+from .i18n import tr
 from .video import VideoInfo, iter_gray_frames, probe, scaled_size
 
 ProgressCb = Callable[[float], None]
@@ -270,7 +271,7 @@ def analyze_motion(path: str | Path, settings: AnalysisSettings | None = None,
         if progress and i % 25 == 0:
             progress(min(1.0, i / total))
     if prev is None:
-        raise RuntimeError(f"Keine Frames gelesen: {path}")
+        raise RuntimeError(tr("Keine Frames gelesen: {0}", path))
     if progress:
         progress(1.0)
     return MotionData(str(path), info.fps / step, np.asarray(dx, np.float32),
@@ -547,7 +548,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
         if pose.installed():
             estimator = pose.PoseEstimator()
         else:
-            report.setdefault("notes", []).append("KI-Kontrolle aus: Modelle nicht geladen")
+            report.setdefault("notes", []).append(tr("KI-Kontrolle aus: Modelle nicht geladen"))
     ai_every = max(1, round(AI_EVERY_S * info.fps / step))
 
     def ai_people(img, reuse=False) -> list:
@@ -557,7 +558,7 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
             return estimator.people(img, reuse=reuse)
         except Exception as e:             # a model / OpenCV problem must not end the analysis
             estimator, anchors = None, []
-            report.setdefault("notes", []).append(f"KI-Kontrolle ausgefallen, ohne KI weiter: {e}")
+            report.setdefault("notes", []).append(tr("KI-Kontrolle ausgefallen, ohne KI weiter: {0}", e))
             return []
     anchors: list = []
     knots: dict[int, dict[int, np.ndarray]] = {}     # area -> {frame: centre} seen by the AI
@@ -715,9 +716,9 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
         if progress and i % 25 == 0:
             progress(min(1.0, i / total))
     if not dx:
-        raise RuntimeError(f"Keine Frames gelesen: {path}")
+        raise RuntimeError(tr("Keine Frames gelesen: {0}", path))
     if all(o < 0 for o in owner):
-        raise RuntimeError("Kein Tracking-Abschnitt liegt im Video")
+        raise RuntimeError(tr("Kein Tracking-Abschnitt liegt im Video"))
     dx_a = np.asarray(dx, np.float64)
     dy_a = np.asarray(dy, np.float64)
     _spread_corrections(events, centers, owner, plan, dx_a, dy_a, k)

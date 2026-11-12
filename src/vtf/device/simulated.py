@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 
+from ..i18n import tr
 from .base import Device
 
 STEPS = 15                 # positions 0..15
@@ -17,7 +18,7 @@ MIN_FULL_STROKE_MS = 200   # fastest full stroke
 
 
 class SimulatedDevice(Device):
-    name = "Simulation (Fredorch F21S)"
+    name = tr("Simulation (Fredorch F21S)")
 
     def __init__(self, clock=time.monotonic):
         super().__init__()
@@ -35,12 +36,12 @@ class SimulatedDevice(Device):
 
     def connect(self) -> None:
         self._connected = True
-        self._emit("Simulation verbunden")
+        self._emit(tr("Simulation verbunden"))
 
     def disconnect(self) -> None:
         self.stop()
         self._connected = False
-        self._emit("Simulation getrennt")
+        self._emit(tr("Simulation getrennt"))
 
     @staticmethod
     def quantize(position: float) -> float:

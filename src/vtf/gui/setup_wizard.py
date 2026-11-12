@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 from ..device.buttplug import ButtplugDevice
 from ..device.sync import ScriptSync
 from ..funscript import Action
+from ..i18n import tr
 from . import theme
 from .device_ui import KINDS
 
@@ -95,13 +96,13 @@ class Flash(QWidget):
 
 
 class SetupWizard(QDialog):
-    PAGES = ("Verbinden", "Richtung", "Hubbereich", "Höchsttempo", "Verzögerung", "Fertig")
+    PAGES = (tr("Verbinden"), tr("Richtung"), tr("Hubbereich"), tr("Höchsttempo"), tr("Verzögerung"), tr("Fertig"))
 
     def __init__(self, ctl, parent=None):
         super().__init__(parent)
         self.ctl = ctl
         self.s = ctl.sync.settings
-        self.setWindowTitle("Gerät einrichten")
+        self.setWindowTitle(tr("Gerät einrichten"))
         self.resize(620, 520)
         lay = QVBoxLayout(self)
         lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
@@ -117,10 +118,10 @@ class SetupWizard(QDialog):
         self.status.setWordWrap(True)
         lay.addWidget(self.status)
         nav = QHBoxLayout()
-        self.stop_btn = QPushButton(theme.icon("x"), "Stopp (Esc)")
+        self.stop_btn = QPushButton(theme.icon("x"), tr("Stopp (Esc)"))
         self.stop_btn.clicked.connect(self.stop_motion)
-        self.back_btn = QPushButton("Zurück")
-        self.next_btn = QPushButton("Weiter")
+        self.back_btn = QPushButton(tr("Zurück"))
+        self.next_btn = QPushButton(tr("Weiter"))
         self.next_btn.setObjectName("primary")
         self.back_btn.clicked.connect(lambda: self.go(self.stack.currentIndex() - 1))
         self.next_btn.clicked.connect(self._next)
@@ -189,7 +190,7 @@ class SetupWizard(QDialog):
         self.stack.setCurrentIndex(i)
         self.steps.setText("  ›  ".join(f"<b>{p}</b>" if k == i else p for k, p in enumerate(self.PAGES)))
         self.back_btn.setEnabled(i > 0)
-        self.next_btn.setText("Speichern und schließen" if i == self.stack.count() - 1 else "Weiter")
+        self.next_btn.setText(tr("Speichern und schließen") if i == self.stack.count() - 1 else tr("Weiter"))
         if i == len(self.PAGES) - 1:
             self._summary()
         self._refresh()
@@ -215,13 +216,13 @@ class SetupWizard(QDialog):
             dev = self.device
             if isinstance(dev, ButtplugDevice):
                 for d in dev.devices.values():
-                    self.dev_box.addItem(d.name + ("" if d.is_linear else " (keine Positionssteuerung)"), d.index)
+                    self.dev_box.addItem(d.name + ("" if d.is_linear else tr(" (keine Positionssteuerung)")), d.index)
                 if dev.selected is not None:
                     self.dev_box.setCurrentIndex(max(0, self.dev_box.findData(dev.selected)))
             elif dev is not None:
                 self.dev_box.addItem(dev.name, None)
             self.dev_box.setEnabled(self.dev_box.count() > 1)
-            self.found.setText(f"Verbunden: {dev.name}" if connected else "Noch nicht verbunden.")
+            self.found.setText(tr("Verbunden: {0}", dev.name) if connected else tr("Noch nicht verbunden."))
         else:
             self.next_btn.setEnabled(True)
         for b in self.findChildren(QPushButton):
@@ -246,7 +247,7 @@ class SetupWizard(QDialog):
         self.timer.stop()
         self._metro = None
         if hasattr(self, "metro_btn"):
-            self.metro_btn.setText("Takt starten")
+            self.metro_btn.setText(tr("Takt starten"))
             self.flash.set_on(False)
         if self.device is not None:
             try:
@@ -274,9 +275,7 @@ class SetupWizard(QDialog):
 
     # ------------------------------------------------------------ pages
     def _page_connect(self):
-        v = self._page("1. Verbinden", "Für den Fredorch F21S: Intiface Central starten und „Start Server“ "
-                       "klicken, Gerät einschalten (Handy-App getrennt), dann hier verbinden. Ohne Gerät geht "
-                       "alles auch mit der Simulation.")
+        v = self._page(tr("1. Verbinden"), tr("Für den Fredorch F21S: Intiface Central starten und „Start Server“ klicken, Gerät einschalten (Handy-App getrennt), dann hier verbinden. Ohne Gerät geht alles auch mit der Simulation."))
         self.kind = QComboBox()
         for label, val in KINDS:
             self.kind.addItem(label, val)
@@ -284,7 +283,7 @@ class SetupWizard(QDialog):
         self.url = QLineEdit()
         self.kind.currentIndexChanged.connect(self._kind_changed)
         self._kind_changed()
-        self.connect_btn = QPushButton(theme.icon("bluetooth", theme.ON_ACCENT), "Verbinden")
+        self.connect_btn = theme.accent_icon(QPushButton(), "bluetooth", tr("Verbinden"))
         self.connect_btn.setObjectName("primary")
         self.connect_btn.clicked.connect(
             lambda: self.ctl.connect_device(self.kind.currentData(), self.url.text().strip()))
@@ -312,26 +311,24 @@ class SetupWizard(QDialog):
             dev.select(self.dev_box.itemData(i))
 
     def _page_direction(self):
-        v = self._page("2. Richtung", "Drück „Oben“. Das Gerät soll ganz nach oben bzw. außen fahren. Fährt "
-                       "es stattdessen nach unten bzw. innen, setz den Haken bei „Richtung umkehren“.")
+        v = self._page(tr("2. Richtung"), tr("Drück „Oben“. Das Gerät soll ganz nach oben bzw. außen fahren. Fährt es stattdessen nach unten bzw. innen, setz den Haken bei „Richtung umkehren“."))
         row = QHBoxLayout()
-        row.addWidget(self._btn("Oben", lambda: self.move(100), "arrow-up"))
-        row.addWidget(self._btn("Unten", lambda: self.move(0), "arrow-down"))
-        row.addWidget(self._btn("Mitte", lambda: self.move(50)))
+        row.addWidget(self._btn(tr("Oben"), lambda: self.move(100), "arrow-up"))
+        row.addWidget(self._btn(tr("Unten"), lambda: self.move(0), "arrow-down"))
+        row.addWidget(self._btn(tr("Mitte"), lambda: self.move(50)))
         v.addLayout(row)
-        self.invert = QCheckBox("Richtung umkehren")
+        self.invert = QCheckBox(tr("Richtung umkehren"))
         self.invert.setChecked(self.s.invert)
         self.invert.toggled.connect(lambda on: (setattr(self.s, "invert", on), self.move(100)))
         v.addWidget(self.invert)
         v.addStretch(1)
 
     def _page_range(self):
-        v = self._page("3. Hubbereich", "Welcher Teil des Weges genutzt wird. Beim Verschieben fährt das Gerät "
-                       "an die Stelle, so siehst du sofort, wo die Grenze liegt. Ganz durch: 0 bis 100.")
+        v = self._page(tr("3. Hubbereich"), tr("Welcher Teil des Weges genutzt wird. Beim Verschieben fährt das Gerät an die Stelle, so siehst du sofort, wo die Grenze liegt. Ganz durch: 0 bis 100."))
         self.r_lo, self.r_hi = QSlider(Qt.Horizontal), QSlider(Qt.Horizontal)
         self.r_lo_val, self.r_hi_val = QLabel(), QLabel()
-        for sl, val, lab, text in ((self.r_lo, self.s.pos_min, self.r_lo_val, "Unten"),
-                                   (self.r_hi, self.s.pos_max, self.r_hi_val, "Oben")):
+        for sl, val, lab, text in ((self.r_lo, self.s.pos_min, self.r_lo_val, tr("Unten")),
+                                   (self.r_hi, self.s.pos_max, self.r_hi_val, tr("Oben"))):
             sl.setRange(0, 100)
             sl.setValue(val)
             lab.setObjectName("value")
@@ -365,9 +362,7 @@ class SetupWizard(QDialog):
         self.move(show, 400)
 
     def _page_speed(self):
-        v = self._page("4. Höchsttempo", "„Probieren“ macht 4 volle Hübe im gewählten Tempo. Werde schneller, "
-                       "bis das Gerät nicht mehr ganz hin und her kommt oder ruckelt, dann eine Stufe zurück und "
-                       "„Übernehmen“. Der F21S schafft etwa 200 ms.")
+        v = self._page(tr("4. Höchsttempo"), tr("„Probieren“ macht 4 volle Hübe im gewählten Tempo. Werde schneller, bis das Gerät nicht mehr ganz hin und her kommt oder ruckelt, dann eine Stufe zurück und „Übernehmen“. Der F21S schafft etwa 200 ms."))
         cur = min(range(len(SPEED_LEVELS)), key=lambda i: abs(speed_for(SPEED_LEVELS[i]) - self.s.max_speed))
         self.level = cur
         self.speed_label = QLabel()
@@ -375,10 +370,10 @@ class SetupWizard(QDialog):
         self.speed_label.setFont(theme.mono_font(13))
         v.addWidget(self.speed_label)
         row = QHBoxLayout()
-        row.addWidget(QPushButton("Langsamer", clicked=lambda: self._level(-1)))
-        row.addWidget(QPushButton("Schneller", clicked=lambda: self._level(1)))
-        row.addWidget(self._btn("Probieren", self.try_speed, "play"))
-        row.addWidget(QPushButton("Übernehmen", clicked=self.take_speed))
+        row.addWidget(QPushButton(tr("Langsamer"), clicked=lambda: self._level(-1)))
+        row.addWidget(QPushButton(tr("Schneller"), clicked=lambda: self._level(1)))
+        row.addWidget(self._btn(tr("Probieren"), self.try_speed, "play"))
+        row.addWidget(QPushButton(tr("Übernehmen"), clicked=self.take_speed))
         v.addLayout(row)
         self.speed_taken = QLabel()
         self.speed_taken.setObjectName("caption")
@@ -389,8 +384,8 @@ class SetupWizard(QDialog):
     def _level(self, d: int):
         self.level = max(0, min(len(SPEED_LEVELS) - 1, self.level + d))
         ms = SPEED_LEVELS[self.level]
-        self.speed_label.setText(f"Voller Hub in {ms} ms  =  {speed_for(ms):.0f} Positionen/s")
-        self.speed_taken.setText(f"Eingestellt: {self.s.max_speed:.0f} /s")
+        self.speed_label.setText(tr("Voller Hub in {0} ms  =  {1:.0f} Positionen/s", ms, speed_for(ms)))
+        self.speed_taken.setText(tr("Eingestellt: {0:.0f} /s", self.s.max_speed))
 
     def try_speed(self):
         if self.device is None:
@@ -406,16 +401,14 @@ class SetupWizard(QDialog):
         self._level(0)
 
     def _page_delay(self):
-        v = self._page("5. Verzögerung", "Das Gerät soll genau dann ganz unten sein, wenn der Kreis aufleuchtet "
-                       "(und es klickt). Kommt es zu spät, den Regler nach rechts schieben, kommt es zu früh, "
-                       "nach links. Bluetooth braucht meist 50–150 ms.")
+        v = self._page(tr("5. Verzögerung"), tr("Das Gerät soll genau dann ganz unten sein, wenn der Kreis aufleuchtet (und es klickt). Kommt es zu spät, den Regler nach rechts schieben, kommt es zu früh, nach links. Bluetooth braucht meist 50–150 ms."))
         row = QHBoxLayout()
         self.flash = Flash()
         row.addWidget(self.flash, 1)
         col = QVBoxLayout()
-        self.metro_btn = self._btn("Takt starten", self.toggle_metro, "play")
+        self.metro_btn = self._btn(tr("Takt starten"), self.toggle_metro, "play")
         col.addWidget(self.metro_btn)
-        self.click = QCheckBox("Klick-Ton")
+        self.click = QCheckBox(tr("Klick-Ton"))
         self.click.setChecked(self.sound is not None)
         self.click.setEnabled(self.sound is not None)
         col.addWidget(self.click)
@@ -430,7 +423,7 @@ class SetupWizard(QDialog):
         self.offset_val = QLabel()
         self.offset_val.setObjectName("value")
         self.offset_val.setFixedWidth(72)
-        name = QLabel("Zeitversatz")
+        name = QLabel(tr("Zeitversatz"))
         name.setObjectName("formLabel")
         orow.addWidget(name)
         orow.addWidget(self.offset, 1)
@@ -453,12 +446,11 @@ class SetupWizard(QDialog):
         self._metro = ScriptSync(self.device, self.s)
         self._metro.set_actions(metronome_actions(0, 600))
         self._last_beat = -1
-        self.metro_btn.setText("Takt stoppen")
+        self.metro_btn.setText(tr("Takt stoppen"))
         self.timer.start()
 
     def _page_done(self):
-        v = self._page("Fertig", "Diese Werte werden gespeichert. Du kannst sie später im Fenster „Gerät“ "
-                       "ändern oder den Assistenten erneut starten.")
+        v = self._page(tr("Fertig"), tr("Diese Werte werden gespeichert. Du kannst sie später im Fenster „Gerät“ ändern oder den Assistenten erneut starten."))
         self.summary = QLabel()
         self.summary.setFont(theme.mono_font(12))
         v.addWidget(self.summary)
@@ -466,10 +458,7 @@ class SetupWizard(QDialog):
 
     def _summary(self):
         s = self.s
-        self.summary.setText(f"Richtung      {'umgekehrt' if s.invert else 'normal'}\n"
-                             f"Hubbereich    {s.pos_min} bis {s.pos_max}\n"
-                             f"Höchsttempo   {s.max_speed:.0f} /s\n"
-                             f"Zeitversatz   {s.offset_ms:+d} ms")
+        self.summary.setText(tr("Richtung      {0}\nHubbereich    {1} bis {2}\nHöchsttempo   {3:.0f} /s\nZeitversatz   {4:+d} ms", 'umgekehrt' if s.invert else 'normal', s.pos_min, s.pos_max, s.max_speed, s.offset_ms))
 
     # ------------------------------------------------------------ closing
     def keyPressEvent(self, ev):

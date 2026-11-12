@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 
+from .i18n import tr
+
 FLUSH_S = 30.0          # write at least this often while recording
 
 
@@ -111,4 +113,4 @@ def summary(data: dict | None = None, days: int | None = None, today: str | None
 
 def fmt_duration(seconds: float) -> str:
     m = int(round(seconds / 60))
-    return f"{m // 60} h {m % 60:02d} min" if m >= 60 else f"{m} min"
+    return tr("{0} h {1:02d} min", m // 60, m % 60) if m >= 60 else f"{m} min"

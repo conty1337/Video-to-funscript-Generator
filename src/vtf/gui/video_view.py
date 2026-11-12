@@ -30,10 +30,28 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..i18n import tr
 from ..tracking import outline_inset
 from . import theme
 
-TRACK_COLORS = ("#e5a043", "#5fb3f0", "#9ad06b")   # area 1, 2, 3
+REF_COLORS = ("#5fb3f0", "#9ad06b", "#e5a043", "#ededed")   # for areas 2 and 3, whichever differ most from the accent
+
+
+def track_color(i: int) -> str:
+    """Area 1 (the toy, whose movement becomes the curve) wears the accent; the reference
+    areas take the two colours that stand furthest from it."""
+    if i % 3 == 0:
+        return theme.ACCENT
+    acc = QColor(theme.ACCENT)
+
+    def distance(c: str) -> float:
+        q = QColor(c)
+        if q.hsvSaturationF() < 0.2:             # grey: always reasonably far
+            return 90.0
+        d = abs(q.hsvHue() - acc.hsvHue()) % 360
+        return min(d, 360 - d)
+    refs = sorted(REF_COLORS, key=distance, reverse=True)[:2]
+    return refs[(i % 3) - 1]
 MAX_TRACKS = 3
 MIN_SIZE = 0.012         # smallest area side, as a fraction of the frame
 MAX_ZOOM = 8.0
@@ -41,7 +59,7 @@ SKEL_POINT = 10           # px around a body point that still picks it
 SKEL_LINE = 7            # px around a body line that still picks it
 GRAB = 8                 # px around a handle that still grabs it
 MENU_SLACK = 12          # px beside an area where a right click still means that area
-ROLE_NAMES = ("Toy", "Bezug", "Bezug")   # what area 1, 2, 3 are
+ROLE_NAMES = (tr("Toy"), tr("Bezug"), tr("Bezug"))   # what area 1, 2, 3 are
 
 
 def lasso_to_box(points: list[tuple[float, float]], aspect: float):
@@ -113,13 +131,9 @@ class VideoView(QWidget):
             self.setToolTip("")
             self.update()
             return
-        self.setToolTip("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen"
+        self.setToolTip(tr("Rechteck aufziehen = Analysebereich (ROI) festlegen, Rechtsklick = ROI entfernen")
                         if mode == "roi" else
-                        "Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). "
-                        "Das startet einen Tracking-Abschnitt an dieser Stelle. Kästchen innen ziehen = "
-                        "verschieben, an einer Ecke = Größe, runder Griff oder Mausrad = drehen. "
-                        "Rechtsklick aufs Kästchen: Rolle, Umrandung, entfernen; daneben: Abschnitt-Menü. "
-                        "Strg+Z macht es rückgängig")
+                        tr("Bis zu 3 Bereiche aufziehen, die verfolgt werden (z.B. die beiden Körperteile). Das startet einen Tracking-Abschnitt an dieser Stelle. Kästchen innen ziehen = verschieben, an einer Ecke = Größe, runder Griff oder Mausrad = drehen. Rechtsklick aufs Kästchen: Rolle, Umrandung, entfernen; daneben: Abschnitt-Menü. Strg+Z macht es rückgängig"))
         self.update()
 
     def set_draw_mode(self, mode: str) -> None:
@@ -222,7 +236,7 @@ class VideoView(QWidget):
                 p.drawEllipse(QPointF(*px[i]), rad, rad)
         if hover is not None:
             k, t = hover
-            who = f"Person {k + 1}: " if len(self._skeleton) > 1 else ""
+            who = tr("Person {0}: ", k + 1) if len(self._skeleton) > 1 else ""
             text = who + (point_name(t) if isinstance(t, int) else line_name(*t))
             p.setFont(theme.mono_font(11))
             fm = p.fontMetrics()
@@ -234,7 +248,7 @@ class VideoView(QWidget):
             p.setPen(accent)
             p.drawText(box, Qt.AlignCenter, text)
         p.setFont(theme.mono_font(11))
-        hint = "Punkt oder Linie anklicken = Kästchen dort · Esc = ausblenden"
+        hint = tr("Punkt oder Linie anklicken = Kästchen dort · Esc = ausblenden")
         tag = QRectF(r.x() + 8, r.bottom() - 28, p.fontMetrics().horizontalAdvance(hint) + 16, 20)
         p.fillRect(tag, QColor(0, 0, 0, 170))
         p.setPen(theme.qcolor(theme.TEXT))
@@ -319,7 +333,7 @@ class VideoView(QWidget):
             tag = QRectF(self.width() - 92, 8, 84, 20)
             p.fillRect(tag, QColor(0, 0, 0, 150))
             p.setPen(theme.qcolor(theme.TEXT))
-            p.drawText(tag, Qt.AlignCenter, f"Zoom {self._zoom * 100:.0f} %")
+            p.drawText(tag, Qt.AlignCenter, tr("Zoom {0:.0f} %", self._zoom * 100))
         if self._countdown is not None:
             self._paint_countdown(p, r)
         if self.mode == "play":                     # player: just the video
@@ -348,7 +362,7 @@ class VideoView(QWidget):
             p.setFont(theme.mono_font(11))
             p.setPen(theme.qcolor(theme.TEXT_2))
             p.drawText(QRectF(rect.x() + 8, rect.y() + 4, 200, 16), Qt.AlignLeft | Qt.AlignVCenter,
-                       "Analysebereich")
+                       tr("Analysebereich"))
 
     def _paint_countdown(self, p: QPainter, r: QRectF) -> None:
         d = max(56.0, min(r.width(), r.height()) * 0.28)
@@ -368,7 +382,7 @@ class VideoView(QWidget):
         f.setPixelSize(max(12, int(d * 0.12)))
         f.setBold(False)
         p.setFont(f)
-        text = "Gleich geht's los"
+        text = tr("Gleich geht's los")
         tw = p.fontMetrics().horizontalAdvance(text) + 20
         th = p.fontMetrics().height() + 8
         box = QRectF(c.x() - tw / 2, c.y() + d / 2 + 8, tw, th)
@@ -461,7 +475,7 @@ class VideoView(QWidget):
         tag = QRectF(b.x() + 6, b.y() - 9, 40, 18)
         p.fillRect(tag, QColor(0, 0, 0, 150))
         p.setPen(color)
-        p.drawText(tag, Qt.AlignCenter, "raus")
+        p.drawText(tag, Qt.AlignCenter, tr("raus"))
 
     def _area_near(self, pos: QPointF, slack: float) -> int | None:
         """The area under pos, or the nearest one within `slack` px of its edge."""
@@ -488,7 +502,7 @@ class VideoView(QWidget):
         for i, box in enumerate(boxes):
             pts, _c, _ang = self._poly(r, box)
             lost = len(box) > 5 and bool(box[5])
-            color = QColor("#e5534b") if lost else QColor(TRACK_COLORS[i % len(TRACK_COLORS)])
+            color = QColor("#e5534b") if lost else QColor(track_color(i))
             outline = self._outlines[i] if i < len(self._outlines) else ()
             if outline:
                 self._paint_outline(p, r, box, outline, color, analysed)
@@ -533,9 +547,9 @@ class VideoView(QWidget):
             p.setBrush(Qt.NoBrush)
             p.drawPolyline(QPolygonF(self._lasso))
         if self.draw_mode != "box" and not self._lasso and self._arrow is None:
-            hint = ("Umranden: mit gedrückter Maustaste eng um das Toy bzw. den Körperteil fahren"
+            hint = (tr("Umranden: mit gedrückter Maustaste eng um das Toy bzw. den Körperteil fahren")
                     if self.draw_mode == "outline" else
-                    "Hub-Richtung: Pfeil entlang der Stoßrichtung ziehen, Spitze = raus")
+                    tr("Hub-Richtung: Pfeil entlang der Stoßrichtung ziehen, Spitze = raus"))
             tw = p.fontMetrics().horizontalAdvance(hint) + 16
             p.fillRect(QRectF(r.x() + 8, r.bottom() - 32, tw, 24), QColor(0, 0, 0, 160))
             p.setPen(theme.qcolor(theme.TEXT))
@@ -544,7 +558,7 @@ class VideoView(QWidget):
             p.setPen(theme.qcolor(theme.TEXT))
             p.fillRect(QRectF(r.x() + 8, r.y() + 8, 330, 24), QColor(0, 0, 0, 150))
             p.drawText(QRectF(r.x() + 16, r.y() + 8, 330, 24), Qt.AlignLeft | Qt.AlignVCenter,
-                       "Tracking: Bereiche aufziehen, die verfolgt werden")
+                       tr("Tracking: Bereiche aufziehen, die verfolgt werden"))
 
     def _set_angle(self, i: int, angle: float) -> None:
         angle = (angle + 180) % 360 - 180
@@ -559,13 +573,13 @@ class VideoView(QWidget):
         f.setPixelSize(15)
         p.setFont(f)
         p.setPen(theme.qcolor(theme.TEXT))
-        p.drawText(QRectF(0, cy - 12, self.width(), 20), Qt.AlignCenter, "Kein Video geladen")
+        p.drawText(QRectF(0, cy - 12, self.width(), 20), Qt.AlignCenter, tr("Kein Video geladen"))
         f.setPixelSize(13)
         p.setFont(f)
         p.setPen(theme.qcolor(theme.TEXT_2))
         p.drawText(QRectF(0, cy + 12, self.width(), 20), Qt.AlignCenter,
-                   "Video öffnen oder hierher ziehen")
-        _keycaps(p, cx, cy + 48, ["Strg", "O"])
+                   tr("Video öffnen oder hierher ziehen"))
+        _keycaps(p, cx, cy + 48, [tr("Strg"), "O"])
 
     # ------------------------------------------------------------ mouse
     def _grab_boxes(self) -> list:

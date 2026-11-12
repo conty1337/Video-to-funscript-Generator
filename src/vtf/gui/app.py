@@ -16,7 +16,10 @@ def main() -> int:
     from . import theme
     from .main_window import MainWindow
 
+    from ..i18n import load_ui
+
     app = QApplication(sys.argv)
+    theme.set_accent(str(load_ui().get("accent") or theme.DEFAULT_ACCENT))
     theme.apply(app)
     app.setApplicationName("Video-to-Funscript Generator")
     app.setOrganizationName("video-to-funscript")

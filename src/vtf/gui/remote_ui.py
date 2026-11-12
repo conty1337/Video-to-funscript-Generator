@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..funscript import position_at
+from ..i18n import tr
 from ..remote import DEFAULT_PORT, RemoteServer, new_pin
 from . import theme
 
@@ -60,7 +61,7 @@ class RemoteController(QObject):
                 self.server.start()
             except OSError as e:
                 self.server = None
-                self.error = f"Port {self.port} nicht verfügbar: {e}"
+                self.error = tr("Port {0} nicht verfügbar: {1}", self.port, e)
                 return
             self._snapshot()
             self.timer.start()
@@ -95,7 +96,7 @@ class RemoteController(QObject):
         d = self.win.ensure_patterns()
         st = d.remote_state()
         dev = self.win.devices.device
-        st["device"] = f"Gerät: {dev.name}" if dev is not None and dev.connected else "Kein Gerät verbunden"
+        st["device"] = tr("Gerät: {0}", dev.name) if dev is not None and dev.connected else tr("Kein Gerät verbunden")
         st["safety"] = self.win.devices.safety_label.text()
         st["video"] = self._video_state()
         self._state = st
@@ -194,18 +195,17 @@ class RemoteDialog(QDialog):
     def __init__(self, ctl: RemoteController, parent=None):
         super().__init__(parent)
         self.ctl = ctl
-        self.setWindowTitle("Handy-Fernbedienung")
+        self.setWindowTitle(tr("Handy-Fernbedienung"))
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(12)
         lay.setSizeConstraint(QLayout.SetMinimumSize)
-        cap = QLabel("Steuere Muster, Abläufe und Zufall vom Handy aus. Handy und PC im selben WLAN, "
-                     "keine App nötig: Adresse im Browser öffnen, PIN eingeben.")
+        cap = QLabel(tr("Steuere Muster, Abläufe und Zufall vom Handy aus. Handy und PC im selben WLAN, keine App nötig: Adresse im Browser öffnen, PIN eingeben."))
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         cap.setMinimumWidth(460)
         lay.addWidget(cap)
-        self.on = QCheckBox("Fernbedienung an")
+        self.on = QCheckBox(tr("Fernbedienung an"))
         self.on.setChecked(ctl.enabled)
         self.on.setMinimumHeight(28)
         lay.addWidget(self.on)
@@ -216,16 +216,16 @@ class RemoteDialog(QDialog):
         self.addr = QLabel()
         self.addr.setFont(theme.mono_font(14))
         self.addr.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        form.addRow(self._label("Adresse"), self.addr)
+        form.addRow(self._label(tr("Adresse")), self.addr)
         self.pin = QLabel()
         self.pin.setFont(theme.mono_font(14))
         self.pin.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.pin_btn = QPushButton("Neue PIN")
+        self.pin_btn = QPushButton(tr("Neue PIN"))
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(self.pin, 1)
         row.addWidget(self.pin_btn)
-        form.addRow(self._label("PIN"), row)
+        form.addRow(self._label(tr("PIN")), row)
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(ctl.port)
@@ -234,12 +234,12 @@ class RemoteDialog(QDialog):
         prow.setContentsMargins(0, 0, 0, 0)
         prow.addWidget(self.port)
         prow.addStretch(1)
-        form.addRow(self._label("Port"), prow)
+        form.addRow(self._label(tr("Port")), prow)
         lay.addLayout(form)
         self.qr = QLabel()
         self.qr.setAlignment(Qt.AlignCenter)
-        self.qr.setToolTip("Mit der Handy-Kamera scannen: öffnet die Fernbedienung, die PIN ist schon drin")
-        self.qr_cap = QLabel("Mit der Handy-Kamera scannen – die PIN ist schon drin")
+        self.qr.setToolTip(tr("Mit der Handy-Kamera scannen: öffnet die Fernbedienung, die PIN ist schon drin"))
+        self.qr_cap = QLabel(tr("Mit der Handy-Kamera scannen – die PIN ist schon drin"))
         self.qr_cap.setObjectName("caption")
         self.qr_cap.setAlignment(Qt.AlignCenter)
         lay.addWidget(self.qr)
@@ -275,7 +275,7 @@ class RemoteDialog(QDialog):
 
     def refresh(self):
         on = self.ctl.enabled
-        self.addr.setText("\n".join(self.ctl.urls()) if on else "aus")
+        self.addr.setText("\n".join(self.ctl.urls()) if on else tr("aus"))
         self.pin.setText(self.ctl.pin)
         urls = self.ctl.urls() if on else []
         pix = qr_pixmap(f"{urls[0]}#pin={self.ctl.pin}") if urls else None
@@ -285,9 +285,7 @@ class RemoteDialog(QDialog):
             self.qr.setPixmap(pix)
         self.err.setText(self.ctl.error)
         self.err.setVisible(bool(self.ctl.error))
-        self.hint.setText("Klappt es nicht, lässt die Firewall den Port evtl. nicht durch. Einmalig im Terminal:\n"
-                          f"sudo firewall-cmd --add-port={self.ctl.port}/tcp --permanent\n"
-                          "sudo firewall-cmd --reload")
+        self.hint.setText(tr("Klappt es nicht, lässt die Firewall den Port evtl. nicht durch. Einmalig im Terminal:\nsudo firewall-cmd --add-port={0}/tcp --permanent\nsudo firewall-cmd --reload", self.ctl.port))
         if self.ctl.error:
             self.on.blockSignals(True)
             self.on.setChecked(False)

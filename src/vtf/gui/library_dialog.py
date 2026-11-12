@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..i18n import tr
 from ..library import SORTS, filtered, save_rating, scan
 from . import theme
 from .heatbar import heat_color
@@ -76,7 +77,7 @@ class LibraryDialog(QDialog):
 
     def __init__(self, qsettings, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Bibliothek")
+        self.setWindowTitle(tr("Bibliothek"))
         self.resize(980, 640)
         self.qs = qsettings
         self.entries: list = []
@@ -88,10 +89,10 @@ class LibraryDialog(QDialog):
         top.setSpacing(8)
         self.folder_label = QLabel()
         self.folder_label.setObjectName("meta")
-        pick = QPushButton(theme.icon("folder-open"), "Ordner")
+        pick = QPushButton(theme.icon("folder-open"), tr("Ordner"))
         pick.clicked.connect(self._pick)
         rescan = QPushButton(theme.icon("rotate-ccw"), "")
-        rescan.setToolTip("Ordner neu einlesen")
+        rescan.setToolTip(tr("Ordner neu einlesen"))
         rescan.clicked.connect(self.reload)
         top.addWidget(pick)
         top.addWidget(rescan)
@@ -101,18 +102,18 @@ class LibraryDialog(QDialog):
         bar = QHBoxLayout()
         bar.setSpacing(8)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Suchen")
+        self.search.setPlaceholderText(tr("Suchen"))
         self.search.textChanged.connect(self.refresh)
         self.sort = QComboBox()
         for key, (label, _k, _r) in SORTS.items():
             self.sort.addItem(label, key)
         self.sort.currentIndexChanged.connect(self.refresh)
         self.min_stars = QComboBox()
-        for k, text in enumerate(("Alle", "ab ★", "ab ★★", "ab ★★★", "ab ★★★★", "★★★★★")):
+        for k, text in enumerate((tr("Alle"), tr("ab ★"), tr("ab ★★"), tr("ab ★★★"), tr("ab ★★★★"), "★★★★★")):
             self.min_stars.addItem(text, k)
         self.min_stars.currentIndexChanged.connect(self.refresh)
         bar.addWidget(self.search, 1)
-        bar.addWidget(QLabel("Sortieren"))
+        bar.addWidget(QLabel(tr("Sortieren")))
         bar.addWidget(self.sort)
         bar.addWidget(self.min_stars)
         lay.addLayout(bar)
@@ -123,15 +124,15 @@ class LibraryDialog(QDialog):
         self.tree.setAlternatingRowColors(False)
         self.tree.setRootIsDecorated(False)
         self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.tree.setHeaderLabels(["Video", "Länge", "Hübe/min", "Tempo", "Bewertung", "Heatmap"])
+        self.tree.setHeaderLabels([tr("Video"), tr("Länge"), tr("Hübe/min"), tr("Tempo"), tr("Bewertung"), tr("Heatmap")])
         self.tree.setItemDelegateForColumn(COL_HEAT, _HeatDelegate(self.tree))
         self.tree.setItemDelegateForColumn(COL_STARS, _StarDelegate(self.tree))
         h = self.tree.header()
         h.setStretchLastSection(True)
         h.setSectionResizeMode(COL_NAME, QHeaderView.Stretch)
         h.setSectionResizeMode(COL_HEAT, QHeaderView.Fixed)
-        self.tree.headerItem().setToolTip(COL_TEMPO, "Mittleres Tempo in Positionen pro Sekunde")
-        self.tree.headerItem().setToolTip(COL_RATE, "Hübe pro Minute, solange sich das Script bewegt")
+        self.tree.headerItem().setToolTip(COL_TEMPO, tr("Mittleres Tempo in Positionen pro Sekunde"))
+        self.tree.headerItem().setToolTip(COL_RATE, tr("Hübe pro Minute, solange sich das Script bewegt"))
         for c, w in ((COL_LEN, 72), (COL_RATE, 84), (COL_TEMPO, 72), (COL_STARS, 104), (COL_HEAT, 240)):
             self.tree.setColumnWidth(c, w)
         self.tree.itemDoubleClicked.connect(lambda it, _c: self._play(it))
@@ -143,11 +144,11 @@ class LibraryDialog(QDialog):
         self.count = QLabel()
         self.count.setObjectName("meta")
         self.count.setFont(theme.mono_font(12))
-        edit = QPushButton(theme.icon("pencil"), "Im Editor öffnen")
+        edit = QPushButton(theme.icon("pencil"), tr("Im Editor öffnen"))
         edit.clicked.connect(self._edit)
-        queue = QPushButton(theme.icon("list-video"), "Zur Playlist")
+        queue = QPushButton(theme.icon("list-video"), tr("Zur Playlist"))
         queue.clicked.connect(self._queue)
-        play = QPushButton(theme.icon("play", theme.ON_ACCENT), "Abspielen")
+        play = theme.accent_icon(QPushButton(), "play", tr("Abspielen"))
         play.setObjectName("primary")
         play.clicked.connect(lambda: self._play(self.tree.currentItem()))
         foot.addWidget(self.count, 1)
@@ -155,7 +156,7 @@ class LibraryDialog(QDialog):
         foot.addWidget(queue)
         foot.addWidget(play)
         lay.addLayout(foot)
-        hint = QLabel("Doppelklick spielt ab · Klick auf die Sterne bewertet (oder Taste 1–5, 0 = keine)")
+        hint = QLabel(tr("Doppelklick spielt ab · Klick auf die Sterne bewertet (oder Taste 1–5, 0 = keine)"))
         hint.setObjectName("caption")
         lay.addWidget(hint)
 
@@ -163,7 +164,7 @@ class LibraryDialog(QDialog):
         if self.folder:
             self.reload()
         else:
-            self.folder_label.setText("Noch kein Ordner gewählt")
+            self.folder_label.setText(tr("Noch kein Ordner gewählt"))
 
     # ------------------------------------------------------------ data
     def set_folder(self, folder: str) -> None:
@@ -189,7 +190,7 @@ class LibraryDialog(QDialog):
             it = QTreeWidgetItem([e.name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
                                   f"{e.avg_speed:.0f}", "", ""])
             it.setToolTip(COL_NAME, str(e.video))
-            it.setToolTip(COL_TEMPO, f"mittleres Tempo {e.avg_speed:.0f} Pos./s, höchstes {e.max_speed:.0f}")
+            it.setToolTip(COL_TEMPO, tr("mittleres Tempo {0:.0f} Pos./s, höchstes {1:.0f}", e.avg_speed, e.max_speed))
             for c in (COL_LEN, COL_RATE, COL_TEMPO):
                 it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
                 it.setFont(c, theme.mono_font(12))
@@ -197,7 +198,7 @@ class LibraryDialog(QDialog):
             it.setData(COL_HEAT, ENTRY_ROLE, e)
             self.tree.addTopLevelItem(it)
         total = len(self.entries)
-        self.count.setText(f"{len(shown)} von {total} Scripts" if total else "Keine Videos mit Script in diesem Ordner")
+        self.count.setText(tr("{0} von {1} Scripts", len(shown), total) if total else tr("Keine Videos mit Script in diesem Ordner"))
 
     def _entry(self, it):
         return None if it is None else it.data(COL_STARS, ENTRY_ROLE)
@@ -212,7 +213,7 @@ class LibraryDialog(QDialog):
 
     # ------------------------------------------------------------ actions
     def _pick(self):
-        d = QFileDialog.getExistingDirectory(self, "Ordner der Bibliothek", self.folder or "")
+        d = QFileDialog.getExistingDirectory(self, tr("Ordner der Bibliothek"), self.folder or "")
         if d:
             self.set_folder(d)
 
@@ -242,7 +243,7 @@ class LibraryDialog(QDialog):
         paths = [str(self._entry(it).video) for it in self.tree.selectedItems() if self._entry(it)]
         if paths:
             self.queueRequested.emit(paths)
-            self.count.setText(f"{len(paths)} zur Playlist hinzugefügt")
+            self.count.setText(tr("{0} zur Playlist hinzugefügt", len(paths)))
 
     def _edit(self):
         e = self._entry(self.tree.currentItem())

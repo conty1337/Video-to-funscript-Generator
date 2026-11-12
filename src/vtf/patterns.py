@@ -20,8 +20,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .funscript import Action, position_at
+from .i18n import dec, tr
 
-KINDS = (("stroke", "Hub"), ("move", "Fahren"), ("hold", "Halten"))
+KINDS = (("stroke", tr("Hub")), ("move", tr("Fahren")), ("hold", tr("Halten")))
 MIN_SPEED, MAX_SPEED = 0.1, 6.0
 
 
@@ -43,16 +44,16 @@ class Block:
 
     def describe(self) -> str:
         if self.kind == "move":
-            return f"Fahren auf {self.hi} %  ·  Tempo {_num(self.speed)}×"
+            return tr("Fahren auf {0} %  ·  Tempo {1}×", self.hi, _num(self.speed))
         if self.kind == "hold":
-            return f"Halten bei {self.hi} %  ·  {_num(self.length)} Hub lang"
+            return tr("Halten bei {0} %  ·  {1} Hub lang", self.hi, _num(self.length))
         depth = f"{self.lo}–{self.hi} %"
         if self.lo_to is not None or self.hi_to is not None:
             depth += f" → {_v(self.lo_to, self.lo)}–{_v(self.hi_to, self.hi)} %"
         speed = f"{_num(self.speed)}×"
         if self.speed_to is not None:
             speed += f" → {_num(self.speed_to)}×"
-        return f"{self.repeat}× Hub {depth}  ·  Tempo {speed}"
+        return tr("{0}× Hub {1}  ·  Tempo {2}", self.repeat, depth, speed)
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -81,6 +82,11 @@ class Pattern:
     category: str = "Eigene"
     builtin: bool = False
 
+    @property
+    def label(self) -> str:
+        """The name as shown: built-in patterns in the app's language."""
+        return tr(self.name) if self.builtin else self.name
+
     def to_dict(self) -> dict:
         return {"name": self.name, "blocks": [b.to_dict() for b in self.blocks]}
 
@@ -94,7 +100,7 @@ class Pattern:
 
 
 def _num(v: float) -> str:
-    return f"{v:g}".replace(".", ",")
+    return dec(f"{v:g}")
 
 
 def _v(v, default):
@@ -415,19 +421,19 @@ BUILTIN: list[Pattern] = [Pattern(name, blocks, cat, True)
 
 #: building blocks offered in the editor: (label, block)
 PALETTE = (
-    ("Voller Hub", _s()),
-    ("Kurz oben", _s(4, 1.5, 60, 100)),
-    ("Kurz unten", _s(4, 1.5, 0, 40)),
-    ("Mitte", _s(4, 1.3, 30, 70)),
-    ("Zittern", _s(8, 4, 0, 12)),
-    ("Langsam", _s(1, 0.5)),
-    ("Schnell", _s(4, 2)),
-    ("Schneller werdend", _s(8, 0.6, speed_to=2.2)),
-    ("Tiefer werdend", _s(8, 1.2, 75, 100, lo_to=0)),
-    ("Nach unten", _m(0)),
-    ("Nach oben", _m(100)),
-    ("Pause oben", _h(100)),
-    ("Pause unten", _h(0)),
+    (tr("Voller Hub"), _s()),
+    (tr("Kurz oben"), _s(4, 1.5, 60, 100)),
+    (tr("Kurz unten"), _s(4, 1.5, 0, 40)),
+    (tr("Mitte"), _s(4, 1.3, 30, 70)),
+    (tr("Zittern"), _s(8, 4, 0, 12)),
+    (tr("Langsam"), _s(1, 0.5)),
+    (tr("Schnell"), _s(4, 2)),
+    (tr("Schneller werdend"), _s(8, 0.6, speed_to=2.2)),
+    (tr("Tiefer werdend"), _s(8, 1.2, 75, 100, lo_to=0)),
+    (tr("Nach unten"), _m(0)),
+    (tr("Nach oben"), _m(100)),
+    (tr("Pause oben"), _h(100)),
+    (tr("Pause unten"), _h(0)),
 )
 
 
@@ -479,6 +485,10 @@ class Program:
     builtin: bool = False
 
     @property
+    def label(self) -> str:
+        return tr(self.name) if self.builtin else self.name
+
+    @property
     def total_ms(self) -> float:
         return sum(st.minutes for st in self.steps) * 60_000
 
@@ -527,12 +537,17 @@ BUILTIN_PROGRAMS: list[Program] = [
 #: moods for the random generator: label, pattern groups (None = all but "Intensiv",
 #: "*" = really all), tempo range, depth range
 MOODS = {
-    "ruhig": ("Ruhig", ("Grundlagen", "Necken", "Steigerung"), (30, 60), (40, 80)),
-    "gemischt": ("Gemischt", None, (40, 100), (50, 100)),
-    "intensiv": ("Intensiv", ("Intensiv", "Rhythmus", "Mehr Rhythmus", "Steigerung", "Mehr Steigerung"),
+    "ruhig": (tr("Ruhig"), ("Grundlagen", "Necken", "Steigerung"), (30, 60), (40, 80)),
+    "gemischt": (tr("Gemischt"), None, (40, 100), (50, 100)),
+    "intensiv": (tr("Intensiv"), ("Intensiv", "Rhythmus", "Mehr Rhythmus", "Steigerung", "Mehr Steigerung"),
                  (70, 150), (80, 100)),
-    "alles": ("Alles", "*", (30, 150), (40, 100)),
+    "alles": (tr("Alles"), "*", (30, 150), (40, 100)),
 }
+
+
+def label(name: str) -> str:
+    """A pattern name, category or program name as shown (built-in ones are translated)."""
+    return tr(name)
 
 
 def mood_pool(mood: str, extra: list[Pattern] | None = None) -> list[Pattern]:

@@ -9,6 +9,7 @@ from PySide6.QtCore import QThread, Signal
 from ..analysis import AnalysisCancelled, AnalysisSettings, analyze_motion_cached
 from ..batch import run_batch
 from ..generator import GeneratorSettings
+from ..i18n import tr
 
 
 class AnalysisWorker(QThread):
@@ -60,7 +61,7 @@ class BatchWorker(QThread):
                             on_progress=self.progress.emit, log=self.log.emit,
                             cancel=lambda: self._stop)
         except Exception as e:
-            self.log.emit(f"Fehler: {e}")
+            self.log.emit(tr("Fehler: {0}", e))
             res = None
         self.done.emit(res)
 

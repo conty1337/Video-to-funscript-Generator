@@ -16,17 +16,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..i18n import tr
 from .rhythm_dialog import _secs
 
 
 class MusicScriptDialog(QDialog):
     def __init__(self, start_ms: float, end_ms: float, duration_ms: float, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Script aus Musik")
+        self.setWindowTitle(tr("Script aus Musik"))
         lay = QVBoxLayout(self)
         lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
-        info = QLabel("Sucht die Schläge in der Tonspur und setzt auf jeden Schlag einen Hub nach unten. "
-                      "Gut für Videos, bei denen die Musik den Takt vorgibt.")
+        info = QLabel(tr("Sucht die Schläge in der Tonspur und setzt auf jeden Schlag einen Hub nach unten. Gut für Videos, bei denen die Musik den Takt vorgibt."))
         info.setObjectName("caption")
         info.setWordWrap(True)
         info.setMinimumWidth(380)
@@ -39,18 +39,18 @@ class MusicScriptDialog(QDialog):
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.addWidget(self.start)
-        rl.addWidget(QLabel("bis"))
+        rl.addWidget(QLabel(tr("bis")))
         rl.addWidget(self.end)
-        form.addRow("Bereich", rng)
+        form.addRow(tr("Bereich"), rng)
         self.every = QComboBox()
-        for n, label in ((1, "Jeder Schlag"), (2, "Jeder 2. Schlag"), (4, "Jeder 4. Schlag")):
+        for n, label in ((1, tr("Jeder Schlag")), (2, tr("Jeder 2. Schlag")), (4, tr("Jeder 4. Schlag"))):
             self.every.addItem(label, n)
-        form.addRow("Hub auf", self.every)
+        form.addRow(tr("Hub auf"), self.every)
         self.sens = QSlider()
         self.sens.setOrientation(self.sens.orientation().Horizontal)
         self.sens.setRange(0, 100)
         self.sens.setValue(50)
-        form.addRow("Empfindlich", self.sens)
+        form.addRow(tr("Empfindlich"), self.sens)
         depth = QWidget()
         dl = QHBoxLayout(depth)
         dl.setContentsMargins(0, 0, 0, 0)
@@ -59,19 +59,19 @@ class MusicScriptDialog(QDialog):
             sp.setRange(0, 100)
             sp.setValue(v)
         dl.addWidget(self.lo)
-        dl.addWidget(QLabel("bis"))
+        dl.addWidget(QLabel(tr("bis")))
         dl.addWidget(self.hi)
-        form.addRow("Tiefe", depth)
+        form.addRow(tr("Tiefe"), depth)
         self.offset = QSpinBox()
         self.offset.setRange(-500, 500)
         self.offset.setSingleStep(10)
         self.offset.setSuffix(" ms")
-        self.offset.setToolTip("Negativ = Hübe etwas vor dem Schlag")
-        form.addRow("Versatz", self.offset)
+        self.offset.setToolTip(tr("Negativ = Hübe etwas vor dem Schlag"))
+        form.addRow(tr("Versatz"), self.offset)
         lay.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Erzeugen")
-        bb.button(QDialogButtonBox.Cancel).setText("Abbrechen")
+        bb.button(QDialogButtonBox.Ok).setText(tr("Erzeugen"))
+        bb.button(QDialogButtonBox.Cancel).setText(tr("Abbrechen"))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)

@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .i18n import tr
 from .video import system_env
 
 APP_ID = "video-to-funscript"
@@ -141,7 +142,7 @@ def auto_integrate(appimage: Path | None) -> str | None:
     try:
         existed = desktop_file().is_file()
         if install(appimage):
-            return "Startmenü-Eintrag aktualisiert" if existed else "Ins Startmenü aufgenommen"
+            return tr("Startmenü-Eintrag aktualisiert") if existed else tr("Ins Startmenü aufgenommen")
     except OSError:
         return None
     return None

@@ -608,7 +608,8 @@ def test_drift_check_goes_to_a_clear_match_further_away():
 # tracking.py + analysis.py as they were when TRACKER_VERSION was last raised
 TRACKER_SOURCES = {"4df57bcbbf193570": 9,
                    "fdb229caa5b1553c": 9,   # outlines: rectangles track exactly as before
-                   "bc4f9a9fa21fadb3": 10}  # faster search after a loss
+                   "bc4f9a9fa21fadb3": 10,  # faster search after a loss
+                   "106f1180fed72152": 10}  # messages translatable, tracking unchanged
 
 
 def test_tracker_version_raised_with_tracker_changes():

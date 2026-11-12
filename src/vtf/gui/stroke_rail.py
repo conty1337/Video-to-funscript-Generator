@@ -7,6 +7,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..i18n import tr
 from . import theme
 
 THUMB_H = 12
@@ -21,8 +22,7 @@ class StrokeRail(QWidget):
         self._pos: float | None = None
         self._device: float | None = None
         self._speed = 0.0
-        self.setToolTip("Script-Position an der aktuellen Stelle (0–100). "
-                        "Umrandung: wo das Gerät gerade ist")
+        self.setToolTip(tr("Script-Position an der aktuellen Stelle (0–100). Umrandung: wo das Gerät gerade ist"))
 
     def set_position(self, pos: float | None) -> None:
         if pos != self._pos:

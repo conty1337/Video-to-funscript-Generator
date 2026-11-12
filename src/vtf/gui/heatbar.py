@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..funscript import Action
+from ..i18n import tr
 from . import theme
 
 #: (speed in positions per second, colour) - interpolated in between
@@ -49,7 +50,7 @@ class HeatBar(QWidget):
         self.actions: list[Action] = []
         self.duration_ms = 0.0
         self.inset = 6               # match the slider groove (half the handle width)
-        self.setToolTip("Heatmap: Tempo des Scripts – dunkel = langsam, grün, gelb, rot = schnell")
+        self.setToolTip(tr("Heatmap: Tempo des Scripts – dunkel = langsam, grün, gelb, rot = schnell"))
 
     def set_actions(self, actions: list[Action], duration_ms: float) -> None:
         self.actions = list(actions)

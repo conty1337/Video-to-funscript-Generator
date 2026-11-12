@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .i18n import tr
+
 SESSION_GAP_MS = 5 * 60_000      # this long without motion starts a new session
 
 
@@ -71,10 +73,10 @@ class SafetyGuard:
         self.since_break_ms += dt
         if s.max_minutes > 0 and self.active_ms >= s.max_minutes * 60_000:
             self.reset()
-            return ("stop", f"Sicherheits-Timer: nach {s.max_minutes} min gestoppt")
+            return ("stop", tr("Sicherheits-Timer: nach {0} min gestoppt", s.max_minutes))
         if s.idle_minutes > 0 and now - self.last_input >= s.idle_minutes * 60_000:
             self.reset()
-            return ("stop", f"Sicherheits-Timer: {s.idle_minutes} min nichts bedient, gestoppt")
+            return ("stop", tr("Sicherheits-Timer: {0} min nichts bedient, gestoppt", s.idle_minutes))
         if s.break_every > 0 and self.since_break_ms >= s.break_every * 60_000:
             self.since_break_ms = 0.0
             self.break_until = now + max(5, s.break_seconds) * 1000
@@ -88,9 +90,9 @@ class SafetyGuard:
             return ""
         if self.break_until is not None:
             left = max(0, int((self.break_until - now) / 1000))
-            return f"Pause · noch {left} s"
+            return tr("Pause · noch {0} s", left)
         parts = []
         if s.max_minutes > 0 and self.active_ms > 0:
             left = max(0.0, s.max_minutes * 60_000 - self.active_ms) / 60_000
-            parts.append(f"Stopp in {left:.0f} min")
-        return "Sicherheit an" + (" · " + parts[0] if parts else "")
+            parts.append(tr("Stopp in {0:.0f} min", left))
+        return tr("Sicherheit an") + (" · " + parts[0] if parts else "")

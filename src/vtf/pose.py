@@ -23,12 +23,14 @@ import shutil
 import urllib.error
 import urllib.request
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 import cv2
 import numpy as np
+
+from .i18n import tr
 
 _BASE = "https://download.openmmlab.com/mmpose/v1/projects"
 # Copies of the ONNX files on this project's GitHub (release "ki-modelle", uploaded by
@@ -147,7 +149,7 @@ def _from_zip(zip_path: Path, member: str, dest: Path) -> None:
     with zipfile.ZipFile(zip_path) as z:
         name = next((n for n in z.namelist() if n.endswith(member)), None)
         if name is None:
-            raise RuntimeError("Modell nicht im Archiv gefunden")
+            raise RuntimeError(tr("Modell nicht im Archiv gefunden"))
         with z.open(name) as src, open(dest, "wb") as dst:
             shutil.copyfileobj(src, dst, 1 << 20)
 
@@ -207,12 +209,12 @@ def download(progress: Callable[[float, str], None] | None = None,
                 part.unlink(missing_ok=True)
             if _sha256(onnx) != m.sha256:
                 onnx.unlink(missing_ok=True)
-                errors.append(f"{m.name}: Prüfsumme stimmt nicht, Download beschädigt")
+                errors.append(tr("{0}: Prüfsumme stimmt nicht, Download beschädigt", m.name))
                 continue
             onnx.replace(folder / m.name)
             break
         else:
-            raise RuntimeError(errors[-1] if errors else f"{m.name}: Laden fehlgeschlagen")
+            raise RuntimeError(errors[-1] if errors else tr("{0}: Laden fehlgeschlagen", m.name))
         done = start + m.mb * 1e6
     _remove_old(folder)
     if progress:
@@ -321,7 +323,7 @@ def _fields(b: bytes):
             data = b[i:i + n]
             i += n
         else:
-            raise ValueError("ONNX-Datei nicht lesbar")
+            raise ValueError(tr("ONNX-Datei nicht lesbar"))
         yield key >> 3, b[start:i], data
 
 
@@ -355,14 +357,14 @@ def _cut_onnx(model: bytes, outputs: list[tuple[str, tuple[int, ...]]]) -> bytes
                 need |= set(ins)
         missing = {name for name, _d in outputs} - {o for _i, outs, _g in nodes for o in outs}
         if missing:
-            raise ValueError(f"Modell passt nicht (fehlt: {', '.join(sorted(missing))})")
+            raise ValueError(tr("Modell passt nicht (fehlt: {0})", ', '.join(sorted(missing))))
         g = bytearray(b"".join(reversed(keep))) + rest
         for name, dims in outputs:              # ValueInfoProto: name, float tensor + shape
             shape = b"".join(_ld(1, b"\x08" + _enc(d)) for d in dims)
             g += _ld(12, _ld(1, name.encode()) + _ld(2, _ld(1, b"\x08\x01" + _ld(2, shape))))
         out += _ld(7, bytes(g))
     if not found:
-        raise ValueError("ONNX-Datei ohne Graph")
+        raise ValueError(tr("ONNX-Datei ohne Graph"))
     return bytes(out)
 
 
@@ -462,13 +464,13 @@ class Region:
 
 
 REGIONS = (
-    Region("pelvis", "Becken / Schritt"),
-    Region("mouth", "Mund"),
-    Region("head", "Kopf"),
-    Region("hand_r", "Hand rechts"),
-    Region("hand_l", "Hand links"),
-    Region("chest", "Brust"),
-    Region("hips", "Hüfte (breit)"),
+    Region("pelvis", tr("Becken / Schritt")),
+    Region("mouth", tr("Mund")),
+    Region("head", tr("Kopf")),
+    Region("hand_r", tr("Hand rechts")),
+    Region("hand_l", tr("Hand links")),
+    Region("chest", tr("Brust")),
+    Region("hips", tr("Hüfte (breit)")),
 )
 
 
@@ -599,12 +601,12 @@ LINKS = (_BODY_LINKS + ((9, 91), (10, 112))
          + tuple((91 + a, 91 + b) for a, b in _HAND_LINKS)
          + tuple((112 + a, 112 + b) for a, b in _HAND_LINKS))
 
-_BODY_NAMES = ("Nase", "Auge links", "Auge rechts", "Ohr links", "Ohr rechts", "Schulter links",
-               "Schulter rechts", "Ellbogen links", "Ellbogen rechts", "Handgelenk links",
-               "Handgelenk rechts", "Hüfte links", "Hüfte rechts", "Knie links", "Knie rechts",
-               "Knöchel links", "Knöchel rechts", "großer Zeh links", "kleiner Zeh links",
-               "Ferse links", "großer Zeh rechts", "kleiner Zeh rechts", "Ferse rechts")
-_FINGERS = ("Daumen", "Zeigefinger", "Mittelfinger", "Ringfinger", "kleiner Finger")
+_BODY_NAMES = (tr("Nase"), tr("Auge links"), tr("Auge rechts"), tr("Ohr links"), tr("Ohr rechts"), tr("Schulter links"),
+               tr("Schulter rechts"), tr("Ellbogen links"), tr("Ellbogen rechts"), tr("Handgelenk links"),
+               tr("Handgelenk rechts"), tr("Hüfte links"), tr("Hüfte rechts"), tr("Knie links"), tr("Knie rechts"),
+               tr("Knöchel links"), tr("Knöchel rechts"), tr("großer Zeh links"), tr("kleiner Zeh links"),
+               tr("Ferse links"), tr("großer Zeh rechts"), tr("kleiner Zeh rechts"), tr("Ferse rechts"))
+_FINGERS = (tr("Daumen"), tr("Zeigefinger"), tr("Mittelfinger"), tr("Ringfinger"), tr("kleiner Finger"))
 
 
 def point_name(i: int) -> str:
@@ -612,19 +614,19 @@ def point_name(i: int) -> str:
     if i < len(_BODY_NAMES):
         return _BODY_NAMES[i]
     if i in MOUTH:
-        return "Mund"
+        return tr("Mund")
     if i in FACE:
-        return "Gesicht"
+        return tr("Gesicht")
     side, base = ("links", 91) if i in L_HAND else ("rechts", 112)
     k = i - base
     return f"Hand {side}" if k == 0 else f"{_FINGERS[(k - 1) // 4]} {side}"
 
 
 def line_name(a: int, b: int) -> str:
-    names = {(5, 7): "Oberarm links", (6, 8): "Oberarm rechts", (7, 9): "Unterarm links",
-             (8, 10): "Unterarm rechts", (11, 13): "Oberschenkel links", (12, 14): "Oberschenkel rechts",
-             (13, 15): "Unterschenkel links", (14, 16): "Unterschenkel rechts", (5, 6): "Schultern",
-             (11, 12): "Becken", (5, 11): "Seite links", (6, 12): "Seite rechts"}
+    names = {(5, 7): tr("Oberarm links"), (6, 8): tr("Oberarm rechts"), (7, 9): tr("Unterarm links"),
+             (8, 10): tr("Unterarm rechts"), (11, 13): tr("Oberschenkel links"), (12, 14): tr("Oberschenkel rechts"),
+             (13, 15): tr("Unterschenkel links"), (14, 16): tr("Unterschenkel rechts"), (5, 6): tr("Schultern"),
+             (11, 12): tr("Becken"), (5, 11): tr("Seite links"), (6, 12): tr("Seite rechts")}
     return names.get((a, b)) or f"{point_name(a)} – {point_name(b)}"
 
 
