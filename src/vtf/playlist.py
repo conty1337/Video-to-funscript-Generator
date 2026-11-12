@@ -32,6 +32,40 @@ def intro_skip_ms(actions, lead_ms: int = LEAD_MS) -> int:
     return start - lead_ms
 
 
+#: the player skips stretches without strokes at least this long ("Pausen überspringen")
+QUIET_MIN_MS = 15_000
+#: ... and comes back in this long before the next stroke
+SKIP_LEAD_MS = 2_000
+
+
+def quiet_stretches(actions, duration_ms: float = 0, min_ms: int = QUIET_MIN_MS,
+                    min_change: int = 10) -> list[tuple[int, int, int]]:
+    """Stretches after the script started where it does not move: (from, to, jump to).
+    Between two strokes the player jumps to SKIP_LEAD_MS before the next one; after the
+    last stroke (with `duration_ms`) to the end of the video. The quiet intro is
+    intro_skip_ms()'s business."""
+    moves = [(int(a.at), int(b.at)) for a, b in zip(actions, actions[1:]) if abs(b.pos - a.pos) >= min_change]
+    out = []
+    for (_s0, e0), (s1, _e1) in zip(moves, moves[1:]):
+        if s1 - e0 >= min_ms:
+            out.append((e0, s1, s1 - SKIP_LEAD_MS))
+    if moves and duration_ms and duration_ms - moves[-1][1] >= min_ms:
+        out.append((moves[-1][1], int(duration_ms), int(duration_ms)))
+    return out
+
+
+def skip_target(ms: float, cuts=(), quiet=()) -> int | None:
+    """Where the player jumps to from ms: the end of a cut it is in, or the jump target
+    of a quiet stretch (a moment after it began, so the last stroke ends). None: play on."""
+    for a, b in cuts:
+        if a <= ms < b:
+            return int(b)
+    for a, b, to in quiet:
+        if a + SKIP_LEAD_MS <= ms < to:
+            return int(to)
+    return None
+
+
 def has_script(path: str | Path) -> bool:
     return funscript_path_for(path).is_file()
 

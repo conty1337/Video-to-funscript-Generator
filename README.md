@@ -49,6 +49,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 28 | Andere Player (mpv, VLC, DeoVR, HereSphere), Vibratoren, TCode-Geräte (OSR2/SR6) mit allen Achsen | ✅ |
 | 29 | Bildrand und kurze Verdeckungen überbrücken, KI-Körpererkennung: Kästchen-Vorschlag und KI-Kontrolle | ✅ |
 | 30 | Toy umranden statt Rechteck, Rollen (Toy / Bezug), Hub-Richtung als Pfeil | ✅ |
+| 31 | Schnitte (X): Stellen ohne Handlung markieren, der Player springt darüber; Pausen ohne Hübe überspringen | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -281,6 +282,15 @@ zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
 speichern, die letzte merkt sich die App. Ein ruhiger Anfang wird übersprungen
 (Start 10 s vor dem ersten Hub), und in den letzten 10 s vor dem Start zählt
 ein Countdown herunter. Beides ist abschaltbar.
+
+**Schnitte**: Wo im Video nichts passiert, im Editor **X** am Anfang und noch
+einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis kurz vor
+den nächsten Hub). Schnitte stehen schraffiert in der Kurve, werden in
+`<Video>.vtf.json` gespeichert, und der Player springt darüber („Schnitte
+überspringen“). Bearbeiten → „Schnitt hier entfernen“ nimmt einen wieder raus.
+Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s von selbst
+(„Pausen ohne Hübe überspringen“, 2 s vor dem nächsten Hub geht es weiter; nach
+dem letzten Hub kommt das nächste Video).
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

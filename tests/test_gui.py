@@ -1760,3 +1760,43 @@ def test_right_click_never_deletes_at_once_and_undo_brings_it_back(app, tmp_path
     w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
     w.dirty = False
     w.close()
+
+
+def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
+    """X marks start and end of a cut, Shift+X cuts to shortly before the next stroke;
+    in the player the cut and (if wanted) long pauses are jumped over."""
+    import shutil
+
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+    from vtf.playlist import SKIP_LEAD_MS
+    from vtf.prep import load_cuts
+
+    path = tmp_path / "cut.avi"
+    shutil.copy(sine_video, path)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(path))
+    w.seek_ms(1000)
+    w.toggle_cut()
+    assert w.curve.cut_open is not None
+    w.seek_ms(2000)
+    w.toggle_cut()
+    assert len(w.cuts) == 1 and abs(w.cuts[0][0] - 1000) < 50 and abs(w.cuts[0][1] - 2000) < 50
+    assert w.curve.cut_open is None and load_cuts(path) == w.cuts
+    w.curve.set_actions([Action(0, 0), Action(300, 90), Action(600, 0), Action(5500, 0), Action(5800, 90)])
+    w.seek_ms(800)
+    w.cut_to_next_move()
+    assert len(w.cuts) == 1                                          # overlapping: merged into one
+    assert abs(w.cuts[0][0] - 800) < 50 and w.cuts[0][1] == 5500 - SKIP_LEAD_MS
+    # player: a tick inside the cut jumps to its end
+    w.set_player_mode(True)
+    assert w._player_skip(1500.0) and abs(w._cur_ms() - (5500 - SKIP_LEAD_MS)) < 50
+    w.player.cuts_cb.setChecked(False)
+    assert not w._player_skip(1500.0)
+    w.seek_ms(1000)
+    w.remove_cut_here()
+    assert w.cuts == [] and load_cuts(path) == []
+    w.set_player_mode(False)
+    w.dirty = False
+    w.close()

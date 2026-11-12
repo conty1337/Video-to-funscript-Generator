@@ -45,8 +45,8 @@ from ..funscript import (
     position_at,
 )
 from ..generator import generate, generate_axes
-from ..playlist import LEAD_MS, intro_skip_ms, script_start_ms
-from ..prep import load_bookmarks, load_prep, prep_path, save_bookmarks, save_prep
+from ..playlist import LEAD_MS, SKIP_LEAD_MS, intro_skip_ms, quiet_stretches, script_start_ms, skip_target
+from ..prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -131,6 +131,9 @@ class MainWindow(QMainWindow):
         self.curve_title.setObjectName("section")
         self.axis = "L0"                       # axis shown in the curve
         self.bookmarks: list[tuple[int, str]] = []   # (ms, name), saved next to the video
+        self.cuts: list[tuple[int, int]] = []         # (from, to) the player skips, saved there too
+        self._cut_start: float | None = None          # X pressed once: the cut starts here
+        self._quiet_cache: tuple = ((), [])
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -387,6 +390,10 @@ class MainWindow(QMainWindow):
         self._act(m, "Weitere Achsen aus Analyse erzeugen (Sway, Roll)", self.generate_more_axes)
         self._act(m, "Rhythmus einfügen…", self.insert_rhythm, "Ctrl+T")
         self._act(m, "Script aus Musik…", self.music_script)
+        m.addSeparator()
+        self._act(m, "Schnitt: Anfang / Ende hier", self.toggle_cut, "X")
+        self._act(m, "Schnitt bis zur nächsten Bewegung", self.cut_to_next_move, "Shift+X")
+        self._act(m, "Schnitt hier entfernen", self.remove_cut_here)
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -553,6 +560,9 @@ class MainWindow(QMainWindow):
         self._track_shadow = list(self.panel.tracking.sections)
         self.bookmarks = load_bookmarks(path)
         self._show_bookmarks()
+        self.cuts = load_cuts(path)
+        self._cut_start = None
+        self._show_cuts()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
         self.file_label.setText(f"{Path(path).name}  ·  {info.width}×{info.height}  ·  {info.fps:.2f} fps")
@@ -603,6 +613,9 @@ class MainWindow(QMainWindow):
         self._track_shadow = []
         self.bookmarks = []
         self._show_bookmarks()
+        self.cuts = []
+        self._cut_start = None
+        self._show_cuts()
         self.rail.set_speed(0.0)
         self.axis_actions = {}
         self.axis = "L0"
@@ -659,6 +672,92 @@ class MainWindow(QMainWindow):
             a, b = acts[i - 1], acts[i]
             speed = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
         self.rail.set_speed(speed)
+
+    # ------------------------------------------------------------ cuts
+    def _show_cuts(self):
+        self.curve.set_cuts(self.cuts, self._cut_start)
+
+    def _cuts_changed(self):
+        self._show_cuts()
+        if self.video_path:
+            try:
+                save_cuts(self.video_path, self.cuts)
+            except OSError as e:
+                self._status(f"Schnitte nicht gespeichert: {e}")
+
+    def add_cut(self, a: float, b: float) -> str:
+        """Cut from a to b (ms); overlapping cuts become one."""
+        a, b = sorted((int(a), int(b)))
+        if b - a < 200:
+            return "Schnitt zu kurz – erst zum Ende spulen"
+        merged = []
+        for c in sorted([*self.cuts, (a, b)]):
+            if merged and c[0] <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], c[1]))
+            else:
+                merged.append(c)
+        self.cuts = merged
+        self._cuts_changed()
+        return f"✂ Schnitt {_fmt(a)} – {_fmt(b)}: der Player springt darüber"
+
+    def toggle_cut(self):
+        """X: first press marks where the cut starts, the second where it ends."""
+        if not self.cap:
+            return
+        ms = self._cur_ms()
+        if self._cut_start is None:
+            self._cut_start = ms
+            self._show_cuts()
+            self._status(f"✂ Schnitt beginnt bei {_fmt(ms)} – zum Ende spulen und nochmal X")
+            return
+        start, self._cut_start = self._cut_start, None
+        self._status(self.add_cut(start, ms))
+        self._show_cuts()
+
+    def cut_to_next_move(self):
+        """Shift+X: cut from here to shortly before the next stroke (or the end)."""
+        if not self.cap:
+            return
+        ms = self._cur_ms()
+        acts = self.stroke_actions()
+        nxt = next((a.at for a, b in zip(acts, acts[1:]) if a.at > ms + SKIP_LEAD_MS and abs(b.pos - a.pos) >= 10),
+                   None)
+        end = nxt - SKIP_LEAD_MS if nxt is not None else self.frame_count / self.fps * 1000
+        self._cut_start = None
+        self._status(self.add_cut(ms, end))
+
+    def remove_cut_here(self):
+        ms = self._cur_ms()
+        keep = [c for c in self.cuts if not c[0] <= ms <= c[1]]
+        if len(keep) == len(self.cuts):
+            self._status("Hier ist kein Schnitt")
+            return
+        self.cuts = keep
+        self._cuts_changed()
+        self._status("Schnitt entfernt")
+
+    def _player_skip(self, media_ms: float) -> bool:
+        """Player: jump over cuts and (if wanted) long stretches without strokes."""
+        if not self.player_mode:
+            return False
+        cuts = self.cuts if self.player.cuts_cb.isChecked() else ()
+        quiet = ()
+        if self.player.quiet_cb.isChecked():
+            acts = self.stroke_actions()
+            key = (id(acts), len(acts), acts[0].at if acts else 0, acts[-1].at if acts else 0)
+            if self._quiet_cache[0] != key:
+                self._quiet_cache = (key, quiet_stretches(acts, self.frame_count / self.fps * 1000))
+            quiet = self._quiet_cache[1]
+        to = skip_target(media_ms, cuts, quiet)
+        if to is None or to <= media_ms:
+            return False
+        if to >= self.frame_count / self.fps * 1000 - 100:
+            self.pause()
+            self._video_ended()
+        else:
+            self.seek_ms(to)
+            self._status(f"✂ übersprungen bis {_fmt(to)}")
+        return True
 
     # ------------------------------------------------------------ bookmarks
     def _show_bookmarks(self):
@@ -885,6 +984,8 @@ class MainWindow(QMainWindow):
         if not self.cap:
             return
         media_ms = self._media_ms()
+        if self._player_skip(media_ms):
+            return
         target = int(media_ms * self.fps / 1000)
         if target >= self.frame_count:
             self.pause()

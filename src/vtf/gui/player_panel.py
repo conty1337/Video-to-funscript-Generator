@@ -154,7 +154,15 @@ class PlayerPanel(QWidget):
         self.countdown_cb.setToolTip("Zählt die letzten 10 s herunter, bevor das Script losgeht")
         self.intro_cb.setChecked(str(settings.value("player/intro", "true")).lower() == "true")
         self.countdown_cb.setChecked(str(settings.value("player/countdown", "true")).lower() == "true")
-        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb):
+        self.cuts_cb = QCheckBox("Schnitte überspringen")
+        self.cuts_cb.setToolTip("Im Editor markierte Schnitte (Taste X) werden beim Abspielen übersprungen")
+        self.cuts_cb.setChecked(str(settings.value("player/cuts", "true")).lower() == "true")
+        self.quiet_cb = QCheckBox("Pausen ohne Hübe überspringen")
+        self.quiet_cb.setToolTip("Bewegt sich das Script 15 s oder länger nicht, geht es 2 s vor dem nächsten "
+                                 "Hub weiter; nach dem letzten Hub zum nächsten Video")
+        self.quiet_cb.setChecked(str(settings.value("player/quiet", "false")).lower() == "true")
+        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb,
+                   self.cuts_cb, self.quiet_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
         self.play_btn = QPushButton(theme.icon("play", theme.ON_ACCENT), "Playlist abspielen")
@@ -197,6 +205,8 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/skip", "true" if pl.skip_without_script else "false")
         self.qs.setValue("player/intro", "true" if self.intro_cb.isChecked() else "false")
         self.qs.setValue("player/countdown", "true" if self.countdown_cb.isChecked() else "false")
+        self.qs.setValue("player/cuts", "true" if self.cuts_cb.isChecked() else "false")
+        self.qs.setValue("player/quiet", "true" if self.quiet_cb.isChecked() else "false")
 
     def refresh(self) -> None:
         pl = self.playlist
