@@ -7,6 +7,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import tr
+
 
 @dataclass
 class Action:
@@ -71,12 +73,12 @@ def position_at(actions: list[Action], ms: float) -> float | None:
 #: used by MultiFunPlayer, OFS & co.: <video>.funscript is the stroke (L0),
 #: the other axes are <video>.<name>.funscript next to it.
 AXES: dict[str, tuple[str, str]] = {
-    "L0": ("Hub", ""),
-    "L1": ("Surge", "surge"),
-    "L2": ("Sway", "sway"),
-    "R0": ("Twist", "twist"),
-    "R1": ("Roll", "roll"),
-    "R2": ("Pitch", "pitch"),
+    "L0": (tr("Hub"), ""),
+    "L1": (tr("Surge"), "surge"),
+    "L2": (tr("Sway"), "sway"),
+    "R0": (tr("Twist"), "twist"),
+    "R1": (tr("Roll"), "roll"),
+    "R2": (tr("Pitch"), "pitch"),
 }
 
 

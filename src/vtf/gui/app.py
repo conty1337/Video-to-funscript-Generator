@@ -16,7 +16,10 @@ def main() -> int:
     from . import theme
     from .main_window import MainWindow
 
+    from ..i18n import load_ui
+
     app = QApplication(sys.argv)
+    theme.set_accent(str(load_ui().get("accent") or theme.DEFAULT_ACCENT))
     theme.apply(app)
     app.setApplicationName("Video-to-Funscript Generator")
     app.setOrganizationName("video-to-funscript")
@@ -35,7 +38,29 @@ def main() -> int:
         win.open_video(args[0])
     if selftest:
         _run_selftest(app, win, selftest)
-    return app.exec()
+    code = app.exec()
+    _leave(win, code)
+    return code                       # not reached
+
+
+def _leave(win, code: int) -> None:
+    """End the process right after the window has closed and saved everything.
+
+    The normal way out lets Python and Qt tear down all their objects in an order
+    neither controls; with a Qt library inside an AppImage that occasionally crashed
+    on closing (signal 7 / 11 in libQt6Core). Everything that matters is written by
+    then (settings, statistics, scripts, preparation files are written at once and
+    atomically), so the teardown is skipped."""
+    try:
+        win.qsettings.sync()
+    except Exception:
+        pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    os._exit(int(code))
 
 
 def _run_selftest(app, win, out: str) -> None:

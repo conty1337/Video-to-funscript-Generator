@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import __version__
+from .i18n import tr
 
 REPO = "conty1337/Video-to-funscript-Generator"
 # VTF_UPDATE_API: nur für Tests (lokaler Server statt GitHub)
@@ -129,12 +130,12 @@ def _get(url: str, accept: str = "application/octet-stream"):
 
 def parse_release(data: dict) -> Release:
     if data.get("draft") or data.get("prerelease"):
-        raise UpdateError("kein stabiles Release")
+        raise UpdateError(tr("kein stabiles Release"))
     tag = str(data.get("tag_name") or "")
     assets = data.get("assets") or []
     app = [a for a in assets if str(a.get("name", "")).endswith(ASSET_SUFFIX)]
     if not app:
-        raise UpdateError("Release enthält kein AppImage")
+        raise UpdateError(tr("Release enthält kein AppImage"))
     # prefer the version-less name used for stable download links
     app.sort(key=lambda a: len(a["name"]))
     asset = app[0]
@@ -156,7 +157,7 @@ def fetch_latest() -> Release:
         try:
             data = json.loads(r.read().decode("utf-8"))
         except ValueError as e:
-            raise UpdateError("ungültige Antwort von GitHub") from e
+            raise UpdateError(tr("ungültige Antwort von GitHub")) from e
     return parse_release(data)
 
 
@@ -168,7 +169,7 @@ def check_for_update() -> Release | None:
 
 def expected_sha256(release: Release) -> str:
     if not release.checksum_url:
-        raise UpdateError("Release enthält keine Prüfsummen (SHA256SUMS)")
+        raise UpdateError(tr("Release enthält keine Prüfsummen (SHA256SUMS)"))
     with _get(release.checksum_url) as r:
         text = r.read(64 * 1024).decode("utf-8", "replace")
     for line in text.splitlines():
@@ -176,7 +177,7 @@ def expected_sha256(release: Release) -> str:
         if len(parts) >= 2 and parts[-1].lstrip("*").endswith(release.asset_name):
             if re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
                 return parts[0].lower()
-    raise UpdateError(f"keine Prüfsumme für {release.asset_name}")
+    raise UpdateError(tr("keine Prüfsumme für {0}", release.asset_name))
 
 
 def download_and_install(release: Release, target: Path | None = None,
@@ -185,9 +186,9 @@ def download_and_install(release: Release, target: Path | None = None,
     """Download, verify and atomically replace ``target`` (default: the running AppImage)."""
     target = target or running_appimage()
     if target is None:
-        raise UpdateError("läuft nicht als AppImage")
+        raise UpdateError(tr("läuft nicht als AppImage"))
     if not os.access(target.parent, os.W_OK):
-        raise UpdateError(f"keine Schreibrechte in {target.parent}")
+        raise UpdateError(tr("keine Schreibrechte in {0}", target.parent))
     want = expected_sha256(release)
     tmp = target.with_name(f".{target.name}.update")
     h = hashlib.sha256()
@@ -209,9 +210,9 @@ def download_and_install(release: Release, target: Path | None = None,
             f.flush()
             os.fsync(f.fileno())
         if release.asset_size and done != release.asset_size:
-            raise UpdateError("Download unvollständig")
+            raise UpdateError(tr("Download unvollständig"))
         if h.hexdigest() != want:
-            raise UpdateError("Prüfsumme stimmt nicht, Update verworfen")
+            raise UpdateError(tr("Prüfsumme stimmt nicht, Update verworfen"))
         os.chmod(tmp, 0o755)
         os.replace(tmp, target)
     except BaseException:

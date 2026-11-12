@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..analysis import TrackSection, section_ranges
+from ..i18n import plural, tr
 from ..tracking import MAX_AREAS
 
 
@@ -67,16 +68,16 @@ class TrackingBox(QWidget):
         lay.addWidget(self.list)
         grid = QGridLayout()
         grid.setSpacing(6)
-        self.end_btn = QPushButton("Ende hier")
-        self.del_btn = QPushButton("Löschen")
-        self.in_btn = QPushButton("Ganz drin")
-        self.out_btn = QPushButton("Ganz draußen")
-        self.clear_btn = QPushButton("Alle löschen")
-        tips = ((self.end_btn, "Abschnitt an der Abspielposition beenden (E)"),
-                (self.clear_btn, "Alle Abschnitte und Kästchen löschen und von vorne anfangen"),
-                (self.del_btn, "Abschnitt an der Abspielposition löschen"),
-                (self.in_btn, "Kalibrieren: an dieser Stelle ist es ganz drin = Position 0 (D)"),
-                (self.out_btn, "Kalibrieren: an dieser Stelle ist es ganz draußen = Position 100 (A)"))
+        self.end_btn = QPushButton(tr("Ende hier"))
+        self.del_btn = QPushButton(tr("Löschen"))
+        self.in_btn = QPushButton(tr("Ganz drin"))
+        self.out_btn = QPushButton(tr("Ganz draußen"))
+        self.clear_btn = QPushButton(tr("Alle löschen"))
+        tips = ((self.end_btn, tr("Abschnitt an der Abspielposition beenden (E)")),
+                (self.clear_btn, tr("Alle Abschnitte und Kästchen löschen und von vorne anfangen")),
+                (self.del_btn, tr("Abschnitt an der Abspielposition löschen")),
+                (self.in_btn, tr("Kalibrieren: an dieser Stelle ist es ganz drin = Position 0 (D)")),
+                (self.out_btn, tr("Kalibrieren: an dieser Stelle ist es ganz draußen = Position 100 (A)")))
         for b, tip in tips:
             b.setToolTip(tip)
             b.setStyleSheet("padding: 0 8px;")
@@ -88,20 +89,16 @@ class TrackingBox(QWidget):
         lay.addLayout(grid)
         draw = QGridLayout()
         draw.setSpacing(6)
-        self.outline_btn = QPushButton("Umranden")
+        self.outline_btn = QPushButton(tr("Umranden"))
         self.outline_btn.setCheckable(True)
         self.outline_btn.setToolTip(
-            "Statt eines Rechtecks mit gedrückter Maustaste eng um das Toy bzw. den Körperteil "
-            "fahren (U). Verfolgt wird nur, was innen liegt – ein paar Pixel Abstand zum Rand "
-            "(im Bild rot schraffiert), damit nichts daneben (Finger, Bettdecke) mitzieht")
-        self.stroke_btn = QPushButton("Hub-Richtung")
+            tr("Statt eines Rechtecks mit gedrückter Maustaste eng um das Toy bzw. den Körperteil fahren (U). Verfolgt wird nur, was innen liegt – ein paar Pixel Abstand zum Rand (im Bild rot schraffiert), damit nichts daneben (Finger, Bettdecke) mitzieht"))
+        self.stroke_btn = QPushButton(tr("Hub-Richtung"))
         self.stroke_btn.setCheckable(True)
         self.stroke_btn.setToolTip(
-            "Einen Pfeil im Bild entlang der Stoßrichtung ziehen, die Spitze zeigt nach „raus“ "
-            "(Position 100). Gemessen wird dann nur entlang des Pfeils, seitliches Wackeln zählt "
-            "nicht. Gilt für den Abschnitt an der Abspielposition (H)")
-        self.stroke_del = QPushButton("Richtung weg")
-        self.stroke_del.setToolTip("Hub-Richtung des Abschnitts an der Abspielposition entfernen")
+            tr("Einen Pfeil im Bild entlang der Stoßrichtung ziehen, die Spitze zeigt nach „raus“ (Position 100). Gemessen wird dann nur entlang des Pfeils, seitliches Wackeln zählt nicht. Gilt für den Abschnitt an der Abspielposition (H)"))
+        self.stroke_del = QPushButton(tr("Richtung weg"))
+        self.stroke_del.setToolTip(tr("Hub-Richtung des Abschnitts an der Abspielposition entfernen"))
         for b in (self.outline_btn, self.stroke_btn, self.stroke_del):
             b.setStyleSheet("padding: 0 8px;")
         draw.addWidget(self.outline_btn, 0, 0, 1, 2)
@@ -111,25 +108,18 @@ class TrackingBox(QWidget):
         self.outline_btn.toggled.connect(self._draw_mode_clicked)
         self.stroke_btn.toggled.connect(self._draw_mode_clicked)
         self.stroke_del.clicked.connect(self._stroke_del_clicked)
-        self.auto_btn = QPushButton("Automatisch finden")
+        self.auto_btn = QPushButton(tr("Automatisch finden"))
         self.auto_btn.setToolTip(
-            "Sucht ab hier ein paar Sekunden lang, was sich im Rhythmus bewegt: das wird das Toy "
-            "(umrandet), eine Stelle mit Muster daneben der Bezug, dazu die Hub-Richtung (F). Danach "
-            "kurz prüfen und bei Bedarf anpassen")
+            tr("Sucht ab hier ein paar Sekunden lang, was sich im Rhythmus bewegt: das wird das Toy (umrandet), eine Stelle mit Muster daneben der Bezug, dazu die Hub-Richtung (F). Danach kurz prüfen und bei Bedarf anpassen"))
         self.auto_btn.setStyleSheet("padding: 0 8px;")
         lay.addWidget(self.auto_btn)
         self.auto_btn.clicked.connect(self.autoRequested)
-        self.ai_btn = QPushButton("KI-Vorschlag")
-        self.ai_btn.setToolTip("Körperteile im aktuellen Bild erkennen (Becken, Mund, Hände, …) und "
-                               "als Kästchen vorschlagen (K). Beim ersten Mal werden die KI-Modelle "
-                               "geladen (etwa 330 MB, einmalig)")
+        self.ai_btn = QPushButton(tr("KI-Vorschlag"))
+        self.ai_btn.setToolTip(tr("Körperteile im aktuellen Bild erkennen (Becken, Mund, Hände, …) und als Kästchen vorschlagen (K). Beim ersten Mal werden die KI-Modelle geladen (etwa 330 MB, einmalig)"))
         self.ai_btn.setStyleSheet("padding: 0 8px;")
-        self.ai_check = QCheckBox("KI-Kontrolle beim Verfolgen")
+        self.ai_check = QCheckBox(tr("KI-Kontrolle beim Verfolgen"))
         self.ai_check.setToolTip(
-            "Die Körpererkennung prüft während der Analyse etwa jede Sekunde (bei Unsicherheit "
-            "öfter), ob jedes Kästchen noch auf seinem Körperteil sitzt. Rutscht es weg oder liegt "
-            "eine Hand darüber, wird es zurückgeholt bzw. die Stelle überbrückt. Langsamer; "
-            "braucht die KI-Modelle")
+            tr("Die Körpererkennung prüft während der Analyse etwa jede Sekunde (bei Unsicherheit öfter), ob jedes Kästchen noch auf seinem Körperteil sitzt. Rutscht es weg oder liegt eine Hand darüber, wird es zurückgeholt bzw. die Stelle überbrückt. Langsamer; braucht die KI-Modelle"))
         lay.addWidget(self.ai_btn)
         lay.addWidget(self.ai_check)
         self.ai_btn.clicked.connect(self.suggestRequested)
@@ -211,16 +201,16 @@ class TrackingBox(QWidget):
         """Stroke arrow (x0, y0, x1, y1 normalized, head = out) for the section at ms; None removes it."""
         i = self.index_at(ms)
         if i is None:
-            return "Hub-Richtung geht nur innerhalb eines Abschnitts – erst Bereiche markieren"
+            return tr("Hub-Richtung geht nur innerhalb eines Abschnitts – erst Bereiche markieren")
         if line is None and self.sections[i].stroke is None:
-            return f"Abschnitt {self._number(i)} hat keine Hub-Richtung"
+            return tr("Abschnitt {0} hat keine Hub-Richtung", self._number(i))
         line = None if line is None else tuple(round(float(v), 4) for v in line[:4])
         self.sections[i] = replace(self.sections[i], stroke=line)
         self.refresh()
         self.generatorChanged.emit()
         if line is None:
-            return f"Abschnitt {self._number(i)}: Hub-Richtung entfernt"
-        return f"Abschnitt {self._number(i)}: Hub wird entlang des Pfeils gemessen, Spitze = raus"
+            return tr("Abschnitt {0}: Hub-Richtung entfernt", self._number(i))
+        return tr("Abschnitt {0}: Hub wird entlang des Pfeils gemessen, Spitze = raus", self._number(i))
 
     def _reorder(self, i: int, order: list[int]) -> None:
         """Areas of section i in a new order (new index -> old index); corrections follow."""
@@ -235,48 +225,48 @@ class TrackingBox(QWidget):
         """role "toy" (what moves, becomes area 1) or "body" (what it is measured against)."""
         i = self.index_at(ms)
         if i is None or area >= len(self.sections[i].boxes):
-            return "Hier ist kein Bereich"
+            return tr("Hier ist kein Bereich")
         n = len(self.sections[i].boxes)
         if role == "toy":
             if area == 0:
-                return "Bereich 1 ist schon das Toy / der bewegte Teil"
+                return tr("Bereich 1 ist schon das Toy / der bewegte Teil")
             order = [area] + [a for a in range(n) if a != area]
         else:
             if area != 0:
-                return f"Bereich {area + 1} ist schon Bezug (Körper)"
+                return tr("Bereich {0} ist schon Bezug (Körper)", area + 1)
             if n < 2:
-                return "Für einen Bezug braucht es noch einen Bereich als Toy – erst einen zweiten aufziehen"
+                return tr("Für einen Bezug braucht es noch einen Bereich als Toy – erst einen zweiten aufziehen")
             order = [1, 0] + list(range(2, n))
         self._reorder(i, order)
         self.refresh()
         self.analysisChanged.emit()
-        return ("Rollen geändert: Bereich 1 = Toy / bewegt, "
-                + ("Bereich 2 = Bezug" if n == 2 else "Bereiche 2–3 = Bezug") + " – die Nummern haben sich geändert")
+        return (tr("Rollen geändert: Bereich 1 = Toy / bewegt, ")
+                + (tr("Bereich 2 = Bezug") if n == 2 else tr("Bereiche 2–3 = Bezug")) + tr(" – die Nummern haben sich geändert"))
 
     def remove_area(self, ms: float, area: int) -> str:
         """Remove one area from the section at ms (with its corrections)."""
         i = self.index_at(ms)
         if i is None or area >= len(self.sections[i].boxes):
-            return "Hier ist kein Bereich"
+            return tr("Hier ist kein Bereich")
         if len(self.sections[i].boxes) == 1:
             return self.delete_at(ms)
         n = len(self.sections[i].boxes)
         self._reorder(i, [a for a in range(n) if a != area])
         self.refresh()
         self.analysisChanged.emit()
-        return f"Bereich {area + 1} entfernt"
+        return tr("Bereich {0} entfernt", area + 1)
 
     def clear_outline(self, ms: float, area: int) -> str:
         i = self.index_at(ms)
         if i is None or not self.sections[i].outline(area):
-            return "Dieser Bereich hat keine Umrandung"
+            return tr("Dieser Bereich hat keine Umrandung")
         s = self.sections[i]
         lines = [s.outline(a) for a in range(len(s.boxes))]
         lines[area] = ()
         self.sections[i] = replace(s, outlines=_trim(tuple(lines)))
         self.refresh()
         self.analysisChanged.emit()
-        return f"Bereich {area + 1} ist wieder ein Rechteck"
+        return tr("Bereich {0} ist wieder ein Rechteck", area + 1)
 
     def _end_clicked(self):
         self._say(self.set_end(self.current_ms()))
@@ -295,9 +285,8 @@ class TrackingBox(QWidget):
         if not n:
             return
         ans = QMessageBox.question(
-            self, "Alle löschen",
-            f"Alle {n} Abschnitt{'e' if n > 1 else ''} mit ihren Kästchen, Korrekturen und der "
-            "Kalibrierung löschen?")
+            self, tr("Alle löschen"),
+            plural(n, "Den Abschnitt mit seinen Kästchen, Korrekturen und der Kalibrierung löschen?", "Alle {0} Abschnitte mit ihren Kästchen, Korrekturen und der Kalibrierung löschen?"))
         if ans == QMessageBox.Yes:
             self._say(self.clear_all())
 
@@ -339,7 +328,7 @@ class TrackingBox(QWidget):
                 self.sections[i] = replace(s, boxes=boxes, outlines=_trim(lines), keys=keys)
                 self.refresh()
                 self.analysisChanged.emit()
-                return f"Abschnitt {self._number(i)}: {len(boxes)} Bereich{'e' if len(boxes) > 1 else ''}"
+                return plural(len(boxes), "Abschnitt {1}: {0} Bereich", "Abschnitt {1}: {0} Bereiche", self._number(i))
         cut = self.index_at(ms)
         end = None
         if cut is not None and self.sections[cut].end_ms is not None and self.sections[cut].end_ms > ms:
@@ -359,8 +348,8 @@ class TrackingBox(QWidget):
         self.refresh()
         self.analysisChanged.emit()
         i = next(k for k, s in enumerate(self.sections) if s.start_ms == int(ms))
-        return (f"Neuer Abschnitt {self._number(i)} ab {fmt_ms(ms)}"
-                + (" – der vorige endet hier" if cut is not None else ""))
+        return (tr("Neuer Abschnitt {0} ab {1}", self._number(i), fmt_ms(ms))
+                + (tr(" – der vorige endet hier") if cut is not None else ""))
 
     def _add_key(self, i: int, ms: float, area: int, box, shown_box) -> str:
         s = self.sections[i]
@@ -371,8 +360,7 @@ class TrackingBox(QWidget):
         self.sections[i] = replace(s, keys=keys)
         self.refresh()
         self.analysisChanged.emit()
-        return (f"Bereich {area + 1} bei {fmt_ms(ms)} nachjustiert – nach neuer Analyse folgt er von hier "
-                "aus, die Abweichung davor wird ausgeglichen")
+        return (tr("Bereich {0} bei {1} nachjustiert – nach neuer Analyse folgt er von hier aus, die Abweichung davor wird ausgeglichen", area + 1, fmt_ms(ms)))
 
     def _edit_marked(self, ms: float, area: int, fn) -> bool:
         """Apply fn(box) -> box to marked area `area` at a section start or a correction at ms."""
@@ -401,20 +389,20 @@ class TrackingBox(QWidget):
         where it really is: a correction there."""
         cur = self.index_at(ms)
         if cur is None:
-            return "Hier ist kein Abschnitt"
+            return tr("Hier ist kein Abschnitt")
         s = self.sections[cur]
         if abs(s.start_ms - ms) <= self.frame_ms * 0.6:
             return self.update_box(ms, area, box)
         if area >= len(s.boxes):
-            return "Diesen Bereich gibt es in dem Abschnitt nicht"
+            return tr("Diesen Bereich gibt es in dem Abschnitt nicht")
         box = tuple(round(float(v), 4) for v in box[:4]) + ((float(box[4]) if len(box) > 4 else 0.0),)
         return self._add_key(cur, ms, area, box, box)
 
     def rotate_box(self, ms: float, area: int, angle: float) -> str:
         """Turn a marked area (at a section start or at a correction)."""
         if self._edit_marked(ms, area, lambda b: tuple(b[:4]) + (round(angle, 1),)):
-            return f"Bereich {area + 1} gedreht: {angle:.0f}°"
-        return "Drehen geht an der Startstelle eines Abschnitts (Klick in der Liste)"
+            return tr("Bereich {0} gedreht: {1:.0f}°", area + 1, angle)
+        return tr("Drehen geht an der Startstelle eines Abschnitts (Klick in der Liste)")
 
     def update_box(self, ms: float, area: int, box) -> str:
         """Move/resize a marked area (at a section start or at a correction)."""
@@ -425,37 +413,37 @@ class TrackingBox(QWidget):
             return (x, y, w, h, round(float(angle), 1))
 
         if self._edit_marked(ms, area, fn):
-            return f"Bereich {area + 1} angepasst"
-        return "Ändern geht an der Startstelle eines Abschnitts (Klick in der Liste)"
+            return tr("Bereich {0} angepasst", area + 1)
+        return tr("Ändern geht an der Startstelle eines Abschnitts (Klick in der Liste)")
 
     def clear_all(self) -> str:
         if not self.sections:
-            return "Keine Abschnitte"
+            return tr("Keine Abschnitte")
         n = len(self.sections)
         self.sections = []
         self.refresh()
         self.analysisChanged.emit()
-        return f"{n} Abschnitt{'e' if n > 1 else ''} gelöscht – Bereiche neu aufziehen"
+        return plural(n, "{0} Abschnitt gelöscht – Bereiche neu aufziehen", "{0} Abschnitte gelöscht – Bereiche neu aufziehen")
 
     def set_end(self, ms: float) -> str:
         cand = [i for i, s in enumerate(self.sections) if s.start_ms < ms]
         if not cand:
-            return "Kein Abschnitt vor dieser Stelle – erst Bereiche markieren"
+            return tr("Kein Abschnitt vor dieser Stelle – erst Bereiche markieren")
         i = max(cand, key=lambda k: self.sections[k].start_ms)
         self.sections[i] = replace(self.sections[i], end_ms=int(ms))
         self.refresh()
         self.analysisChanged.emit()
-        return f"Abschnitt {self._number(i)} endet bei {fmt_ms(ms)}"
+        return tr("Abschnitt {0} endet bei {1}", self._number(i), fmt_ms(ms))
 
     def delete_at(self, ms: float) -> str:
         i = self.index_at(ms)
         if i is None:
-            return "Hier ist kein Abschnitt"
+            return tr("Hier ist kein Abschnitt")
         n = self._number(i)
         del self.sections[i]
         self.refresh()
         self.analysisChanged.emit()
-        return f"Abschnitt {n} gelöscht"
+        return tr("Abschnitt {0} gelöscht", n)
 
     def move_edge(self, i: int, which: str, ms: float) -> str:
         """Start or end of section i dragged in the curve to ms."""
@@ -469,7 +457,7 @@ class TrackingBox(QWidget):
         if which == "end":
             ms = max(s.start_ms + gap, min(ms, int(self.duration_ms or ms)))
             self.sections[i] = replace(s, end_ms=ms)
-            msg = f"Abschnitt {n} endet bei {fmt_ms(ms)}"
+            msg = tr("Abschnitt {0} endet bei {1}", n, fmt_ms(ms))
         else:
             prev = max((o.start_ms for o in self.sections if o.start_ms < s.start_ms), default=None)
             lo = 0 if prev is None else prev + gap
@@ -484,8 +472,7 @@ class TrackingBox(QWidget):
             self.sections[i] = replace(s, start_ms=ms, keys=keys, end_ms=end,
                                        calib_in_ms=inside(s.calib_in_ms), calib_out_ms=inside(s.calib_out_ms))
             self.sections.sort(key=lambda x: x.start_ms)
-            msg = (f"Abschnitt {n} beginnt jetzt bei {fmt_ms(ms)} – die Kästchen gelten ab hier, "
-                   "bitte dort prüfen")
+            msg = (tr("Abschnitt {0} beginnt jetzt bei {1} – die Kästchen gelten ab hier, bitte dort prüfen", n, fmt_ms(ms)))
         self.refresh()
         self.analysisChanged.emit()
         return msg
@@ -493,16 +480,16 @@ class TrackingBox(QWidget):
     def calibrate(self, kind: str, ms: float) -> str:
         i = self.index_at(ms)
         if i is None:
-            return "Kalibrieren geht nur innerhalb eines Abschnitts"
+            return tr("Kalibrieren geht nur innerhalb eines Abschnitts")
         key = "calib_in_ms" if kind == "in" else "calib_out_ms"
         self.sections[i] = replace(self.sections[i], **{key: int(ms)})
         self.refresh()
         self.generatorChanged.emit()
         s = self.sections[i]
-        what = "ganz drin (0)" if kind == "in" else "ganz draußen (100)"
-        rest = ("kalibriert – das Script nutzt jetzt die echte Tiefe" if s.calibrated else
-                "jetzt noch „Ganz draußen“ setzen" if kind == "in" else "jetzt noch „Ganz drin“ setzen")
-        return f"Abschnitt {self._number(i)}: {fmt_ms(ms)} = {what}, {rest}"
+        what = tr("ganz drin (0)") if kind == "in" else tr("ganz draußen (100)")
+        rest = (tr("kalibriert – das Script nutzt jetzt die echte Tiefe") if s.calibrated else
+                tr("jetzt noch „Ganz draußen“ setzen") if kind == "in" else tr("jetzt noch „Ganz drin“ setzen"))
+        return tr("Abschnitt {0}: {1} = {2}, {3}", self._number(i), fmt_ms(ms), what, rest)
 
     def _number(self, i: int) -> int:
         return i + 1
@@ -515,22 +502,22 @@ class TrackingBox(QWidget):
             a, b = ranges.get(i, (s.start_ms, s.end_ms or self.duration_ms))
             n = len(s.boxes)
             half = s.calib_in_ms is not None or s.calib_out_ms is not None
-            cal = "kalibriert" if s.calibrated else ("halb kalibriert" if half else "relativ")
-            fix = f"  ·  {len(s.keys)}× korr." if s.keys else ""
-            item = QListWidgetItem(f"{i + 1}   {fmt_ms(a)} – {fmt_ms(b)}   ·  {n} Ber.  ·  {cal}{fix}")
+            cal = tr("kalibriert") if s.calibrated else (tr("halb kalibriert") if half else tr("relativ"))
+            fix = tr("  ·  {0}× korr.", len(s.keys)) if s.keys else ""
+            item = QListWidgetItem(tr("{0}   {1} – {2}   ·  {3} Ber.  ·  {4}{5}", i + 1, fmt_ms(a), fmt_ms(b), n, cal, fix))
             item.setData(Qt.UserRole, s.start_ms)
-            tip = [f"Bereiche: {n} (1 = Toy / bewegt" + (", 2–3 = Bezug)" if n > 1 else ")")]
+            tip = [tr("Bereiche: {0} (1 = Toy / bewegt", n) + (tr(", 2–3 = Bezug)") if n > 1 else ")")]
             lined = [str(a + 1) for a in range(n) if s.outline(a)]
             if lined:
-                tip.append("Umrandet: Bereich " + ", ".join(lined))
+                tip.append(tr("Umrandet: Bereich ") + ", ".join(lined))
             if s.stroke:
-                tip.append("Hub-Richtung: Pfeil gesetzt")
+                tip.append(tr("Hub-Richtung: Pfeil gesetzt"))
             if s.keys:
-                tip.append(f"Nachjustiert: {len(s.keys)}× (" + ", ".join(fmt_ms(k[0]) for k in s.keys) + ")")
+                tip.append(tr("Nachjustiert: {0}× (", len(s.keys)) + ", ".join(fmt_ms(k[0]) for k in s.keys) + ")")
             if s.calib_in_ms is not None:
-                tip.append(f"ganz drin bei {fmt_ms(s.calib_in_ms)}")
+                tip.append(tr("ganz drin bei {0}", fmt_ms(s.calib_in_ms)))
             if s.calib_out_ms is not None:
-                tip.append(f"ganz draußen bei {fmt_ms(s.calib_out_ms)}")
+                tip.append(tr("ganz draußen bei {0}", fmt_ms(s.calib_out_ms)))
             item.setToolTip("\n".join(tip))
             self.list.addItem(item)
         has = bool(self.sections)
@@ -541,18 +528,9 @@ class TrackingBox(QWidget):
         for b in (self.end_btn, self.del_btn, self.in_btn, self.out_btn, self.clear_btn, self.stroke_del):
             b.setEnabled(has)
         if not has:
-            self.help.setText("Im Video bis zu 3 Bereiche aufziehen (oder mit „Umranden“ eng drum "
-                              "herum fahren). Der erste ist das Toy / die Maschine, weitere sind der "
-                              "Bezug (Körper, bewegt sich wenig) – gemessen wird das Toy relativ dazu, "
-                              "die Kamera spielt dann keine Rolle. Rechtsklick auf ein Kästchen: Rolle "
-                              "ändern. Kästchen innen ziehen = verschieben, an einer Ecke = Größe, am "
-                              "runden Griff oder mit dem Mausrad drehen. Nach einem Szenenwechsel "
-                              "einfach neu markieren.")
+            self.help.setText(tr("Im Video bis zu 3 Bereiche aufziehen (oder mit „Umranden“ eng drum herum fahren). Der erste ist das Toy / die Maschine, weitere sind der Bezug (Körper, bewegt sich wenig) – gemessen wird das Toy relativ dazu, die Kamera spielt dann keine Rolle. Rechtsklick auf ein Kästchen: Rolle ändern. Kästchen innen ziehen = verschieben, an einer Ecke = Größe, am runden Griff oder mit dem Mausrad drehen. Nach einem Szenenwechsel einfach neu markieren."))
         else:
-            self.help.setText("Klick auf einen Abschnitt springt zu seinem Start, dort lassen sich die "
-                              "Kästchen verschieben, vergrößern und drehen. Wandert ein Kästchen ab: "
-                              "an der Stelle einfach anpacken und richtig hinschieben (nachjustieren). Für echte "
-                              "Tiefe: ganz drin → „Ganz drin“, ganz draußen → „Ganz draußen“.")
+            self.help.setText(tr("Klick auf einen Abschnitt springt zu seinem Start, dort lassen sich die Kästchen verschieben, vergrößern und drehen. Wandert ein Kästchen ab: an der Stelle einfach anpacken und richtig hinschieben (nachjustieren). Für echte Tiefe: ganz drin → „Ganz drin“, ganz draußen → „Ganz draußen“."))
 
     def _clicked(self, item: QListWidgetItem) -> None:
         self.seekRequested.emit(int(item.data(Qt.UserRole)))

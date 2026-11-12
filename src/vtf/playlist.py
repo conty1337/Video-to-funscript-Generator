@@ -9,7 +9,6 @@ from pathlib import Path
 
 from .funscript import funscript_path_for
 
-
 #: how long before the script starts the player jumps in / counts down
 LEAD_MS = 10_000
 

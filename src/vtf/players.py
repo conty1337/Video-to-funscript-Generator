@@ -23,6 +23,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+from .i18n import tr
+
 KINDS = (("mpv", "mpv"), ("vlc", "VLC"), ("deovr", "DeoVR"), ("heresphere", "HereSphere"))
 DEFAULT_MPV_SOCKET = "/tmp/mpvsocket"
 DEFAULT_VLC = "127.0.0.1:8080"
@@ -56,8 +58,7 @@ class MpvPlayer:
             s.settimeout(1.0)
             s.connect(self.socket_path)
         except OSError as e:
-            raise PlayerError(f"mpv nicht erreichbar über {self.socket_path}. mpv mit "
-                              f"--input-ipc-server={self.socket_path} starten.") from e
+            raise PlayerError(tr("mpv nicht erreichbar über {0}. mpv mit --input-ipc-server={1} starten.", self.socket_path, self.socket_path)) from e
         self.sock = s
 
     def close(self) -> None:
@@ -70,7 +71,7 @@ class MpvPlayer:
 
     def poll(self) -> PlayerState:
         if self.sock is None:
-            raise PlayerError("nicht verbunden")
+            raise PlayerError(tr("nicht verbunden"))
         props = ("time-pos", "pause", "path", "duration")
         msg = b"".join(json.dumps({"command": ["get_property", p], "request_id": i + 1}).encode() + b"\n"
                        for i, p in enumerate(props))
@@ -90,10 +91,10 @@ class MpvPlayer:
                 if len(got) < len(props):
                     data = self.sock.recv(65536)
                     if not data:
-                        raise PlayerError("mpv wurde beendet")
+                        raise PlayerError(tr("mpv wurde beendet"))
                     self._buf += data
         except OSError as e:
-            raise PlayerError(f"Verbindung zu mpv verloren: {e}") from e
+            raise PlayerError(tr("Verbindung zu mpv verloren: {0}", e)) from e
         t, pause, path, dur = (got.get(i + 1) for i in range(len(props)))
         return PlayerState(str(path or ""), float(t or 0) * 1000, path is not None and t is not None and not pause,
                            float(dur or 0) * 1000)
@@ -117,10 +118,10 @@ class VlcPlayer:
                 return json.loads(r.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as e:
             if e.code == 401:
-                raise PlayerError("VLC: falsches Passwort (Einstellungen → Lua → Passwort)") from e
-            raise PlayerError(f"VLC antwortet mit {e.code}") from e
+                raise PlayerError(tr("VLC: falsches Passwort (Einstellungen → Lua → Passwort)")) from e
+            raise PlayerError(tr("VLC antwortet mit {0}", e.code)) from e
         except (OSError, ValueError) as e:
-            raise PlayerError(f"VLC nicht erreichbar unter {self.address}. Weboberfläche in VLC an?") from e
+            raise PlayerError(tr("VLC nicht erreichbar unter {0}. Weboberfläche in VLC an?", self.address)) from e
 
     def connect(self) -> None:
         self._get("status.json")
@@ -174,8 +175,7 @@ class DeoVrPlayer:
         try:
             s = socket.create_connection((self.host, self.port), timeout=3.0)
         except OSError as e:
-            raise PlayerError(f"{self.name} nicht erreichbar unter {self.host}:{self.port}. "
-                              "Fernsteuerung im Player eingeschaltet?") from e
+            raise PlayerError(tr("{0} nicht erreichbar unter {1}:{2}. Fernsteuerung im Player eingeschaltet?", self.name, self.host, self.port)) from e
         s.settimeout(0.5)
         self.sock = s
         self._error = ""
@@ -201,7 +201,7 @@ class DeoVrPlayer:
                 self._error = str(e)
                 return
             if not data:
-                self._error = f"{self.name} hat die Verbindung beendet"
+                self._error = tr("{0} hat die Verbindung beendet", self.name)
                 return
             buf += data
             while len(buf) >= 4:
@@ -233,14 +233,14 @@ class DeoVrPlayer:
 
     def poll(self) -> PlayerState:
         if self._error or self.sock is None:
-            raise PlayerError(self._error or "nicht verbunden")
+            raise PlayerError(self._error or tr("nicht verbunden"))
         now = time.monotonic()
         if now - self._last_ping >= 1.0:                # keep-alive: an empty message
             self._last_ping = now
             try:
                 self.sock.sendall(struct.pack("<I", 0))
             except OSError as e:
-                raise PlayerError(f"Verbindung zu {self.name} verloren: {e}") from e
+                raise PlayerError(tr("Verbindung zu {0} verloren: {1}", self.name, e)) from e
         with self._lock:
             return PlayerState(self.state.path, self.state.time_ms, self.state.playing, self.state.duration_ms)
 

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..batch import VIDEO_EXTS
+from ..i18n import plural, tr
 from ..playlist import COUNTDOWN_RANGE_S, LEAD_MS, Playlist, has_script
 from . import theme
 
@@ -103,7 +104,7 @@ class PlayerPanel(QWidget):
         hl = QVBoxLayout(head)
         hl.setContentsMargins(16, 16, 16, 8)
         hl.setSpacing(2)
-        title = QLabel("Playlist")
+        title = QLabel(tr("Playlist"))
         title.setObjectName("section")
         self.meta = QLabel()
         self.meta.setObjectName("caption")
@@ -113,8 +114,7 @@ class PlayerPanel(QWidget):
 
         self.list = PlaylistView()
         lay.addWidget(self.list, 1)
-        self.empty = QLabel("Videos oder Ordner hierher ziehen\noder mit + hinzufügen.\n\n"
-                            "Abgespielt wird das Funscript, das neben dem Video liegt.")
+        self.empty = QLabel(tr("Videos oder Ordner hierher ziehen\noder mit + hinzufügen.\n\nAbgespielt wird das Funscript, das neben dem Video liegt."))
         self.empty.setObjectName("caption")
         self.empty.setAlignment(Qt.AlignCenter)
         self.empty.setWordWrap(True)
@@ -123,16 +123,16 @@ class PlayerPanel(QWidget):
         tools = QHBoxLayout()
         tools.setContentsMargins(16, 8, 16, 8)
         tools.setSpacing(4)
-        self.add_btn = self._tool("plus", "Videos hinzufügen")
-        self.folder_btn = self._tool("folders", "Ordner hinzufügen (mit Unterordnern)")
-        self.remove_btn = self._tool("trash", "Ausgewählte entfernen (Entf)")
+        self.add_btn = self._tool("plus", tr("Videos hinzufügen"))
+        self.folder_btn = self._tool("folders", tr("Ordner hinzufügen (mit Unterordnern)"))
+        self.remove_btn = self._tool("trash", tr("Ausgewählte entfernen (Entf)"))
         tools.addWidget(self.add_btn)
         tools.addWidget(self.folder_btn)
         tools.addWidget(self.remove_btn)
         tools.addStretch(1)
-        self.load_btn = QPushButton("Laden")
-        self.save_btn = QPushButton("Speichern")
-        for b, tip in ((self.load_btn, "Playlist aus .m3u laden"), (self.save_btn, "Playlist als .m3u speichern")):
+        self.load_btn = QPushButton(tr("Laden"))
+        self.save_btn = QPushButton(tr("Speichern"))
+        for b, tip in ((self.load_btn, tr("Playlist aus .m3u laden")), (self.save_btn, tr("Playlist als .m3u speichern"))):
             b.setToolTip(tip)
             b.setStyleSheet("padding: 0 10px;")
             tools.addWidget(b)
@@ -143,17 +143,16 @@ class PlayerPanel(QWidget):
         fl = QVBoxLayout(footer)
         fl.setContentsMargins(16, 8, 16, 16)
         fl.setSpacing(8)
-        self.repeat_cb = QCheckBox("Playlist wiederholen")
-        self.shuffle_cb = QCheckBox("Zufällige Reihenfolge")
-        self.skip_cb = QCheckBox("Videos ohne Script überspringen")
+        self.repeat_cb = QCheckBox(tr("Playlist wiederholen"))
+        self.shuffle_cb = QCheckBox(tr("Zufällige Reihenfolge"))
+        self.skip_cb = QCheckBox(tr("Videos ohne Script überspringen"))
         self.repeat_cb.setChecked(self.playlist.repeat)
         self.shuffle_cb.setChecked(self.playlist.shuffle)
         self.skip_cb.setChecked(self.playlist.skip_without_script)
-        self.intro_cb = QCheckBox("Ruhigen Anfang überspringen")
-        self.intro_cb.setToolTip("Startet 10 s bevor das Script losgeht, statt am Anfang des Videos")
-        self.countdown_cb = QCheckBox("Countdown vor dem Start")
-        self.countdown_cb.setToolTip("Zählt die letzten 10 s herunter, bevor das Script losgeht – auch "
-                                     "nach einem Schnitt oder einer Pause, wenn es weitergeht")
+        self.intro_cb = QCheckBox(tr("Ruhigen Anfang überspringen"))
+        self.intro_cb.setToolTip(tr("Startet 10 s bevor das Script losgeht, statt am Anfang des Videos"))
+        self.countdown_cb = QCheckBox(tr("Countdown vor dem Start"))
+        self.countdown_cb.setToolTip(tr("Zählt die letzten 10 s herunter, bevor das Script losgeht – auch nach einem Schnitt oder einer Pause, wenn es weitergeht"))
         self.intro_cb.setChecked(str(settings.value("player/intro", "true")).lower() == "true")
         self.countdown_cb.setChecked(str(settings.value("player/countdown", "true")).lower() == "true")
         lo, hi = COUNTDOWN_RANGE_S
@@ -161,19 +160,16 @@ class PlayerPanel(QWidget):
         self.countdown_s.setRange(lo, hi)
         self.countdown_s.setSuffix(" s")
         self.countdown_s.setFixedWidth(72)
-        self.countdown_s.setToolTip("Wie lange der Countdown läuft. So weit vor dem ersten Hub startet "
-                                    "das Video, und so weit vor dem nächsten Hub geht es nach einer "
-                                    "übersprungenen Pause weiter")
+        self.countdown_s.setToolTip(tr("Wie lange der Countdown läuft. So weit vor dem ersten Hub startet das Video, und so weit vor dem nächsten Hub geht es nach einer übersprungenen Pause weiter"))
         try:
             self.countdown_s.setValue(int(settings.value("player/countdown_s", LEAD_MS // 1000)))
         except (TypeError, ValueError):
             self.countdown_s.setValue(LEAD_MS // 1000)
-        self.cuts_cb = QCheckBox("Schnitte überspringen")
-        self.cuts_cb.setToolTip("Im Editor markierte Schnitte (Taste X) werden beim Abspielen übersprungen")
+        self.cuts_cb = QCheckBox(tr("Schnitte überspringen"))
+        self.cuts_cb.setToolTip(tr("Im Editor markierte Schnitte (Taste X) werden beim Abspielen übersprungen"))
         self.cuts_cb.setChecked(str(settings.value("player/cuts", "true")).lower() == "true")
-        self.quiet_cb = QCheckBox("Pausen ohne Hübe überspringen")
-        self.quiet_cb.setToolTip("Bewegt sich das Script 15 s oder länger nicht, geht es die Countdown-Länge vor "
-                                 "dem nächsten Hub weiter; nach dem letzten Hub zum nächsten Video")
+        self.quiet_cb = QCheckBox(tr("Pausen ohne Hübe überspringen"))
+        self.quiet_cb.setToolTip(tr("Bewegt sich das Script 15 s oder länger nicht, geht es die Countdown-Länge vor dem nächsten Hub weiter; nach dem letzten Hub zum nächsten Video"))
         self.quiet_cb.setChecked(str(settings.value("player/quiet", "false")).lower() == "true")
         for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb,
                    self.cuts_cb, self.quiet_cb):
@@ -182,14 +178,14 @@ class PlayerPanel(QWidget):
             if cb is self.countdown_cb:          # its length right below it
                 row = QHBoxLayout()
                 row.setContentsMargins(22, 0, 0, 0)    # under the checkbox text: box 14 + gap 8
-                cap = QLabel("Länge")
+                cap = QLabel(tr("Länge"))
                 cap.setObjectName("caption")
                 row.addWidget(cap)
                 row.addWidget(self.countdown_s)
                 row.addStretch(1)
                 fl.addLayout(row)
         self.countdown_s.valueChanged.connect(self.save)
-        self.play_btn = QPushButton(theme.icon("play", theme.ON_ACCENT), "Playlist abspielen")
+        self.play_btn = theme.accent_icon(QPushButton(), "play", tr("Playlist abspielen"))
         self.play_btn.setObjectName("primary")
         fl.addSpacing(4)
         fl.addWidget(self.play_btn)
@@ -246,7 +242,7 @@ class PlayerPanel(QWidget):
             script = has_script(path)
             n_script += script
             name = Path(path).name
-            item = QListWidgetItem(name if script else f"{name}   · kein Script")
+            item = QListWidgetItem(name if script else tr("{0}   · kein Script", name))
             item.setData(PATH_ROLE, path)
             item.setToolTip(path)
             if i == pl.current:
@@ -257,7 +253,7 @@ class PlayerPanel(QWidget):
             self.list.addItem(item)
         self.list.blockSignals(False)
         n = len(pl.items)
-        self.meta.setText(f"{n} Video{'s' if n != 1 else ''} · {n_script} mit Script" if n else "Leer")
+        self.meta.setText(plural(n, "{0} Video · {1} mit Script", "{0} Videos · {1} mit Script", n_script) if n else tr("Leer"))
         self.list.setVisible(n > 0)
         self.empty.setVisible(n == 0)
         self.play_btn.setEnabled(pl.first_playable() is not None)
@@ -287,14 +283,14 @@ class PlayerPanel(QWidget):
 
     def add_dialog(self):
         exts = " ".join(f"*{e}" for e in sorted(VIDEO_EXTS))
-        paths, _ = QFileDialog.getOpenFileNames(self, "Videos hinzufügen", self.qs.value("last_dir", ""),
-                                                f"Videos ({exts});;Alle Dateien (*)")
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("Videos hinzufügen"), self.qs.value("last_dir", ""),
+                                                tr("Videos ({0});;Alle Dateien (*)", exts))
         if paths:
             self.qs.setValue("last_dir", str(Path(paths[0]).parent))
             self.add_paths(paths)
 
     def add_folder_dialog(self):
-        d = QFileDialog.getExistingDirectory(self, "Ordner hinzufügen", self.qs.value("last_dir", ""))
+        d = QFileDialog.getExistingDirectory(self, tr("Ordner hinzufügen"), self.qs.value("last_dir", ""))
         if d:
             self.qs.setValue("last_dir", d)
             self.add_paths([d])
@@ -306,16 +302,16 @@ class PlayerPanel(QWidget):
         self.refresh()
 
     def load_dialog(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Playlist laden", self.qs.value("last_dir", ""),
-                                              "Playlist (*.m3u *.m3u8);;Alle Dateien (*)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Playlist laden"), self.qs.value("last_dir", ""),
+                                              tr("Playlist (*.m3u *.m3u8);;Alle Dateien (*)"))
         if path:
             self.playlist.load_m3u(path)
             self.refresh()
 
     def save_dialog(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Playlist speichern",
+        path, _ = QFileDialog.getSaveFileName(self, tr("Playlist speichern"),
                                               str(Path(self.qs.value("last_dir", "") or ".") / "playlist.m3u"),
-                                              "Playlist (*.m3u)")
+                                              tr("Playlist (*.m3u)"))
         if path:
             if not path.lower().endswith((".m3u", ".m3u8")):
                 path += ".m3u"

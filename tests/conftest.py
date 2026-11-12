@@ -17,6 +17,7 @@ from videogen import make_video  # noqa: E402
 _home = tempfile.mkdtemp(prefix="vtf-tests-")
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_home, "config")
 os.environ["XDG_DATA_HOME"] = os.path.join(_home, "data")
+os.environ["VTF_LANG"] = "de"      # the tests check German texts
 
 
 @pytest.fixture

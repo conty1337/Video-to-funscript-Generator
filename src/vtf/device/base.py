@@ -6,6 +6,8 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from ..i18n import tr
+
 
 class DeviceError(Exception):
     pass
@@ -18,7 +20,7 @@ class Device(ABC):
     main thread while connections may run in background threads.
     """
 
-    name: str = "Gerät"
+    name: str = tr("Gerät")
 
     def __init__(self):
         self._listeners: list[Callable[[str], None]] = []

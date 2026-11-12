@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
 from .. import editing
 from ..funscript import Action
+from ..i18n import tr
 from . import theme
 
 HIT_PX = 7
@@ -260,7 +261,7 @@ class CurveWidget(QWidget):
             if len(s) > 5 and s[5]:                                                  # set end
                 p.drawLine(QPointF(x1, r.top()), QPointF(x1, r.bottom()))
                 p.fillRect(QRectF(x1 - 5, r.top(), 5, 10), theme.qcolor(theme.ACCENT, 0.7))
-            for ms, label, y in ((cin, "drin", r.bottom() - 4), (cout, "raus", r.top() + 12)):
+            for ms, label, y in ((cin, tr("drin"), r.bottom() - 4), (cout, tr("raus"), r.top() + 12)):
                 if ms is None:
                     continue
                 x = self._x(ms)
@@ -290,13 +291,13 @@ class CurveWidget(QWidget):
             lx = max(x0, r.left()) + 4
             p.drawPixmap(int(lx), int(r.bottom() - 22), theme.icon_pixmap("scissors", theme.TEXT_2, 14))
             p.setPen(theme.qcolor(theme.TEXT_2))
-            p.drawText(QPointF(lx + 18, r.bottom() - 10), "Schnitt")
+            p.drawText(QPointF(lx + 18, r.bottom() - 10), tr("Schnitt"))
         if self.cut_open is not None:
             x = self._x(self.cut_open)
             p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.9), 1, Qt.DashLine))
             p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
             p.drawPixmap(int(x + 4), int(r.bottom() - 22), theme.icon_pixmap("scissors", theme.TEXT_2, 14))
-            p.drawText(QPointF(x + 22, r.bottom() - 10), "Schnitt ab hier, Ende fehlt")
+            p.drawText(QPointF(x + 22, r.bottom() - 10), tr("Schnitt ab hier, Ende fehlt"))
         # script check: amber marks along the top
         for a, b in self.issues:
             x0, x1 = self._x(a), self._x(b)
@@ -307,6 +308,7 @@ class CurveWidget(QWidget):
             p.setPen(Qt.NoPen)
             p.setBrush(theme.qcolor(theme.ACCENT, 0.85))
             p.drawPolygon(QPolygonF([QPointF(cx - 5, r.top()), QPointF(cx + 5, r.top()), QPointF(cx, r.top() + 7)]))
+        p.setBrush(Qt.NoBrush)                  # the script line below must not be filled
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)
@@ -334,6 +336,7 @@ class CurveWidget(QWidget):
                 pt = QPointF(self._x(a.at), self._y(a.pos / 100))
                 path.moveTo(pt) if k == 0 else path.lineTo(pt)
             p.setPen(QPen(theme.qcolor(theme.ACCENT), 1.5))
+            p.setBrush(Qt.NoBrush)              # a line, never a filled shape
             p.drawPath(path)
             if self.view_ms < 120_000:
                 for i in vis:

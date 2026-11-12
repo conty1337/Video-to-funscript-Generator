@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 
 from .funscript import Action
+from .i18n import tr
 
 Clip = list[tuple[int, int]]          # (ms relative to the first point, position)
 
@@ -112,8 +113,8 @@ def in_rect(actions: list[Action], t0: float, t1: float, p0: float, p1: float) -
 
 
 #: rhythm patterns: (code, label)
-PATTERNS = (("even", "Gleichmäßig"), ("faster", "Schneller werdend"), ("slower", "Langsamer werdend"),
-            ("double", "Doppelschlag"), ("wave", "Wellen (Tiefe schwankt)"))
+PATTERNS = (("even", tr("Gleichmäßig")), ("faster", tr("Schneller werdend")), ("slower", tr("Langsamer werdend")),
+            ("double", tr("Doppelschlag")), ("wave", tr("Wellen (Tiefe schwankt)")))
 
 
 def _rhythm_points(start: int, end: int, bpm: float, lo: int, hi: int, pattern: str) -> list[Action]:

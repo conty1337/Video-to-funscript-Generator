@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .batch import VIDEO_EXTS
 from .funscript import Funscript, funscript_path_for
+from .i18n import tr
 
 STROKE_MIN = 10          # a step of at least this many positions is a stroke
 HEAT_BUCKETS = 120       # slices of the heatmap preview
@@ -82,11 +83,11 @@ def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
 
 
 SORTS = {
-    "name": ("Name", lambda e: e.name.lower(), False),
-    "rating": ("Bewertung", lambda e: (e.rating, e.name.lower()), True),
-    "tempo": ("Tempo", lambda e: e.avg_speed, True),
-    "new": ("Neueste", lambda e: e.mtime, True),
-    "length": ("Länge", lambda e: e.duration_ms, True),
+    "name": (tr("Name"), lambda e: e.name.lower(), False),
+    "rating": (tr("Bewertung"), lambda e: (e.rating, e.name.lower()), True),
+    "tempo": (tr("Tempo"), lambda e: e.avg_speed, True),
+    "new": (tr("Neueste"), lambda e: e.mtime, True),
+    "length": (tr("Länge"), lambda e: e.duration_ms, True),
 }
 
 

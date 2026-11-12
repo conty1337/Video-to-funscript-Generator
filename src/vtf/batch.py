@@ -10,6 +10,7 @@ from . import __version__
 from .analysis import AnalysisCancelled, AnalysisSettings, analyze_motion_cached
 from .funscript import Funscript, funscript_path_for
 from .generator import GeneratorSettings, generate
+from .i18n import tr
 from .prep import is_prepared, load_prep
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts"}
@@ -53,7 +54,7 @@ def make_metadata(video: str | Path) -> dict:
     return {
         "title": Path(video).stem,
         "creator": "Video-to-Funscript Generator",
-        "description": "Automatisch erzeugt",
+        "description": tr("Automatisch erzeugt"),
         "notes": f"vtf {__version__}",
     }
 
@@ -67,7 +68,7 @@ def run_batch(folder: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
     log = log or (lambda _m: None)
     videos = find_videos(folder, recursive)
     res = BatchResult()
-    log(f"{len(videos)} Videos gefunden.")
+    log(tr("{0} Videos gefunden.", len(videos)))
     for i, v in enumerate(videos):
         if cancel and cancel():
             res.cancelled = True
@@ -76,18 +77,18 @@ def run_batch(folder: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
             on_file(i, len(videos), v)
         if not overwrite and is_analyzed(v):
             res.skipped.append(v)
-            log(f"Übersprungen (bereits analysiert): {v.name}")
+            log(tr("Übersprungen (bereits analysiert): {0}", v.name))
             continue
         try:
             prepared = is_prepared(v)
             out = process_video(v, an, gen, on_progress, cancel)
             res.done.append(v)
-            log(f"Fertig: {v.name} -> {out.name}" + ("  (Tracking, vorbereitet)" if prepared else ""))
+            log(tr("Fertig: {0} -> {1}", v.name, out.name) + (tr("  (Tracking, vorbereitet)") if prepared else ""))
         except AnalysisCancelled:
             res.cancelled = True
             log("Abgebrochen.")
             break
         except Exception as e:  # keep going with the next file
             res.failed.append((v, str(e)))
-            log(f"Fehler bei {v.name}: {e}")
+            log(tr("Fehler bei {0}: {1}", v.name, e))
     return res

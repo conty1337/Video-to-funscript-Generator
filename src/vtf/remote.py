@@ -15,6 +15,8 @@ import time
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .i18n import tr
+
 DEFAULT_PORT = 8765
 MAX_WRONG = 8
 LOCK_S = 60
@@ -83,36 +85,36 @@ class RemoteServer:
                 ip = self.client_address[0]
                 n, until = server._wrong.get(ip, (0, 0.0))
                 if until > time.monotonic():
-                    self._json(429, {"error": "Zu viele falsche PINs, kurz warten"})
+                    self._json(429, {"error": tr("Zu viele falsche PINs, kurz warten")})
                     return False
                 if secrets.compare_digest(str(pin), server.pin):
                     server._wrong.pop(ip, None)
                     return True
                 n += 1
                 server._wrong[ip] = (0, time.monotonic() + LOCK_S) if n >= MAX_WRONG else (n, 0.0)
-                self._json(401, {"error": "Falsche PIN"})
+                self._json(401, {"error": tr("Falsche PIN")})
                 return False
 
             def do_GET(self):
                 path, _, query = self.path.partition("?")
                 if path in ("/", "/index.html"):
-                    self._send(200, PAGE.encode(), "text/html; charset=utf-8")
+                    self._send(200, page().encode(), "text/html; charset=utf-8")
                 elif path == "/api/state":
                     params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                     if self._authorized(params.get("pin", "")):
                         self._json(200, server.get_state())
                 else:
-                    self._json(404, {"error": "nicht gefunden"})
+                    self._json(404, {"error": tr("nicht gefunden")})
 
             def do_POST(self):
                 if self.path != "/api/cmd":
-                    self._json(404, {"error": "nicht gefunden"})
+                    self._json(404, {"error": tr("nicht gefunden")})
                     return
                 try:
                     n = min(int(self.headers.get("Content-Length", 0)), 4096)
                     data = json.loads(self.rfile.read(n) or b"{}")
                 except (ValueError, OSError):
-                    self._json(400, {"error": "ungültig"})
+                    self._json(400, {"error": tr("ungültig")})
                     return
                 if not isinstance(data, dict) or not self._authorized(data.pop("pin", "")):
                     return
@@ -418,3 +420,53 @@ tm=setTimeout(()=>cmd({cmd:'set',[id]:+e.target.value}),150)};
 poll();setInterval(poll,700);
 </script></body></html>
 """
+
+
+#: the page's German text -> English (exact pieces of the page, quotes included)
+PAGE_EN = (
+    ('<html lang="de">', '<html lang="en">'),
+    ("<title>Fernbedienung</title>", "<title>Remote</title>"),
+    ("<h1>Fernbedienung</h1>", "<h1>Remote</h1>"),
+    ('id="title">Fernbedienung<', 'id="title">Remote<'),
+    ("PIN aus der App eingeben: Gerät → Handy-Fernbedienung", "Enter the PIN from the app: Device → Phone remote"),
+    (">Verbinden</button>", ">Connect</button>"),
+    ('"Verlauf des Musters"', '"Pattern curve"'),
+    ('>Muster</button>', '>Pattern</button>'), ('>Ablauf</button>', '>Program</button>'),
+    ('>Zufall</button>', '>Random</button>'),
+    ('aria-label="Zurück"', 'aria-label="Back"'), ('aria-label="Auswahl"', 'aria-label="Choice"'),
+    ('aria-label="Weiter"', 'aria-label="Next"'), ("Nächster Abschnitt", "Next section"),
+    ('"Stelle im Video"', '"Position in the video"'), ('"Voriges Video"', '"Previous video"'),
+    ('"10 Sekunden zurück"', '"Back 10 seconds"'), ('"10 Sekunden vor"', '"Forward 10 seconds"'),
+    ('"Nächstes Video"', '"Next video"'), ('aria-label="Abspielen"', 'aria-label="Play"'),
+    ("Keine Playlist. Videos in der App im Player-Modus (Strg+P) in die Liste ziehen.",
+     "No playlist. Drag videos into the list in the app's player mode (Ctrl+P)."),
+    ("<span>Tiefe</span>", "<span>Depth</span>"), ('"Weniger tief"', '"Less deep"'),
+    ('aria-label="Tiefe"', 'aria-label="Depth"'), ('aria-label="Tiefer"', 'aria-label="Deeper"'),
+    ('"Langsamer"', '"Slower"'), ('"Schneller"', '"Faster"'),
+    (">Not-Aus</button>", ">E-stop</button>"),
+    ("'Keine Verbindung zur App'", "'No connection to the app'"),
+    ("'Kein Script zu diesem Video'", "'No script for this video'"), ("'Kein Video offen'", "'No video open'"),
+    ("'Musik: Gerät folgt dem Takt'", "'Music: the device follows the beat'"),
+    ("'Nichts ausgewählt'", "'Nothing selected'"),
+    ("'Abspielen'", "'Play'"), ("'Stopp'", "'Stop'"),
+    ("'Verschiebt den ganzen Ablauf'", "'Shifts the whole program'"),
+    ("'Gilt für alle Abschnitte, auch die nächsten'", "'Applies to all sections, the coming ones too'"),
+    ("'Hübe/min'", "'strokes/min'"), ("' von '", "' of '"),
+    ("'mit Script'", "'with script'"), ("'ohne Script'", "'without script'"),
+    ("'Ein Video aus der Liste antippen'", "'Tap a video in the list'"), ("'noch '", "'left '"),
+)
+DEFAULT_ACCENT = "#e5a043"
+
+
+def page(accent: str | None = None) -> str:
+    """The phone page in the app's language and with its accent colour."""
+    from .i18n import current, load_ui
+
+    accent = accent or str(load_ui().get("accent") or DEFAULT_ACCENT)
+    out = PAGE
+    if current() == "en":
+        for de, en in PAGE_EN:
+            out = out.replace(de, en)
+    a = accent if len(accent) == 7 and accent.startswith("#") else DEFAULT_ACCENT
+    r, g, b = (int(a[i:i + 2], 16) for i in (1, 3, 5))
+    return out.replace(DEFAULT_ACCENT, a).replace("rgba(229,160,67,", f"rgba({r},{g},{b},")

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import cv2
 
+from .i18n import tr
+
 
 def opencl_available() -> bool:
     try:
@@ -47,11 +49,10 @@ def opencl_hint() -> str:
     if opencl_device_name():
         return ""
     if not any(os.path.exists(p) for p in _LOADER_PATHS):
-        return "Kein OpenCL-Loader gefunden. Installieren: sudo dnf install ocl-icd mesa-libOpenCL"
+        return tr("Kein OpenCL-Loader gefunden. Installieren: sudo dnf install ocl-icd mesa-libOpenCL")
     icds = os.listdir(_ICD_DIR) if os.path.isdir(_ICD_DIR) else []
     if not icds:
-        return "Kein OpenCL-Treiber installiert. Für AMD: sudo dnf install mesa-libOpenCL"
+        return tr("Kein OpenCL-Treiber installiert. Für AMD: sudo dnf install mesa-libOpenCL")
     if any("rusticl" in n for n in icds) and not os.environ.get("RUSTICL_ENABLE"):
-        return "Mesa rusticl ist installiert, aber nicht aktiv: mit RUSTICL_ENABLE=radeonsi starten"
-    return ("OpenCL-Treiber vorhanden (" + ", ".join(sorted(icds)) + "), aber kein Gerät gefunden. "
-            "Prüfen mit: RUSTICL_ENABLE=radeonsi clinfo -l")
+        return tr("Mesa rusticl ist installiert, aber nicht aktiv: mit RUSTICL_ENABLE=radeonsi starten")
+    return (tr("OpenCL-Treiber vorhanden (") + ", ".join(sorted(icds)) + tr("), aber kein Gerät gefunden. Prüfen mit: RUSTICL_ENABLE=radeonsi clinfo -l"))

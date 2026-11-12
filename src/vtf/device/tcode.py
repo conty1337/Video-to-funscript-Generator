@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import socket
 
+from ..i18n import tr
 from .base import Device, DeviceError
 
 DEFAULT_PORT = "/dev/ttyUSB0"
@@ -28,7 +29,7 @@ class TCodeDevice(Device):
     def __init__(self, address: str = DEFAULT_PORT):
         super().__init__()
         self.address = address.strip() or DEFAULT_PORT
-        self.name = "TCode-Gerät"
+        self.name = tr("TCode-Gerät")
         self._fd: int | None = None
         self._sock: socket.socket | None = None
         self._udp: tuple[str, int] | None = None
@@ -45,14 +46,14 @@ class TCodeDevice(Device):
                 self._udp = (host or "127.0.0.1", int(port))
                 self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             except (ValueError, OSError) as e:
-                raise DeviceError(f"Ungültige Adresse {self.address} (Beispiel: udp://192.168.0.50:8000)") from e
-            self.name = f"TCode über WLAN ({self._udp[0]})"
+                raise DeviceError(tr("Ungültige Adresse {0} (Beispiel: udp://192.168.0.50:8000)", self.address)) from e
+            self.name = tr("TCode über WLAN ({0})", self._udp[0])
         else:
             try:
                 fd = os.open(self.address, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
             except OSError as e:
-                hint = " Ist der Benutzer in der Gruppe „dialout“?" if e.errno == 13 else ""
-                raise DeviceError(f"{self.address} lässt sich nicht öffnen: {e.strerror}.{hint}") from e
+                hint = tr(" Ist der Benutzer in der Gruppe „dialout“?") if e.errno == 13 else ""
+                raise DeviceError(tr("{0} lässt sich nicht öffnen: {1}.{2}", self.address, e.strerror, hint)) from e
             try:
                 import termios
                 import tty
@@ -67,7 +68,7 @@ class TCodeDevice(Device):
                 except (OSError, termios.error):
                     pass
             self._fd = fd
-            self.name = f"TCode über USB ({os.path.basename(self.address)})"
+            self.name = tr("TCode über USB ({0})", os.path.basename(self.address))
         self._emit(f"Verbunden: {self.name}")
 
     def disconnect(self) -> None:
@@ -83,7 +84,7 @@ class TCodeDevice(Device):
         if self._sock is not None:
             self._sock.close()
             self._sock = None
-        self._emit("Getrennt")
+        self._emit(tr("Getrennt"))
 
     def write(self, line: str) -> None:
         data = (line + "\n").encode()
@@ -94,9 +95,9 @@ class TCodeDevice(Device):
                 elif self._fd is not None:
                     os.write(self._fd, data)
                 else:
-                    raise DeviceError("nicht verbunden")
+                    raise DeviceError(tr("nicht verbunden"))
         except OSError as e:
-            raise DeviceError(f"TCode-Gerät: {e}") from e
+            raise DeviceError(tr("TCode-Gerät: {0}", e)) from e
 
     def move(self, position: float, duration_ms: int) -> None:
         self.write(command("L0", position, duration_ms))

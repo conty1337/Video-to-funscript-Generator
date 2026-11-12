@@ -7,14 +7,16 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from .. import patterns as P
+from ..i18n import dec, tr
 from . import theme
 
 
-def draw_curve(p: QPainter, rect: QRectF, pts, lo: float = 0, hi: float = 100, color: str = theme.ACCENT,
+def draw_curve(p: QPainter, rect: QRectF, pts, lo: float = 0, hi: float = 100, color: str | None = None,
                width: float = 1.6, fill: bool = True) -> None:
     """Draw points (ms, 0..1) into rect; positions mapped to the stroke range lo..hi."""
     if len(pts) < 2:
         return
+    color = color or theme.ACCENT
     t_end = pts[-1][0] or 1.0
     lo, hi = sorted((lo, hi))
 
@@ -38,7 +40,7 @@ def draw_curve(p: QPainter, rect: QRectF, pts, lo: float = 0, hi: float = 100, c
     p.drawPath(path)
 
 
-def curve_pixmap(pts, w: int, h: int, color: str = theme.ACCENT, ratio: float = 2.0) -> QPixmap:
+def curve_pixmap(pts, w: int, h: int, color: str | None = None, ratio: float = 2.0) -> QPixmap:
     pm = QPixmap(int(w * ratio), int(h * ratio))
     pm.fill(Qt.transparent)
     pm.setDevicePixelRatio(ratio)
@@ -128,7 +130,7 @@ class PatternView(QWidget):
         p.fillRect(band, theme.qcolor(theme.TEXT, 0.025))
         if not self._pts:
             p.setPen(QColor(theme.MUTED))
-            p.drawText(r, Qt.AlignCenter, "Kein Muster – Bausteine hinzufügen")
+            p.drawText(r, Qt.AlignCenter, tr("Kein Muster – Bausteine hinzufügen"))
             return
         total = self._pts[-1][0] or 1.0
         one = total / self.cycles
@@ -148,7 +150,7 @@ class PatternView(QWidget):
         draw_curve(p, r, self._pts, self.lo, self.hi, width=2.0)
         p.setPen(QColor(theme.MUTED))
         p.drawText(QRectF(r.left(), r.bottom() + 4, r.width(), 16), Qt.AlignLeft | Qt.AlignVCenter,
-                   f"{self.cycles} Durchläufe · je {one / 1000:.1f} s".replace(".", ","))
+                   dec(tr("{0} Durchläufe · je {1:.1f} s", self.cycles, one / 1000)))
         if self.phase is not None:
             x = r.left() + r.width() * self.phase   # phase over all runs shown
             p.setPen(QPen(QColor(theme.TEXT), 1.5))
@@ -227,7 +229,7 @@ class ProgramView(QWidget):
         prog = self.program
         if prog is None or not prog.steps or prog.total_ms <= 0:
             p.setPen(QColor(theme.MUTED))
-            p.drawText(r, Qt.AlignCenter, "Keine Schritte – Schritt hinzufügen")
+            p.drawText(r, Qt.AlignCenter, tr("Keine Schritte – Schritt hinzufügen"))
             return
         total = prog.total_ms
         starts = prog.starts()
@@ -253,10 +255,10 @@ class ProgramView(QWidget):
                 p.restore()
             p.setPen(QColor(theme.TEXT if on else theme.TEXT_2))
             p.drawText(QRectF(x0 + 3, self.rect().top() + 4, x1 - x0 - 6, 18), Qt.AlignLeft | Qt.AlignVCenter,
-                       p.fontMetrics().elidedText(st.pattern, Qt.ElideRight, int(max(0, x1 - x0 - 6))))
+                       p.fontMetrics().elidedText(P.label(st.pattern), Qt.ElideRight, int(max(0, x1 - x0 - 6))))
             p.setPen(QColor(theme.MUTED))
             w = int(max(0, x1 - x0 - 6))
-            for k, lab in enumerate((f"{st.minutes:g} min".replace(".", ","), f"{st.bpm}/min · {st.depth} %")):
+            for k, lab in enumerate((dec(f"{st.minutes:g} min"), tr("{0}/min · {1} %", st.bpm, st.depth))):
                 p.drawText(QRectF(x0 + 3, r.bottom() + 3 + 15 * k, x1 - x0 - 6, 15), Qt.AlignLeft | Qt.AlignVCenter,
                            p.fontMetrics().elidedText(lab, Qt.ElideRight, w))
 

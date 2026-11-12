@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from .. import patterns as P
 from ..editing import PATTERNS
+from ..i18n import tr
 from .pattern_view import pattern_icon
 
 
@@ -35,10 +36,10 @@ def _secs(v: float, maximum: float) -> QDoubleSpinBox:
 class RhythmDialog(QDialog):
     def __init__(self, start_ms: float, end_ms: float, duration_ms: float, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Rhythmus einfügen")
+        self.setWindowTitle(tr("Rhythmus einfügen"))
         lay = QVBoxLayout(self)
         lay.setSizeConstraint(QLayout.SetMinimumSize)    # see theme.DialogFitter
-        info = QLabel("Ersetzt die Punkte im Bereich durch einen Rhythmus oder ein Muster aus der Muster-Steuerung.")
+        info = QLabel(tr("Ersetzt die Punkte im Bereich durch einen Rhythmus oder ein Muster aus der Muster-Steuerung."))
         info.setObjectName("caption")
         info.setWordWrap(True)
         lay.addWidget(info)
@@ -50,14 +51,14 @@ class RhythmDialog(QDialog):
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.addWidget(self.start)
-        rl.addWidget(QLabel("bis"))
+        rl.addWidget(QLabel(tr("bis")))
         rl.addWidget(self.end)
-        form.addRow("Bereich", rng)
+        form.addRow(tr("Bereich"), rng)
         self.bpm = QSpinBox()
         self.bpm.setRange(10, 300)
         self.bpm.setValue(60)
-        self.bpm.setSuffix(" Hübe/min")
-        form.addRow("Tempo", self.bpm)
+        self.bpm.setSuffix(tr(" Hübe/min"))
+        form.addRow(tr("Tempo"), self.bpm)
         self.pattern = QComboBox()
         self.pattern.setIconSize(QSize(72, 24))
         for code, label in PATTERNS:
@@ -68,7 +69,7 @@ class RhythmDialog(QDialog):
             self.pattern.insertSeparator(self.pattern.count())
         for p in lib:
             self.pattern.addItem(pattern_icon(p, 72, 24), f"{p.name}  ·  {p.category}", p)
-        form.addRow("Muster", self.pattern)
+        form.addRow(tr("Muster"), self.pattern)
         depth = QWidget()
         dl = QHBoxLayout(depth)
         dl.setContentsMargins(0, 0, 0, 0)
@@ -77,13 +78,13 @@ class RhythmDialog(QDialog):
             sp.setRange(0, 100)
             sp.setValue(v)
         dl.addWidget(self.lo)
-        dl.addWidget(QLabel("bis"))
+        dl.addWidget(QLabel(tr("bis")))
         dl.addWidget(self.hi)
-        form.addRow("Tiefe", depth)
+        form.addRow(tr("Tiefe"), depth)
         lay.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Einfügen")
-        bb.button(QDialogButtonBox.Cancel).setText("Abbrechen")
+        bb.button(QDialogButtonBox.Ok).setText(tr("Einfügen"))
+        bb.button(QDialogButtonBox.Cancel).setText(tr("Abbrechen"))
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)

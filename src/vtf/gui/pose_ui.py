@@ -7,6 +7,7 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QMessageBox, QProgressDialog, QWidget
 
 from .. import pose
+from ..i18n import tr
 
 
 class DownloadWorker(QThread):
@@ -35,14 +36,12 @@ def ensure_models(parent: QWidget | None) -> bool:
         return True
     mb = pose.download_mb()
     ans = QMessageBox.question(
-        parent, "KI-Modelle laden",
-        f"Für die Körpererkennung werden einmalig zwei Modelle geladen (zusammen etwa {mb} MB, "
-        "von download.openmmlab.com, Lizenz Apache-2.0). Sie bleiben auf diesem Rechner unter\n"
-        f"{pose.models_dir()}\nund laufen danach ohne Internet.\n\nJetzt laden?")
+        parent, tr("KI-Modelle laden"),
+        tr("Für die Körpererkennung werden einmalig zwei Modelle geladen (zusammen etwa {0} MB, von download.openmmlab.com, Lizenz Apache-2.0). Sie bleiben auf diesem Rechner unter\n{1}\nund laufen danach ohne Internet.\n\nJetzt laden?", mb, pose.models_dir()))
     if ans != QMessageBox.Yes:
         return False
-    dlg = QProgressDialog("KI-Modelle werden geladen …", "Abbrechen", 0, 1000, parent)
-    dlg.setWindowTitle("KI-Modelle laden")
+    dlg = QProgressDialog(tr("KI-Modelle werden geladen …"), tr("Abbrechen"), 0, 1000, parent)
+    dlg.setWindowTitle(tr("KI-Modelle laden"))
     dlg.setMinimumDuration(0)
     dlg.setAutoClose(False)
     dlg.setAutoReset(False)
@@ -52,7 +51,7 @@ def ensure_models(parent: QWidget | None) -> bool:
     def prog(p: float, name: str):
         dlg.setValue(int(p * 1000))
         if name:
-            dlg.setLabelText(f"KI-Modelle werden geladen … {p * mb:.0f} von {mb} MB")
+            dlg.setLabelText(tr("KI-Modelle werden geladen … {0:.0f} von {1} MB", p * mb, mb))
 
     worker.progress.connect(prog)
     worker.failed.connect(errors.append)
@@ -63,7 +62,7 @@ def ensure_models(parent: QWidget | None) -> bool:
     worker.stop()
     worker.wait()
     if errors and errors[0]:
-        QMessageBox.warning(parent, "KI-Modelle laden", f"Laden fehlgeschlagen: {errors[0]}")
+        QMessageBox.warning(parent, tr("KI-Modelle laden"), tr("Laden fehlgeschlagen: {0}", errors[0]))
     return pose.installed()
 
 

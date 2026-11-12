@@ -55,6 +55,8 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 34 | Bibliothek (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche, Sortierung und Sternen | ✅ |
 | 35 | QR-Code für die Handy-Fernbedienung (PIN schon drin) | ✅ |
 | 36 | Sitzungs-Statistik (nur lokal): Spielzeit, Hübe, Lieblingsvideos und -muster | ✅ |
+| 37 | Sprachen: Deutsch und Englisch (Ansicht → Sprache) | ✅ |
+| 38 | Akzentfarbe: sechs Vorgaben oder eine eigene Farbe (Ansicht → Akzentfarbe) | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -330,6 +332,15 @@ Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Edi
 Gezählt wird, was mit Script abgespielt wird, und Muster/Abläufe/Zufall/Musik
 aus der Muster-Steuerung. Alles bleibt auf dem Rechner
 (`~/.config/video-to-funscript/stats.json`), „Zurücksetzen“ löscht es.
+
+**Sprache und Akzentfarbe** (Menü Ansicht): Die Oberfläche gibt es auf Deutsch
+und Englisch, voreingestellt ist die Sprache des Systems. Die Sprache wechselt
+nach einem Neustart, als AppImage startet die App auf Wunsch gleich neu. Die
+Akzentfarbe (Kurve, Hauptknopf, Fortschritt, Bereich 1 beim Tracking, auch auf
+der Handy-Fernbedienung) wechselt sofort: Bernstein, Blau, Türkis, Grün,
+Violett, Pink oder über „Eigene Farbe…“ jede beliebige, mit Vorschau beim
+Aussuchen. Ist die Farbe dunkel, wird die Schrift darauf weiß. Beides steht in
+`~/.config/video-to-funscript/ui.json`.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

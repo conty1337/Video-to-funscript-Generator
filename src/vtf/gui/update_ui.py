@@ -10,6 +10,7 @@ from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtWidgets import QMessageBox, QPushButton
 
 from .. import __version__, updater
+from ..i18n import tr
 from .workers import UpdateWorker
 
 CHECK_DELAY_MS = 4000
@@ -32,7 +33,7 @@ class UpdateController(QObject):
         self.button.clicked.connect(self._button_clicked)
         window.statusBar().addPermanentWidget(self.button)
 
-        self.auto_action = QAction("Automatisch aktualisieren", window)
+        self.auto_action = QAction(tr("Automatisch aktualisieren"), window)
         self.auto_action.setCheckable(True)
         self.auto_action.setChecked(self.auto_enabled())
         self.auto_action.toggled.connect(lambda on: self.settings.setValue("auto_update", on))
@@ -46,11 +47,11 @@ class UpdateController(QObject):
 
     def add_menu_entries(self, menu) -> None:
         menu.addSeparator()
-        a = QAction("Nach Updates suchen", self.win)
+        a = QAction(tr("Nach Updates suchen"), self.win)
         a.triggered.connect(lambda: self.check(interactive=True))
         menu.addAction(a)
         menu.addAction(self.auto_action)
-        info = QAction(f"Version {__version__}", self.win)
+        info = QAction(tr("Version {0}", __version__), self.win)
         info.setEnabled(False)
         menu.addAction(info)
 
@@ -71,41 +72,41 @@ class UpdateController(QObject):
     def _checked(self, release):
         if release is None:
             if self.interactive:
-                QMessageBox.information(self.win, "Updates", f"Version {__version__} ist aktuell.")
+                QMessageBox.information(self.win, tr("Updates"), tr("Version {0} ist aktuell.", __version__))
             return
         self.release = release
         if updater.can_self_update() and (self.auto_enabled() or self.interactive):
             self._install()
         else:
-            self._show(f"Version {release.version} verfügbar")
+            self._show(tr("Version {0} verfügbar", release.version))
             if self.interactive:
                 self._button_clicked()
 
     def _check_failed(self, msg: str):
         if self.interactive:
-            QMessageBox.warning(self.win, "Updates",
-                                f"Die Suche nach Updates ist fehlgeschlagen:\n{msg}")
+            QMessageBox.warning(self.win, tr("Updates"),
+                                tr("Die Suche nach Updates ist fehlgeschlagen:\n{0}", msg))
 
     # ------------------------------------------------------------ install
     def _install(self):
-        self._show(f"Lade Version {self.release.version}  0 %", enabled=False)
+        self._show(tr("Lade Version {0}  0 %", self.release.version), enabled=False)
         self.worker = UpdateWorker("install", self.release)
         self.worker.progress.connect(
-            lambda p: self.button.setText(f"Lade Version {self.release.version} {p * 100:3.0f} %"))
+            lambda p: self.button.setText(tr("Lade Version {0} {1:3.0f} %", self.release.version, p * 100)))
         self.worker.installed.connect(self._installed)
         self.worker.failed.connect(self._install_failed)
         self.worker.start()
 
     def _installed(self, path: str):
         self.installed_path = Path(path)
-        self._show(f"Version {self.release.version} installiert · Neu starten")
+        self._show(tr("Version {0} installiert · Neu starten", self.release.version))
         if self.interactive:
             self._ask_restart()
 
     def _install_failed(self, msg: str):
-        self._show(f"Version {self.release.version} verfügbar")
+        self._show(tr("Version {0} verfügbar", self.release.version))
         if self.interactive:
-            QMessageBox.warning(self.win, "Update", f"Das Update konnte nicht installiert werden:\n{msg}")
+            QMessageBox.warning(self.win, tr("Update"), tr("Das Update konnte nicht installiert werden:\n{0}", msg))
 
     # ------------------------------------------------------------ ui
     def _show(self, text: str, enabled: bool = True):
@@ -120,21 +121,19 @@ class UpdateController(QObject):
             self.interactive = True
             self._install()
         elif self.release:
-            where = ("Diese Installation kann sich nicht selbst aktualisieren "
-                     "(kein AppImage oder keine Schreibrechte im Ordner).")
-            r = QMessageBox.question(self.win, "Update verfügbar",
-                                     f"Version {self.release.version} ist verfügbar.\n{where}\n\n"
-                                     "Download-Seite öffnen?")
+            where = (tr("Diese Installation kann sich nicht selbst aktualisieren (kein AppImage oder keine Schreibrechte im Ordner)."))
+            r = QMessageBox.question(self.win, tr("Update verfügbar"),
+                                     tr("Version {0} ist verfügbar.\n{1}\n\nDownload-Seite öffnen?", self.release.version, where))
             if r == QMessageBox.Yes:
                 QDesktopServices.openUrl(QUrl(self.release.page_url))
 
     def _ask_restart(self):
         notes = (self.release.notes[:600] + "…") if self.release and len(self.release.notes) > 600 else (
             self.release.notes if self.release else "")
-        text = f"Version {self.release.version} ist installiert. Jetzt neu starten?"
+        text = tr("Version {0} ist installiert. Jetzt neu starten?", self.release.version)
         if notes:
-            text += f"\n\nNeu in dieser Version:\n{notes}"
-        if QMessageBox.question(self.win, "Update installiert", text) == QMessageBox.Yes:
+            text += tr("\n\nNeu in dieser Version:\n{0}", notes)
+        if QMessageBox.question(self.win, tr("Update installiert"), text) == QMessageBox.Yes:
             self.restart_now()
 
     def restart_now(self):
