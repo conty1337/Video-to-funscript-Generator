@@ -64,7 +64,12 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
      wartet am Rand, und die Bewegung draußen wird weitergerechnet.
    - Ein Kästchen liegt daneben: an der Stelle **anpacken und richtig
      hinschieben**, dann neu analysieren. Die Zeit davor wird mit ausgeglichen.
-8. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video.
+8. **Prüfen lassen**: Orange Markierungen oben in der Kurve zeigen Stellen, die
+   einen zweiten Blick wert sind (zu schnell, Lücke, Zittern, plötzlich kleine
+   Hübe, Takt setzt aus, Bereich verloren). Knopf **Prüfung** in der Zeitleiste
+   = Liste, **F3** springt zur nächsten Stelle. Steht dort „Prüfung ok“, musst du
+   nicht das ganze Script ansehen.
+9. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video.
 
 ## Optionen (links unter „Optionen“)
 
@@ -157,6 +162,7 @@ Muster-Steuerung für einen Bereich ein.
 | E / D / A | Abschnitt-Ende, ganz drin, ganz draußen |
 | B, Alt+← / Alt+→ | Lesezeichen setzen, voriges/nächstes |
 | X, Umschalt+X | Schnitt Anfang/Ende, Schnitt bis zum nächsten Hub |
+| F3, Umschalt+F3 | nächste/vorige Stelle aus der Prüfung |
 | U, H | Umranden, Hub-Richtung (Tracking) |
 | Strg+Mausrad, Strg+0 | Video zoomen, Zoom zurücksetzen |
 | Strg+T | Rhythmus einfügen |

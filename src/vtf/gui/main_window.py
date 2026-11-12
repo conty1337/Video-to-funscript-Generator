@@ -11,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -47,6 +47,9 @@ from ..funscript import (
 from ..generator import generate, generate_axes
 from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, skip_target
 from ..prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
+from ..quality import check as check_script
+from ..quality import describe as describe_issue
+from ..quality import summary as issue_summary
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -64,6 +67,17 @@ from .workers import AnalysisWorker
 
 
 TRACK_UNDO = "tracking"      # undo entry holding the tracking sections, not script points
+
+
+class ElidedLabel(QLabel):
+    """A one-line label that ends in … when it does not fit (instead of being cut off)."""
+
+    def paintEvent(self, _ev):
+        p = QPainter(self)
+        p.setPen(self.palette().color(self.foregroundRole()))
+        p.setFont(self.font())
+        text = p.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
+        p.drawText(self.rect(), int(self.alignment()), text)
 
 
 class MainWindow(QMainWindow):
@@ -135,6 +149,7 @@ class MainWindow(QMainWindow):
         self._cut_start: float | None = None          # X pressed once: the cut starts here
         self._quiet_cache: tuple = ((), [])
         self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
+        self.issues: list = []                        # script check: places worth a look
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -147,10 +162,10 @@ class MainWindow(QMainWindow):
         self.curve_meta = QLabel("Noch nicht analysiert")
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
-        curve_hint = self.curve_hint = QLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
+        curve_hint = self.curve_hint = ElidedLabel("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · "
                            "Rechtsklick löscht · Mausrad zoomt")
         curve_hint.setObjectName("caption")
-        # long hint must not widen the window: it is cut off when there is no room
+        # long hint must not widen the window: shortened with … when there is no room
         curve_hint.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         curve_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
@@ -250,6 +265,9 @@ class MainWindow(QMainWindow):
         self._tool("waves", "Glätten", self.smooth_points, "Ausgewählte Punkte glätten (Strg+G)", tools)
         self._tool("bookmark", "Lesezeichen", self.add_bookmark, "Lesezeichen an der Abspielposition (B)", tools)
         self._tool("plus", "Rhythmus", self.insert_rhythm, "Rhythmus oder Muster einfügen (Strg+T)", tools)
+        tools.addSpacing(12)
+        self.check_btn = self._tool("alert", "Prüfung", self._issue_menu,
+                                    "Stellen, die einen zweiten Blick wert sind (F3 springt zur nächsten)", tools)
         head.addWidget(self.edit_tools)
         head.addWidget(curve_hint, 1)
         cl.addLayout(head)
@@ -412,6 +430,9 @@ class MainWindow(QMainWindow):
         self._act(m, "Schnitt: Anfang / Ende hier", self.toggle_cut, "X")
         self._act(m, "Schnitt bis zur nächsten Bewegung", self.cut_to_next_move, "Shift+X")
         self._act(m, "Schnitt hier entfernen", self.remove_cut_here)
+        m.addSeparator()
+        self._act(m, "Nächste Stelle zum Prüfen", lambda: self.jump_issue(1), "F3")
+        self._act(m, "Vorige Stelle zum Prüfen", lambda: self.jump_issue(-1), "Shift+F3")
         m = self.menuBar().addMenu("&Wiedergabe")
         self._act(m, "Abspielen/Pause", self.toggle_play, "Space")
         self._act(m, "Frame vor", lambda: self.step_frames(1), "Right")
@@ -611,6 +632,7 @@ class MainWindow(QMainWindow):
             self._status("Bereit zur Analyse")
         self.seek_frame(0)
         self._update_heat()
+        self._update_issues()
 
     def close_video(self):
         """Take the video out (asks first if the script is not saved)."""
@@ -703,6 +725,48 @@ class MainWindow(QMainWindow):
             speed = abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at)
         self.rail.set_speed(speed)
 
+    # ------------------------------------------------------------ script check
+    def _update_issues(self):
+        """Check the stroke script again (cheap): marks in the curve, count on the button."""
+        acts = self.stroke_actions()
+        lost = [(a, b) for a, b, _ar in self._lost_stretches()]
+        self.issues = check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost) if acts else []
+        self.curve.set_issues([(it.start_ms, it.end_ms) for it in self.issues])
+        n = len(self.issues)
+        self.check_btn.setText(f"{n} prüfen" if n else ("Prüfung ok" if acts else "Prüfung"))
+        self.check_btn.setToolTip(issue_summary(self.issues) + " · F3 springt zur nächsten Stelle"
+                                  if acts else "Noch kein Script")
+
+    def jump_issue(self, direction: int):
+        if not self.issues:
+            self._status("Prüfung: nichts aufgefallen" if self.stroke_actions() else "Noch kein Script")
+            return
+        cur = self._cur_ms()
+        if direction > 0:
+            it = next((i for i in self.issues if i.start_ms - 1000 > cur + 50), self.issues[0])
+        else:
+            it = next((i for i in reversed(self.issues) if i.start_ms - 1000 < cur - 50), self.issues[-1])
+        self._show_issue(it)
+
+    def _show_issue(self, it):
+        self.seek_ms(max(0, it.start_ms - 1000))            # a second before, to see it coming
+        k = self.issues.index(it) + 1 if it in self.issues else 0
+        self._status(f"Prüfung {k}/{len(self.issues)}: {describe_issue(it)}")
+
+    def _issue_menu(self):
+        menu = QMenu(self)
+        head = menu.addAction(issue_summary(self.issues) if self.stroke_actions() else "Noch kein Script")
+        head.setEnabled(False)
+        if self.issues:
+            menu.addSeparator()
+            for it in self.issues[:40]:
+                menu.addAction(describe_issue(it)).triggered.connect(
+                    lambda _c=False, x=it: self._show_issue(x))
+            if len(self.issues) > 40:
+                more = menu.addAction(f"… und {len(self.issues) - 40} weitere (F3)")
+                more.setEnabled(False)
+        self._run_menu(menu, self.check_btn.mapToGlobal(self.check_btn.rect().bottomLeft()))
+
     # ------------------------------------------------------------ cuts
     def _show_cuts(self):
         self.curve.set_cuts(self.cuts, self._cut_start)
@@ -711,6 +775,7 @@ class MainWindow(QMainWindow):
 
     def _cuts_changed(self):
         self._show_cuts()
+        self._update_issues()
         if self.video_path:
             try:
                 save_cuts(self.video_path, self.cuts)
@@ -1772,6 +1837,7 @@ class MainWindow(QMainWindow):
         self.heat.set_actions(self.stroke_actions(), dur)
 
     def _refresh_position(self):
+        self._update_issues()
         self.devices.set_actions(self.stroke_actions())
         self.devices.set_axes(self.all_axes())
         self.rail.set_position(position_at(self.stroke_actions(), self.curve.playhead_ms))

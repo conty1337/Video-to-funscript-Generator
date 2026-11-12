@@ -50,6 +50,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 29 | Bildrand und kurze Verdeckungen überbrücken, KI-Körpererkennung: Kästchen-Vorschlag und KI-Kontrolle | ✅ |
 | 30 | Toy umranden statt Rechteck, Rollen (Toy / Bezug), Hub-Richtung als Pfeil | ✅ |
 | 31 | Schnitte (X): Stellen ohne Handlung markieren, der Player springt darüber; Pausen ohne Hübe überspringen | ✅ |
+| 32 | Script-Prüfung: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -286,6 +287,15 @@ speichern, die letzte merkt sich die App. Ein ruhiger Anfang wird übersprungen
 (Start kurz vor dem ersten Hub), und vor dem Start zählt ein Countdown herunter.
 Beides ist abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s,
 Standard 10 s).
+
+**Prüfung**: Nach jeder Änderung prüft die App das Script und markiert Stellen,
+die einen zweiten Blick wert sind, orange oben in der Kurve: zu schnell fürs
+Gerät (Tempo-Grenze bzw. 500 Pos./s), Lücken ab 4 s, Zittern (viele winzige
+Bewegungen), Hübe plötzlich viel kleiner als drumherum (Kästchen verrutscht?),
+ein Hub viel langsamer als die anderen (Takt setzt aus) und Stellen, wo das
+Tracking einen Bereich verloren hat. Der Knopf „Prüfung“ in der Zeitleiste zeigt
+die Liste, **F3** / **Umschalt+F3** springen zur nächsten/vorigen Stelle (eine
+Sekunde davor). Schnitte werden nicht geprüft.
 
 **Schnitte**: Wo im Video nichts passiert, im Editor **X** am Anfang und noch
 einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis zum
