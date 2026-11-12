@@ -603,3 +603,24 @@ def test_drift_check_goes_to_a_clear_match_further_away():
     f1[100:140, 100:140] = (0.5 * f1[100:140, 100:140] + 0.5 * f0[100:140, 100:140]).astype(np.uint8)
     s1 = b._drift_correction(f1)                             # half like it, and away: not good here
     assert s1 < b.GOOD_SCORE
+
+
+# tracking.py + analysis.py as they were when TRACKER_VERSION was last raised
+TRACKER_SOURCES = {"4df57bcbbf193570": 9}
+
+
+def test_tracker_version_raised_with_tracker_changes():
+    """Saved analyses are reused while TRACKER_VERSION stays the same. A change to the
+    tracker without raising it would leave old (worse) results in use. After changing
+    tracking.py or analysis.py: raise TRACKER_VERSION if results can change (or keep it
+    if not) and put the new hash here."""
+    import hashlib
+    from pathlib import Path
+
+    import vtf.analysis as an
+
+    src = Path(an.__file__).parent
+    h = hashlib.sha256((src / "tracking.py").read_bytes() + (src / "analysis.py").read_bytes()).hexdigest()[:16]
+    assert TRACKER_SOURCES.get(h) == an.TRACKER_VERSION, (
+        f"tracker sources changed (hash {h}): raise TRACKER_VERSION if results can change, "
+        "then record the hash in TRACKER_SOURCES")

@@ -131,6 +131,14 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
       - Nachteil: Die Punkte zittern um ein paar Pixel, kleine Hübe würden
         ungenauer. Denkbar als Mischung: Tracker für die feine Bewegung, KI für
         die Lage.
+      - Getestet (0.10.13, zwei echte Solo-Nahaufnahmen mit Maschine, liegend,
+        Kamera von unten): Das Körpermodell findet die Hüftpunkte dort kaum
+        (Sicherheit fast immer unter der Schwelle, nur 1 % bzw. 13 % der
+        Bilder), die Beckenmitte springt im Mittel 40 px (bei 640 px Breite)
+        zwischen zwei Blicken 0,2 s auseinander. Für solche Nahaufnahmen taugt
+        ein Hub aus Körperpunkten nicht; sinnvoll erst für Ganzkörper-Szenen.
+        Toys und Maschinen erkennt das Modell ohnehin nicht. Eine KI-Abfrage
+        kostet etwa 0,3 s (CPU, 640 px).
 - [x] **Bildrand und kurze Verdeckungen** (0.10.8): Strecke außerhalb des
       Bildes und unter einer Hand wird weich überbrückt.
 - [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,
