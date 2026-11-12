@@ -123,3 +123,39 @@ def test_small_strokes_right_after_big_ones_are_found():
     # still: tiny wobble on a quiet curve is not taken for strokes
     quiet = 0.5 + 0.01 * np.sin(2 * np.pi * 7 * t)
     assert len(extract_actions(t * 1000, quiet, GeneratorSettings())) <= 2
+
+
+def _plateau_signal(kind: str):
+    """1 stroke per second at 50 fps, the deep end held 0.4 s: flat ('flat'), with a small
+    dip in the middle ('dip'), or a real double stroke ('double')."""
+    fps = 50
+    t = np.arange(0, 10, 1 / fps)
+    ph = t % 1.0
+    up = np.clip(ph / 0.3, 0, 1)
+    down = np.clip((1.0 - ph) / 0.3, 0, 1)
+    sig = np.minimum(up, down)                              # 0 -> 1 (held 0.3..0.7) -> 0
+    held = (ph > 0.3) & (ph < 0.7)
+    dip = {"flat": 0.0, "dip": 0.12, "double": 0.6}[kind]
+    sig = np.where(held, 1.0 - dip * np.sin(np.pi * (ph - 0.3) / 0.4), sig)
+    return t * 1000, sig
+
+
+def test_plateau_gets_one_point_in_its_middle():
+    from vtf.generator import extract_actions
+
+    for kind in ("flat", "dip"):
+        t, sig = _plateau_signal(kind)
+        acts = extract_actions(t, sig, GeneratorSettings(sensitivity=70, min_interval_ms=60))
+        tops = [a for a in acts if a.pos > 70]
+        assert 8 <= len(tops) <= 10, (kind, [(a.at, a.pos) for a in acts])
+        for a in tops[1:-1]:
+            assert abs(a.at % 1000 - 500) <= 40, (kind, a)          # middle of the held stretch
+            assert a.pos >= 95
+        # switched off: as before (a dip gives two tops, flat the start of the stretch)
+        old = extract_actions(t, sig, GeneratorSettings(sensitivity=70, min_interval_ms=60, plateaus=False))
+        old_tops = [a for a in old if a.pos > 70]
+        assert len(old_tops) > len(tops) or any(abs(a.at % 1000 - 500) > 100 for a in old_tops[1:-1])
+    # a real double stroke at the deep end stays two strokes
+    t, sig = _plateau_signal("double")
+    acts = extract_actions(t, sig, GeneratorSettings(sensitivity=70, min_interval_ms=60))
+    assert len([a for a in acts if a.pos > 70]) >= 16

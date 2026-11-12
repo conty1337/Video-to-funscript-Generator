@@ -23,6 +23,7 @@ class GeneratorSettings:
     pos_max: int = 100
     full_stroke: bool = False       # peaks -> pos_max, valleys -> pos_min
     max_speed: int = 0              # positions per second the device can do; 0 = no limit
+    plateaus: bool = True           # a top or bottom with a flat stretch or a small dip: one point in its middle
 
 
 @dataclass
@@ -234,6 +235,83 @@ def enforce_min_interval(idx: list[int], t_ms: np.ndarray, signal: np.ndarray,
     return out
 
 
+PLATEAU_FLAT = 0.02      # the curve stays this close (part of the range) to a turn: flat there
+PLATEAU_MIN_MS = 160     # ... for at least this long (a round turn is shorter): the point goes to the middle
+PLATEAU_MAX_MS = 1500    # longer flat stretches or double tops are real pauses / double strokes
+NOTCH_FRAC = 0.3         # a dip between two tops smaller than this part of the strokes around: one top
+
+
+def _stretch(t_ms: np.ndarray, signal: np.ndarray, i: int, tol: float) -> tuple[int, int]:
+    """The samples around the turn at i that stay within `tol` of it (at most PLATEAU_MAX_MS)."""
+    n = len(signal)
+    v = float(signal[i])
+    up = v >= 0.5
+    def near(j):
+        return (v - float(signal[j]) if up else float(signal[j]) - v) <= tol
+    j0 = i
+    while j0 > 0 and near(j0 - 1) and t_ms[i] - t_ms[j0 - 1] <= PLATEAU_MAX_MS / 2:
+        j0 -= 1
+    j1 = i
+    while j1 < n - 1 and near(j1 + 1) and t_ms[j1 + 1] - t_ms[i] <= PLATEAU_MAX_MS / 2:
+        j1 += 1
+    return j0, j1
+
+
+def _plateau_time(t_ms: np.ndarray, signal: np.ndarray, i: int, stroke: float) -> float | None:
+    """Middle of the flat (or slightly sagging) stretch around the turn at i, or None when
+    the turn is round. `stroke`: height of the strokes next to it."""
+    j0, j1 = _stretch(t_ms, signal, i, PLATEAU_FLAT)
+    if j1 - j0 >= 4 and t_ms[j1] - t_ms[j0] >= PLATEAU_MIN_MS:
+        return float(t_ms[j0] + t_ms[j1]) / 2                      # flat
+    # sagging: within a third of the stroke it has two rims with a dip between them (a round
+    # turn has one top), the turn found is one of the rims
+    j0, j1 = _stretch(t_ms, signal, i, NOTCH_FRAC * stroke)
+    if j1 - j0 < 4 or t_ms[j1] - t_ms[j0] < PLATEAU_MIN_MS:
+        return None
+    seg = signal[j0:j1 + 1].astype(np.float64)
+    if float(signal[i]) < 0.5:
+        seg = -seg
+    left = np.maximum.accumulate(seg)
+    right = np.maximum.accumulate(seg[::-1])[::-1]
+    if float(np.max(np.minimum(left, right) - seg)) < PLATEAU_FLAT:
+        return None
+    return float(t_ms[j0] + t_ms[j1]) / 2
+
+
+def turns(t_ms: np.ndarray, signal: np.ndarray, idx: list[int], plateaus: bool = True) -> list[tuple[float, float]]:
+    """(time, value) of every turn. With `plateaus`: a turn on a flat stretch gets the middle
+    of it, and two tops with only a small dip between them (the machine waits at the end
+    and the curve trembles) become one top in their middle - as one would set it by hand."""
+    out: list[tuple[float, float]] = []
+    k, n = 0, len(idx)
+    while k < n:
+        i = idx[k]
+        if plateaus and k + 2 < n:
+            a, b, c = (float(signal[j]) for j in idx[k:k + 3])
+            strokes = []
+            if k > 0:
+                strokes.append(abs(a - float(signal[idx[k - 1]])))
+            if k + 3 < n:
+                strokes.append(abs(c - float(signal[idx[k + 3]])))
+            notch = max(abs(a - b), abs(c - b))
+            ta, tc = float(t_ms[i]), float(t_ms[idx[k + 2]])
+            if len(strokes) == 2 and notch < NOTCH_FRAC * min(strokes) and tc - ta <= PLATEAU_MAX_MS:
+                top = max(a, c) if a > b else min(a, c)
+                out.append(((ta + tc) / 2, top))
+                k += 3
+                continue
+        t = None
+        if plateaus and 0 < k < n - 1:          # only between two strokes, not the quiet start or end
+            prev_t, next_t = float(t_ms[idx[k - 1]]), float(t_ms[idx[k + 1]])
+            stroke = min(abs(float(signal[i]) - float(signal[idx[q]])) for q in (k - 1, k + 1))
+            t = _plateau_time(t_ms, signal, i, stroke)
+            if t is not None:                   # never closer than a quarter of the way to a neighbour
+                t = min(max(t, prev_t + (float(t_ms[i]) - prev_t) / 4), next_t - (next_t - float(t_ms[i])) / 4)
+        out.append((turn_time(t_ms, signal, i) if t is None else t, float(signal[i])))
+        k += 1
+    return out
+
+
 def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
                     delta_scale: float = 1.0) -> list[Action]:
     sens = float(np.clip(s.sensitivity, 0, 100)) / 100.0
@@ -241,14 +319,14 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
     idx = find_extrema(signal, local_delta(t_ms, signal, delta))
     idx = enforce_min_interval(idx, t_ms, signal, s.min_interval_ms)
     lo, hi = sorted((int(s.pos_min), int(s.pos_max)))
+    pts = turns(t_ms, signal, idx, s.plateaus)
     actions: list[Action] = []
-    for k, i in enumerate(idx):
-        v = float(signal[i])
-        if s.full_stroke and len(idx) > 1:
-            nb = signal[idx[k + 1]] if k + 1 < len(idx) else signal[idx[k - 1]]
+    for k, (t, v) in enumerate(pts):
+        if s.full_stroke and len(pts) > 1:
+            nb = pts[k + 1][1] if k + 1 < len(pts) else pts[k - 1][1]
             v = 1.0 if v >= nb else 0.0
         pos = int(round(lo + v * (hi - lo)))
-        at = int(round(turn_time(t_ms, signal, i)))
+        at = int(round(t))
         if actions and at <= actions[-1].at:
             continue
         actions.append(Action(at, max(0, min(100, pos))))

@@ -82,6 +82,7 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
 | Richtung | welche Bewegung im Bild zum Hub wird (ein Hub-Richtungs-Pfeil im Abschnitt geht vor) |
 | Empfindlichkeit | höher = auch kleine Hübe |
 | Glättung | bügelt Zittern aus |
+| Plateaus: ein Punkt in der Mitte | an: kurzes Stehenbleiben ganz drin/draußen wird ein Punkt in der Mitte |
 | Mindestabstand | kürzeste Zeit zwischen zwei Punkten |
 | Drift-Filter | entfernt langsames Wegwandern |
 | Normalisierung | streckt leise Stellen auf vollen Hub (bei Kalibrierung egal) |
