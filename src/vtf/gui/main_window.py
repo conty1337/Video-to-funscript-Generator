@@ -11,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -234,6 +234,23 @@ class MainWindow(QMainWindow):
         head.addWidget(self.curve_title)
         head.addWidget(self.axis_box)
         head.addWidget(self.curve_meta)
+        head.addSpacing(8)
+        self.edit_tools = QWidget()                 # buttons for the menu commands, editing only
+        tools = QHBoxLayout(self.edit_tools)
+        tools.setContentsMargins(0, 0, 0, 0)
+        tools.setSpacing(6)
+        self.cut_btn = self._tool("scissors", "Schnitt", self.toggle_cut,
+                                  "Schnitt: Anfang hier, nochmal am Ende drücken (X). Der Player springt darüber")
+        self.cut_btn.setCheckable(True)
+        self._tool("scissors", "Bis zum nächsten Hub", self.cut_to_next_move,
+                   "Schnitt von hier bis zum Countdown vor dem nächsten Hub (Umschalt+X)", tools)
+        self._tool("x", "Schnitt weg", self.remove_cut_here, "Schnitt an der Abspielposition entfernen", tools)
+        tools.insertWidget(0, self.cut_btn)
+        tools.addSpacing(10)
+        self._tool("", "Glätten", self.smooth_points, "Ausgewählte Punkte glätten (Strg+G)", tools)
+        self._tool("bookmark", "Lesezeichen", self.add_bookmark, "Lesezeichen an der Abspielposition (B)", tools)
+        self._tool("plus", "Rhythmus", self.insert_rhythm, "Rhythmus oder Muster einfügen (Strg+T)", tools)
+        head.addWidget(self.edit_tools)
         head.addWidget(curve_hint, 1)
         cl.addLayout(head)
         for label, widget in (("Video", self.slider), ("Tempo", self.heat)):
@@ -492,6 +509,17 @@ class MainWindow(QMainWindow):
         self.close_act.setVisible(False)
         self._toolbar = tb
 
+    def _tool(self, icon: str, text: str, slot, tip: str, layout=None) -> QPushButton:
+        """A small button in the timeline header for a menu command."""
+        b = QPushButton(theme.icon(icon, theme.TEXT_2, 14) if icon else QIcon(), text)
+        b.setObjectName("tool")
+        b.setToolTip(tip)
+        b.setFocusPolicy(Qt.NoFocus)
+        b.clicked.connect(lambda _c=False: slot())
+        if layout is not None:
+            layout.addWidget(b)
+        return b
+
     def _transport(self, name: str, tip: str) -> QPushButton:
         b = QPushButton(theme.icon(name, theme.TEXT_2, 16), "")
         b.setObjectName("transport")
@@ -678,6 +706,8 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ cuts
     def _show_cuts(self):
         self.curve.set_cuts(self.cuts, self._cut_start)
+        self.cut_btn.setChecked(self._cut_start is not None)          # a cut waits for its end
+        self.cut_btn.setText("Schnitt-Ende" if self._cut_start is not None else "Schnitt")
 
     def _cuts_changed(self):
         self._show_cuts()
@@ -705,6 +735,7 @@ class MainWindow(QMainWindow):
     def toggle_cut(self):
         """X: first press marks where the cut starts, the second where it ends."""
         if not self.cap:
+            self._show_cuts()
             return
         ms = self._cur_ms()
         if self._cut_start is None:
@@ -1377,6 +1408,7 @@ class MainWindow(QMainWindow):
         has_list = bool(self.player.playlist.items)
         self.prev_btn.setEnabled(on and has_list)
         self.next_btn.setEnabled(on and has_list)
+        self.edit_tools.setVisible(not on)
         self.curve_hint.setText("Nur ansehen" if on else "Umschalt+Ziehen wählt aus · Fläche ziehen scrollt")
         self.curve_hint.setToolTip(
             "Zum Bearbeiten in den Modus „Bearbeiten“ wechseln" if on else

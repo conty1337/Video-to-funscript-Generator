@@ -1803,3 +1803,25 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     w.set_player_mode(False)
     w.dirty = False
     w.close()
+
+
+def test_timeline_buttons_for_cuts(app, sine_video):
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(sine_video))
+    assert w.edit_tools.isVisibleTo(w)
+    w.seek_ms(1000)
+    w.cut_btn.click()
+    assert w.cut_btn.isChecked() and w.cut_btn.text() == "Schnitt-Ende"
+    w.seek_ms(2500)
+    w.cut_btn.click()
+    assert not w.cut_btn.isChecked() and len(w.cuts) == 1
+    w.cuts = []
+    w._cuts_changed()
+    w.set_player_mode(True)
+    assert not w.edit_tools.isVisibleTo(w)
+    w.set_player_mode(False)
+    w.dirty = False
+    w.close()
