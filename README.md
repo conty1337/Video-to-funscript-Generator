@@ -280,17 +280,19 @@ wiederholen, zufällige Reihenfolge, Videos ohne Script überspringen. Bild ↑/
 springt zum vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es,
 zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
 speichern, die letzte merkt sich die App. Ein ruhiger Anfang wird übersprungen
-(Start 10 s vor dem ersten Hub), und in den letzten 10 s vor dem Start zählt
-ein Countdown herunter. Beides ist abschaltbar.
+(Start kurz vor dem ersten Hub), und vor dem Start zählt ein Countdown herunter.
+Beides ist abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s,
+Standard 10 s).
 
 **Schnitte**: Wo im Video nichts passiert, im Editor **X** am Anfang und noch
-einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis kurz vor
-den nächsten Hub). Schnitte stehen schraffiert in der Kurve, werden in
+einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis zum
+Countdown vor dem nächsten Hub). Schnitte stehen schraffiert in der Kurve, werden in
 `<Video>.vtf.json` gespeichert, und der Player springt darüber („Schnitte
 überspringen“). Bearbeiten → „Schnitt hier entfernen“ nimmt einen wieder raus.
 Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s von selbst
-(„Pausen ohne Hübe überspringen“, 2 s vor dem nächsten Hub geht es weiter; nach
-dem letzten Hub kommt das nächste Video).
+(„Pausen ohne Hübe überspringen“; nach dem letzten Hub kommt das nächste
+Video). Wie am Anfang zählt dann der Countdown herunter, bis es weitergeht –
+nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

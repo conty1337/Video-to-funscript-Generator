@@ -98,11 +98,13 @@ Muster-Steuerung für einen Bereich ein.
   **Gerät** (Strg+D) → Verbinden. Beim ersten Mal am besten Gerät →
   **Einrichtungs-Assistent**. Ohne Gerät: „Simulation“.
 - **Player** (Strg+P): Videos in die Playlist ziehen, „Playlist abspielen“.
-  Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown.
+  Ein ruhiger Anfang wird übersprungen, vor dem Start zählt ein Countdown
+  (Länge unter „Countdown vor dem Start“ einstellbar, 3–30 s).
   Schnitte (siehe unten) werden übersprungen, auf Wunsch auch jede Pause ohne
-  Hübe ab 15 s („Pausen ohne Hübe überspringen“).
+  Hübe ab 15 s („Pausen ohne Hübe überspringen“). Wenn es danach weitergeht,
+  zählt der Countdown wie am Anfang herunter.
 - **Schnitt** (im Editor): Wo nichts passiert, **X** am Anfang und **X** am
-  Ende drücken, oder **Umschalt+X** = Schnitt bis kurz vor den nächsten Hub.
+  Ende drücken, oder **Umschalt+X** = Schnitt bis zum Countdown vor dem nächsten Hub.
   Schraffiert in der Kurve; der Player springt darüber. Entfernen: Bearbeiten
   → „Schnitt hier entfernen“.
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät

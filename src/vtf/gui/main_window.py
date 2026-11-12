@@ -45,7 +45,7 @@ from ..funscript import (
     position_at,
 )
 from ..generator import generate, generate_axes
-from ..playlist import LEAD_MS, SKIP_LEAD_MS, intro_skip_ms, quiet_stretches, script_start_ms, skip_target
+from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, skip_target
 from ..prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
         self.cuts: list[tuple[int, int]] = []         # (from, to) the player skips, saved there too
         self._cut_start: float | None = None          # X pressed once: the cut starts here
         self._quiet_cache: tuple = ((), [])
+        self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -562,6 +563,7 @@ class MainWindow(QMainWindow):
         self._show_bookmarks()
         self.cuts = load_cuts(path)
         self._cut_start = None
+        self._skip_resume = None
         self._show_cuts()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(f"{Path(path).name} – Video-to-Funscript Generator")
@@ -720,9 +722,10 @@ class MainWindow(QMainWindow):
             return
         ms = self._cur_ms()
         acts = self.stroke_actions()
-        nxt = next((a.at for a, b in zip(acts, acts[1:]) if a.at > ms + SKIP_LEAD_MS and abs(b.pos - a.pos) >= 10),
+        lead = self.player.lead_ms()             # the countdown then runs up to the stroke
+        nxt = next((a.at for a, b in zip(acts, acts[1:]) if a.at > ms + lead and abs(b.pos - a.pos) >= 10),
                    None)
-        end = nxt - SKIP_LEAD_MS if nxt is not None else self.frame_count / self.fps * 1000
+        end = nxt - lead if nxt is not None else self.frame_count / self.fps * 1000
         self._cut_start = None
         self._status(self.add_cut(ms, end))
 
@@ -744,9 +747,11 @@ class MainWindow(QMainWindow):
         quiet = ()
         if self.player.quiet_cb.isChecked():
             acts = self.stroke_actions()
-            key = (id(acts), len(acts), acts[0].at if acts else 0, acts[-1].at if acts else 0)
+            lead = self.player.lead_ms()
+            key = (id(acts), len(acts), acts[0].at if acts else 0, acts[-1].at if acts else 0, lead)
             if self._quiet_cache[0] != key:
-                self._quiet_cache = (key, quiet_stretches(acts, self.frame_count / self.fps * 1000))
+                self._quiet_cache = (key, quiet_stretches(acts, self.frame_count / self.fps * 1000,
+                                                          lead_ms=lead))
             quiet = self._quiet_cache[1]
         to = skip_target(media_ms, cuts, quiet)
         if to is None or to <= media_ms:
@@ -756,6 +761,7 @@ class MainWindow(QMainWindow):
             self._video_ended()
         else:
             self.seek_ms(to)
+            self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
             self._status(f"✂ übersprungen bis {_fmt(to)}")
         return True
 
@@ -948,11 +954,14 @@ class MainWindow(QMainWindow):
             self.seek_ms(min(tb.sections, key=lambda s: abs(s.start_ms - ms)).start_ms)
 
     def _update_countdown(self, ms: float):
-        """Player: count the last seconds down before the script starts."""
+        """Player: count the last seconds down before the script starts, and before it
+        goes on after a pause (a skipped cut, or just a long still stretch)."""
         sec = None
         if self.player_mode and self.player.countdown_cb.isChecked():
-            start = script_start_ms(self.stroke_actions())
-            if start is not None and 0 < start - ms <= LEAD_MS:
+            start = resume_ms(ms, self.stroke_actions())
+            if start is None and self._skip_resume is not None and ms < self._skip_resume:
+                start = self._skip_resume            # just jumped over a cut: count down to it too
+            if start is not None and 0 < start - ms <= self.player.lead_ms():
                 sec = math.ceil((start - ms) / 1000)
         self.view.set_countdown(sec)
 
@@ -1390,7 +1399,8 @@ class MainWindow(QMainWindow):
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
-            skip = intro_skip_ms(self.stroke_actions()) if self.player.intro_cb.isChecked() else 0
+            skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms())
+                    if self.player.intro_cb.isChecked() else 0)
             if skip:
                 self.seek_ms(skip)
             if not self.timer.isActive():

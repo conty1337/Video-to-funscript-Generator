@@ -1769,7 +1769,6 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
 
     from vtf.funscript import Action
     from vtf.gui.main_window import MainWindow
-    from vtf.playlist import SKIP_LEAD_MS
     from vtf.prep import load_cuts
 
     path = tmp_path / "cut.avi"
@@ -1785,13 +1784,17 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     assert len(w.cuts) == 1 and abs(w.cuts[0][0] - 1000) < 50 and abs(w.cuts[0][1] - 2000) < 50
     assert w.curve.cut_open is None and load_cuts(path) == w.cuts
     w.curve.set_actions([Action(0, 0), Action(300, 90), Action(600, 0), Action(5500, 0), Action(5800, 90)])
+    w.player.countdown_s.setValue(3)                                 # countdown length 3 s
     w.seek_ms(800)
     w.cut_to_next_move()
     assert len(w.cuts) == 1                                          # overlapping: merged into one
-    assert abs(w.cuts[0][0] - 800) < 50 and w.cuts[0][1] == 5500 - SKIP_LEAD_MS
-    # player: a tick inside the cut jumps to its end
+    assert abs(w.cuts[0][0] - 800) < 50 and w.cuts[0][1] == 5500 - 3000
+    # player: a tick inside the cut jumps to its end, the countdown then runs to the stroke
     w.set_player_mode(True)
-    assert w._player_skip(1500.0) and abs(w._cur_ms() - (5500 - SKIP_LEAD_MS)) < 50
+    assert w._player_skip(1500.0) and abs(w._cur_ms() - 2500) < 50
+    w.player.countdown_cb.setChecked(True)
+    w._update_countdown(2500.0)
+    assert w.view._countdown == 3
     w.player.cuts_cb.setChecked(False)
     assert not w._player_skip(1500.0)
     w.seek_ms(1000)

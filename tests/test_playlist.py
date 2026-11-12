@@ -96,17 +96,31 @@ def test_script_start_and_intro_skip():
 
 def test_quiet_stretches_and_skip_target():
     from vtf.funscript import Action
-    from vtf.playlist import SKIP_LEAD_MS, quiet_stretches, skip_target
+    from vtf.playlist import quiet_stretches, skip_target
 
     acts = [Action(0, 0), Action(500, 90), Action(1000, 0),          # strokes
             Action(5000, 0), Action(25000, 2),                       # 24 s nothing (2 is no stroke)
             Action(30000, 0), Action(30500, 90), Action(31000, 0)]
-    q = quiet_stretches(acts, duration_ms=60000)
-    assert q == [(1000, 30000, 30000 - SKIP_LEAD_MS), (31000, 60000, 60000)]
+    q = quiet_stretches(acts, duration_ms=60000, lead_ms=5000)
+    assert q == [(1000, 30000, 25000), (31000, 60000, 60000)]
     assert skip_target(1500, (), q) is None                          # the last stroke ends first
-    assert skip_target(10000, (), q) == 30000 - SKIP_LEAD_MS
-    assert skip_target(29000, (), q) is None                         # already near the next stroke
+    assert skip_target(2500, (), q) == 25000
+    assert skip_target(10000, (), q) == 25000
+    assert skip_target(26000, (), q) is None                         # already near the next stroke
     assert skip_target(40000, (), q) == 60000                        # after the last: to the end
     cuts = [(2000, 4000)]
     assert skip_target(2500, cuts) == 4000 and skip_target(4000, cuts) is None
     assert quiet_stretches(acts[:3]) == [] and quiet_stretches([]) == []
+
+
+def test_countdown_also_after_a_pause():
+    from vtf.funscript import Action
+    from vtf.playlist import resume_ms
+
+    acts = [Action(20000, 0), Action(20500, 90), Action(21000, 0),     # starts at 20 s
+            Action(22000, 90), Action(23000, 0),                       # goes on: no countdown
+            Action(40000, 0), Action(40500, 90)]                       # after 17 s still
+    assert resume_ms(15000, acts) == 20000
+    assert resume_ms(21500, acts) is None
+    assert resume_ms(33000, acts) == 40000
+    assert resume_ms(41000, acts) is None
