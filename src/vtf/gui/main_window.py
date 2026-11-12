@@ -63,6 +63,9 @@ from .video_view import VideoView
 from .workers import AnalysisWorker
 
 
+TRACK_UNDO = "tracking"      # undo entry holding the tracking sections, not script points
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -80,6 +83,9 @@ class MainWindow(QMainWindow):
         self.worker: AnalysisWorker | None = None
         self.undo_stack: list[tuple[str, list[Action]]] = []   # (axis, actions)
         self.redo_stack: list[tuple[str, list[Action]]] = []
+        # tracking changes are undone with the same Strg+Z: entries (TRACK_UNDO, sections)
+        self._track_shadow: list = []          # the sections after the last change
+        self._track_restoring = False
         self.dirty = False
 
         # widgets
@@ -325,7 +331,7 @@ class MainWindow(QMainWindow):
         self.view.strokeDrawn.connect(self._stroke_drawn)
         self.view.areaMenuRequested.connect(self._area_menu)
         self.panel.tracking.drawModeChanged.connect(self.view.set_draw_mode)
-        self.view.tracksCleared.connect(lambda: self._track_cmd(self.panel.tracking.delete_at))
+        self.view.sectionMenuRequested.connect(self._section_menu)
         self.panel.tracking.current_ms = self._cur_ms
         self.panel.tracking.message.connect(self._status)
         self.panel.tracking.suggestRequested.connect(self.suggest_boxes)
@@ -544,6 +550,7 @@ class MainWindow(QMainWindow):
             self.panel.tracking.refresh()
             self.panel.method.setCurrentIndex(self.panel.method.findData("track"))
             self._update_section_marks()
+        self._track_shadow = list(self.panel.tracking.sections)
         self.bookmarks = load_bookmarks(path)
         self._show_bookmarks()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
@@ -593,6 +600,7 @@ class MainWindow(QMainWindow):
         self.view.set_tracks([])
         self.view.set_track_overlay(None)
         self.panel.tracking.reset(0, 30)
+        self._track_shadow = []
         self.bookmarks = []
         self._show_bookmarks()
         self.rail.set_speed(0.0)
@@ -1098,7 +1106,28 @@ class MainWindow(QMainWindow):
         elif chosen is flat:
             self._status(tb.clear_outline(ms, area))
         elif chosen is rm:
-            self._status(tb.remove_area(ms, area))
+            self._status(tb.remove_area(ms, area) + " – Strg+Z holt ihn zurück")
+
+    def _section_menu(self, pos):
+        """Right click in the video beside the areas: delete only from a menu."""
+        if self.panel.mode != "track":
+            return
+        tb = self.panel.tracking
+        ms = self._cur_ms()
+        i = tb.index_at(ms)
+        menu = QMenu(self)
+        head = menu.addAction(f"Abschnitt {i + 1}" if i is not None else "Kein Abschnitt an dieser Stelle")
+        head.setEnabled(False)
+        menu.addSeparator()
+        stroke = menu.addAction("Hub-Richtung entfernen")
+        stroke.setEnabled(i is not None and tb.sections[i].stroke is not None)
+        delete = menu.addAction("Abschnitt hier löschen")
+        delete.setEnabled(i is not None)
+        chosen = self._run_menu(menu, pos)
+        if chosen is stroke:
+            self._status(tb.set_stroke(ms, None))
+        elif chosen is delete:
+            self._status(tb.delete_at(ms) + " – Strg+Z holt ihn zurück")
 
     def _run_menu(self, menu: QMenu, pos):
         return menu.exec(pos)
@@ -1153,6 +1182,12 @@ class MainWindow(QMainWindow):
         return out
 
     def _sections_changed(self):
+        secs = list(self.panel.tracking.sections)
+        if not self._track_restoring and secs != self._track_shadow:
+            self.undo_stack.append((TRACK_UNDO, self._track_shadow))     # Strg+Z brings it back
+            del self.undo_stack[:-100]
+            self.redo_stack.clear()
+        self._track_shadow = secs
         self._update_track_overlay(self._cur_ms())
         self._update_section_marks()
         if self.video_path and self.panel.mode == "track":
@@ -1601,6 +1636,9 @@ class MainWindow(QMainWindow):
         self._update_meta()
 
     def _restore(self, src: list, dst: list):
+        if src[-1][0] == TRACK_UNDO:
+            self._restore_tracking(src, dst)
+            return
         axis, acts = src.pop()
         dst.append((axis, list(self.actions_for(axis))))
         if axis != self.axis:
@@ -1609,6 +1647,22 @@ class MainWindow(QMainWindow):
         self.dirty = True
         self._update_axis_labels()
         self._refresh_position()
+
+    def _restore_tracking(self, src: list, dst: list):
+        _key, secs = src.pop()
+        tb = self.panel.tracking
+        before = list(tb.sections)
+        dst.append((TRACK_UNDO, before))
+        tb.sections = list(secs)
+        tb.refresh()
+        self._track_restoring = True
+        try:
+            # only the arrow or the calibration differs: no new analysis needed
+            same = [s.analysis_key() for s in before] == [s.analysis_key() for s in secs]
+            (tb.generatorChanged if same else tb.analysisChanged).emit()
+        finally:
+            self._track_restoring = False
+        self._status("Tracking: " + ("rückgängig gemacht" if dst is self.redo_stack else "wiederhergestellt"))
 
     def undo(self):
         if self.undo_stack:

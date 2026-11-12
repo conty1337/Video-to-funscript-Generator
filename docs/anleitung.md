@@ -36,6 +36,9 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
      ein paar Pixeln Abstand zum Rand (im Bild rot schraffiert). Gut, wenn
      direkt daneben etwas liegt, das sich anders bewegt, z.B. Finger, Hand
      oder Fuß. Rechtsklick → „Umrandung entfernen“ macht wieder ein Rechteck.
+   - **Löschen**: Rechtsklick aufs Kästchen → „Bereich entfernen“, Rechtsklick
+     daneben → „Abschnitt hier löschen“. Versehentlich gelöscht? **Strg+Z**
+     holt es zurück (auch Rollen, Pfeile, verschobene Kästchen).
    - **Hub-Richtung** (Knopf oder Taste H): einen Pfeil entlang der
      Stoßrichtung ziehen, die Spitze zeigt nach *raus*. Gemessen wird dann nur
      entlang des Pfeils, seitliches Wackeln zählt nicht. Gut bei Maschinen, die

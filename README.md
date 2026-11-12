@@ -174,8 +174,10 @@ hier** (Taste E) beendet ihn, z.B. wenn die Szene vorbei ist. Nach einem
 Szenenwechsel einfach an der neuen Stelle wieder markieren, dann beginnt dort
 ein neuer Abschnitt. Nur in Abschnitten entstehen Punkte. Die Abschnitte stehen
 als Liste in den Einstellungen (Klick springt zum Start) und als helle Bänder in
-der Kurve. Rechtsklick ins Video (neben die Kästchen) löscht den Abschnitt an
-dieser Stelle.
+der Kurve. Rechtsklick ins Video öffnet ein Menü: auf einem Kästchen (auch knapp
+daneben) für dieses Kästchen (Rolle, Umrandung, entfernen), sonst für den
+Abschnitt (löschen, Hub-Richtung entfernen). Sofort gelöscht wird per Rechtsklick
+nichts mehr, und **Strg+Z** macht auch Tracking-Änderungen rückgängig.
 
 *Tiefen-Kalibrierung*: Zu einer Stelle spulen, wo es ganz drin ist, und **Ganz
 drin** (Taste D) klicken, dann zu einer Stelle ganz draußen und **Ganz

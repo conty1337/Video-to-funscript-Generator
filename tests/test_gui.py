@@ -1703,3 +1703,60 @@ def test_main_window_roles_outline_and_arrow(app, tmp_path, monkeypatch):
     w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
     w.dirty = False
     w.close()
+
+
+def test_right_click_never_deletes_at_once_and_undo_brings_it_back(app, tmp_path, monkeypatch):
+    """A right click beside a box opens a menu instead of deleting the section; a click a
+    few px beside a box still means that box; Strg+Z undoes tracking changes too."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from test_tracking import _video
+
+    from vtf.gui.main_window import MainWindow
+
+    path, a, b = _video(tmp_path / "u.avi", seconds=1.0, pan=False)
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(path))
+    w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+    w._box_drawn(a)
+    w._box_drawn(b)
+    tb = w.panel.tracking
+    assert len(tb.sections[0].boxes) == 2
+    v = w.view
+    sections, areas = [], []
+    v.sectionMenuRequested.connect(sections.append)
+    v.areaMenuRequested.connect(lambda i, p: areas.append(i))
+    monkeypatch.setattr(w, "_run_menu", lambda menu, pos: None)       # menu closed, nothing chosen
+    r = v._image_rect()
+    x, y, bw, bh = a[:4]
+    beside = QPoint(int(r.x() + (x + bw) * r.width() + 6), int(r.y() + (y + bh / 2) * r.height()))
+    QTest.mouseClick(v, Qt.RightButton, Qt.NoModifier, beside)
+    assert areas == [0] and not sections
+    QTest.mouseClick(v, Qt.RightButton, Qt.NoModifier, QPoint(int(r.right() - 3), int(r.bottom() - 3)))
+    assert sections and len(tb.sections) == 1                           # still there
+    # removing an area and the section, then Strg+Z twice brings both back
+    monkeypatch.setattr(w, "_run_menu", lambda menu, pos: next(x for x in menu.actions() if "entfernen" in x.text()
+                                                                    and "Bereich" in x.text()))
+    w._area_menu(1, None)
+    assert len(tb.sections[0].boxes) == 1
+    monkeypatch.setattr(w, "_run_menu", lambda menu, pos: next(x for x in menu.actions() if "löschen" in x.text()))
+    w._section_menu(None)
+    assert not tb.sections
+    w.undo()
+    assert len(tb.sections) == 1 and len(tb.sections[0].boxes) == 1
+    w.undo()
+    assert len(tb.sections[0].boxes) == 2
+    w.redo()
+    assert len(tb.sections[0].boxes) == 1
+    # an arrow undone needs no new analysis
+    w.redo()
+    w.undo()
+    tb.set_stroke(w._cur_ms(), (0.5, 0.6, 0.6, 0.4))
+    outdated = []
+    w.panel.analysisChanged.connect(lambda: outdated.append(1))
+    w.undo()
+    assert tb.sections[0].stroke is None and not outdated
+    w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
+    w.dirty = False
+    w.close()
