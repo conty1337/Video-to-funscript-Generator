@@ -116,7 +116,7 @@ class AnalysisSettings:
 
 
 #: bumped when tracking results change (new cache entries for tracked videos)
-TRACKER_VERSION = 8
+TRACKER_VERSION = 9
 #: frames kept (compressed) for following an area backwards from a correction,
 #: as image pixels: ~10 min at 320 px width
 BACK_BUDGET_PX = 18000 * 320 * 180
