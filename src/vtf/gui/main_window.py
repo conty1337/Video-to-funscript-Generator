@@ -150,6 +150,10 @@ class MainWindow(QMainWindow):
         self._quiet_cache: tuple = ((), [])
         self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
         self.issues: list = []                        # script check: places worth a look
+        from ..stats import Recorder
+        self.stats = Recorder()                       # playing time, strokes (only on this computer)
+        self._stat_ms: float | None = None            # media time of the last counted tick
+        self._stat_half = 0                           # script points passed (two = one stroke)
         self.axis_actions: dict[str, list[Action]] = {}   # the other axes
         self._l0_signal = None                 # analysis curve of L0 (t_ms, signal)
         self.axis_box = QComboBox()
@@ -489,6 +493,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, "Muster-Steuerung…", self.open_patterns, "Ctrl+M")
         self._act(m, "Handy-Fernbedienung…", self.open_remote)
+        self._act(m, "Statistik…", self.open_stats)
         self._act(m, "Andere Player (mpv, VLC, VR)…", self.open_players)
         m.addSeparator()
         self._act(m, "Not-Aus (Gerät stoppen)", self.emergency_stop, "Esc")
@@ -1070,6 +1075,7 @@ class MainWindow(QMainWindow):
         if not self.cap:
             return
         idx = max(0, min(int(idx), self.frame_count - 1))
+        self._stat_ms = None                     # a jump is not played time
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         self._read_frame()
         if self.timer.isActive():   # keep playing from the new position
@@ -1094,6 +1100,7 @@ class MainWindow(QMainWindow):
         if not self.cap:
             return
         media_ms = self._media_ms()
+        self._record_play(media_ms)
         if self._player_skip(media_ms):
             return
         target = int(media_ms * self.fps / 1000)
@@ -1135,7 +1142,26 @@ class MainWindow(QMainWindow):
             self.audio.play(self._play_origin_ms)
             self.play_btn.setIcon(theme.icon("pause", theme.TEXT_2, 16))
 
+    def _record_play(self, media_ms: float):
+        """Statistics: time played with a script and the strokes passed meanwhile."""
+        last, self._stat_ms = self._stat_ms, media_ms
+        acts = self.stroke_actions()
+        if last is None or not acts or not self.video_path or not 0 < media_ms - last < 500:
+            return
+        times = [a.at for a in acts]
+        self._stat_half += bisect.bisect_right(times, media_ms) - bisect.bisect_right(times, last)
+        whole, self._stat_half = divmod(self._stat_half, 2)
+        self.stats.add("video", Path(self.video_path).stem, (media_ms - last) / 1000, whole)
+
+    def open_stats(self):
+        from .stats_dialog import StatsDialog
+
+        self.stats.flush()
+        StatsDialog(self).exec()
+
     def pause(self):
+        self._stat_ms = None
+        self.stats.flush()
         self.timer.stop()
         self.audio.pause()
         self.devices.tick(0, False)
@@ -2158,6 +2184,7 @@ class MainWindow(QMainWindow):
         self.cancel_analysis()
         self.updates.shutdown()
         self._stop_patterns()
+        self.stats.flush()
         self.remote.shutdown()
         self.external.shutdown()
         self.devices.shutdown()

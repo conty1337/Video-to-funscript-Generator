@@ -1426,6 +1426,32 @@ class PatternDialog(QDialog):
     def _tick(self):
         self._tick_inner()
         self._update_live()
+        self._record_stats()
+
+    def _record_stats(self):
+        """Playing time per pattern / program for the statistics (only on this computer)."""
+        win = self.parent()
+        stats = getattr(win, "stats", None)
+        now = self._now()
+        running = self.runner.running or self.prunner.running or self.music.running
+        last, self._stat_t = getattr(self, "_stat_t", None), (now if running else None)
+        if stats is None or not running or last is None or not 0 < now - last < 1000:
+            return
+        dt = (now - last) / 1000
+        if self.music.running:
+            name, bpm = "Musik", 0.0
+        elif self.mode == 0:
+            p = self.current()
+            name, bpm = (p.name if p else "Muster"), float(self.bpm.value())
+        else:
+            pr = self.active_program()
+            cur = self.prunner.current(now) if self.prunner.running else None
+            name = ("Zufall" if self.mode == 2 else (pr.name if pr else "Ablauf"))
+            bpm = float(cur[0]) if cur else float(self.bpm.value())
+        self._stat_strokes = getattr(self, "_stat_strokes", 0.0) + dt * bpm / 60
+        whole = int(self._stat_strokes)
+        self._stat_strokes -= whole
+        stats.add("pattern", name, dt, whole)
 
     def _tick_inner(self):
         now = self._now()
