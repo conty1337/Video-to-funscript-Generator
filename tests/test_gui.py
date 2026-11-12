@@ -1885,3 +1885,27 @@ def test_auto_find_marks_toy_reference_and_arrow(app, tmp_path):
         w.panel.method.setCurrentIndex(w.panel.method.findData("flow"))
         w.dirty = False
         w.close()
+
+
+def test_playing_counts_time_and_strokes_for_the_statistics(app, sine_video):
+    from vtf import stats as S
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    S.reset()
+    w = MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(sine_video))
+        w.curve.set_actions([Action(k * 250, 90 if k % 2 else 10) for k in range(20)])   # a stroke per 0.5 s
+        for ms in range(0, 4001, 10):                  # 4 s of ticks
+            w._record_play(float(ms))
+        w._record_play(9000.0)                         # a jump: not counted
+        w.stats.flush()
+        s = S.summary(days=1)
+        assert abs(s["seconds"] - 4.0) < 0.05 and s["strokes"] == 8
+        assert s["videos"][0][0] == sine_video.stem
+    finally:
+        w.dirty = False
+        w.close()
+        S.reset()

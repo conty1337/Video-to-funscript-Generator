@@ -54,6 +54,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 33 | Automatisch finden (F): Toy umrandet, Bezug und Hub-Richtung aus der rhythmischen Bewegung | ✅ |
 | 34 | Bibliothek (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche, Sortierung und Sternen | ✅ |
 | 35 | QR-Code für die Handy-Fernbedienung (PIN schon drin) | ✅ |
+| 36 | Sitzungs-Statistik (nur lokal): Spielzeit, Hübe, Lieblingsvideos und -muster | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -323,6 +324,12 @@ Sternen filtern. Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
 Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Editor
 öffnen“ zum Bearbeiten. Die Bewertungen bleiben auf dem Rechner
 (`~/.config/video-to-funscript/library.json`).
+
+**Statistik** (Gerät → Statistik…): Spielzeit, Hübe und Tage für heute, 7 Tage,
+30 Tage und gesamt, dazu die Lieblingsvideos und Lieblingsmuster (nach Spielzeit).
+Gezählt wird, was mit Script abgespielt wird, und Muster/Abläufe/Zufall/Musik
+aus der Muster-Steuerung. Alles bleibt auf dem Rechner
+(`~/.config/video-to-funscript/stats.json`), „Zurücksetzen“ löscht es.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

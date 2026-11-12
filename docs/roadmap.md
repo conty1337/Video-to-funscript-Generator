@@ -156,7 +156,8 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
 - [x] **Script-Qualitätsprüfung** (0.10.20): zu schnell, Lücken, Zittern,
       plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin.
 - [x] **Plateaus** (0.10.19) und **Bereiche automatisch finden** (0.10.21).
-- [ ] **Sitzungs-Statistik**: Dauer, Hübe, Lieblingsmuster (nur lokal).
+- [x] **Sitzungs-Statistik** (0.10.24): Spielzeit, Hübe, Lieblingsvideos und
+      -muster pro Tag, nur lokal.
 - [ ] **Browser-Videos** (Erweiterung oder Bookmarklet), um Scripts auch zu
       Videos im Browser zu spielen.
 - [x] **QR-Code** für die Handy-Fernbedienung (0.10.23), mit PIN im Link.

@@ -53,7 +53,7 @@ def pytest_sessionfinish(session, exitstatus):
                 obj.requestInterruption()
                 obj.quit()
                 obj.wait(3000)
-        except RuntimeError:                  # C++ object already deleted
+        except (RuntimeError, ReferenceError):  # C++ object already deleted, dead weak proxy
             pass
     for w in app.topLevelWidgets():
         try:
