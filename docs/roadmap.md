@@ -151,11 +151,12 @@ Problem: Ohne Markierung weiß die App nicht, was sie verfolgen soll.
       Der Pfeil senkt bei Clip 2 die Abweichung von 4,5 auf 1,8 Positionen.
 - [x] **Bildrand und kurze Verdeckungen** (0.10.8): Strecke außerhalb des
       Bildes und unter einer Hand wird weich überbrückt.
-- [ ] **Funscript-Bibliothek**: alle Scripts eines Ordners mit Heatmap-Vorschau,
-      Suche und Bewertung, Doppelklick spielt ab.
-- [ ] **Script-Qualitätsprüfung**: warnt vor zu schnellen Stellen, Lücken,
-      Zittern und Abschnitten ohne Bewegung, mit Sprung zur Stelle.
+- [x] **Funscript-Bibliothek** (0.10.22): alle Scripts eines Ordners mit
+      Heatmap-Vorschau, Suche, Sortierung und Bewertung, Doppelklick spielt ab.
+- [x] **Script-Qualitätsprüfung** (0.10.20): zu schnell, Lücken, Zittern,
+      plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin.
+- [x] **Plateaus** (0.10.19) und **Bereiche automatisch finden** (0.10.21).
 - [ ] **Sitzungs-Statistik**: Dauer, Hübe, Lieblingsmuster (nur lokal).
 - [ ] **Browser-Videos** (Erweiterung oder Bookmarklet), um Scripts auch zu
       Videos im Browser zu spielen.
-- [ ] **QR-Code** für die Handy-Fernbedienung statt Adresse abtippen.
+- [x] **QR-Code** für die Handy-Fernbedienung (0.10.23), mit PIN im Link.

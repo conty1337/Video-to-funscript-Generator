@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "video-to-funscript"
-version = "0.10.22"
+version = "0.10.23"
 description = "Lokale, kostenlose Videoanalyse und Funscript-Erstellung"
 readme = "README.md"
 license = { text = "MIT" }
@@ -22,6 +22,8 @@ dependencies = [
     "certifi>=2024.0",
     # Intiface Central (Buttplug) spricht WebSocket
     "websockets>=12",
+    # QR-Code für die Handy-Fernbedienung (reines Python, ohne weitere Abhängigkeiten)
+    "segno>=1.5",
 ]
 
 [project.optional-dependencies]

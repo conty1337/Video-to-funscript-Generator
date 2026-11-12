@@ -6,6 +6,7 @@ import bisect
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -168,6 +169,27 @@ class RemoteController(QObject):
         self._snapshot()
 
 
+def qr_pixmap(text: str, module_px: int = 6):
+    """QR code of `text` as a pixmap (dark on white with the quiet zone), None without segno."""
+    try:
+        import segno
+    except ImportError:
+        return None
+    rows = [list(r) for r in segno.make(text, error="m", micro=False).matrix_iter(scale=1, border=4)]
+    n = len(rows)
+    img = QImage(n * module_px, n * module_px, QImage.Format_RGB32)
+    img.fill(QColor(255, 255, 255))
+    p = QPainter(img)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, dark in enumerate(row):
+            if dark:
+                p.drawRect(x * module_px, y * module_px, module_px, module_px)
+    p.end()
+    return QPixmap.fromImage(img)
+
+
 class RemoteDialog(QDialog):
     def __init__(self, ctl: RemoteController, parent=None):
         super().__init__(parent)
@@ -214,6 +236,14 @@ class RemoteDialog(QDialog):
         prow.addStretch(1)
         form.addRow(self._label("Port"), prow)
         lay.addLayout(form)
+        self.qr = QLabel()
+        self.qr.setAlignment(Qt.AlignCenter)
+        self.qr.setToolTip("Mit der Handy-Kamera scannen: öffnet die Fernbedienung, die PIN ist schon drin")
+        self.qr_cap = QLabel("Mit der Handy-Kamera scannen – die PIN ist schon drin")
+        self.qr_cap.setObjectName("caption")
+        self.qr_cap.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.qr)
+        lay.addWidget(self.qr_cap)
         self.err = QLabel()
         self.err.setObjectName("caption")
         self.err.setWordWrap(True)
@@ -247,6 +277,12 @@ class RemoteDialog(QDialog):
         on = self.ctl.enabled
         self.addr.setText("\n".join(self.ctl.urls()) if on else "aus")
         self.pin.setText(self.ctl.pin)
+        urls = self.ctl.urls() if on else []
+        pix = qr_pixmap(f"{urls[0]}#pin={self.ctl.pin}") if urls else None
+        self.qr.setVisible(pix is not None)
+        self.qr_cap.setVisible(pix is not None)
+        if pix is not None:
+            self.qr.setPixmap(pix)
         self.err.setText(self.ctl.error)
         self.err.setVisible(bool(self.ctl.error))
         self.hint.setText("Klappt es nicht, lässt die Firewall den Port evtl. nicht durch. Einmalig im Terminal:\n"
