@@ -1825,3 +1825,29 @@ def test_timeline_buttons_for_cuts(app, sine_video):
     w.set_player_mode(False)
     w.dirty = False
     w.close()
+
+
+def test_script_check_marks_and_jumps(app, sine_video, monkeypatch):
+    from vtf.funscript import Action
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(sine_video))
+        assert w.check_btn.text() == "Prüfung"                # no script yet
+        acts = [Action(k * 400, 90 if k % 2 else 10) for k in range(10)] + [Action(3700, 10)]  # last too fast
+        w.curve.set_actions(acts)
+        w._edited()
+        assert w.issues and w.issues[0].kind == "fast" and w.check_btn.text() == "1 prüfen"
+        assert w.curve.issues == [(3600, 3700)]
+        w.seek_ms(0)
+        w.jump_issue(1)
+        assert abs(w._cur_ms() - 2600) < 50 and "zu schnell" in w.status_label.text()
+        chosen = []
+        monkeypatch.setattr(w, "_run_menu", lambda menu, pos: chosen.append([a.text() for a in menu.actions()]))
+        w._issue_menu()
+        assert any("zu schnell" in t for t in chosen[0])
+    finally:
+        w.dirty = False                 # no "unsaved changes" question when a check fails
+        w.close()

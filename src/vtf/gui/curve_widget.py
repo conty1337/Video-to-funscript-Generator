@@ -20,7 +20,7 @@ from typing import ClassVar
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QScrollBar, QSizePolicy, QWidget
 
 from .. import editing
@@ -64,6 +64,7 @@ class CurveWidget(QWidget):
         self._edge: tuple[int, str] | None = None   # section edge being dragged
         self.lost: list[tuple] = []      # tracking: (start, end) where an area was lost
         self.cuts: list[tuple] = []      # (start, end) the player skips
+        self.issues: list[tuple] = []    # (start, end) the script check found worth a look
         self.cut_open: float | None = None   # a cut started here, its end not set yet
         self._sel: set[int] = set()          # selected action indices
         self._drag_from: QPointF | None = None
@@ -98,6 +99,10 @@ class CurveWidget(QWidget):
 
     def set_sections(self, sections) -> None:
         self.sections = list(sections)
+        self.update()
+
+    def set_issues(self, stretches) -> None:
+        self.issues = list(stretches)
         self.update()
 
     def set_cuts(self, cuts, open_at: float | None = None) -> None:
@@ -292,6 +297,16 @@ class CurveWidget(QWidget):
             p.drawLine(QPointF(x, r.top()), QPointF(x, r.bottom()))
             p.drawPixmap(int(x + 4), int(r.bottom() - 22), theme.icon_pixmap("scissors", theme.TEXT_2, 14))
             p.drawText(QPointF(x + 22, r.bottom() - 10), "Schnitt ab hier, Ende fehlt")
+        # script check: amber marks along the top
+        for a, b in self.issues:
+            x0, x1 = self._x(a), self._x(b)
+            if x1 < r.left() - 6 or x0 > r.right() + 6:
+                continue
+            p.fillRect(QRectF(x0, r.top(), max(2.0, x1 - x0), 4), theme.qcolor(theme.ACCENT, 0.85))
+            cx = (x0 + x1) / 2
+            p.setPen(Qt.NoPen)
+            p.setBrush(theme.qcolor(theme.ACCENT, 0.85))
+            p.drawPolygon(QPolygonF([QPointF(cx - 5, r.top()), QPointF(cx + 5, r.top()), QPointF(cx, r.top() + 7)]))
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)
