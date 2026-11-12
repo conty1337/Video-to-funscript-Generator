@@ -160,6 +160,7 @@ class PlayerPanel(QWidget):
         self.countdown_s = QSpinBox()
         self.countdown_s.setRange(lo, hi)
         self.countdown_s.setSuffix(" s")
+        self.countdown_s.setFixedWidth(72)
         self.countdown_s.setToolTip("Wie lange der Countdown läuft. So weit vor dem ersten Hub startet "
                                     "das Video, und so weit vor dem nächsten Hub geht es nach einer "
                                     "übersprungenen Pause weiter")
@@ -180,7 +181,7 @@ class PlayerPanel(QWidget):
             cb.toggled.connect(self._options_changed)
             if cb is self.countdown_cb:          # its length right below it
                 row = QHBoxLayout()
-                row.setContentsMargins(24, 0, 0, 0)
+                row.setContentsMargins(22, 0, 0, 0)    # under the checkbox text: box 14 + gap 8
                 cap = QLabel("Länge")
                 cap.setObjectName("caption")
                 row.addWidget(cap)

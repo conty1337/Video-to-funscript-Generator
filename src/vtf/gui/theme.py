@@ -60,6 +60,12 @@ def mono_font(px: int = 12) -> QFont:
 # ------------------------------------------------------------ icons
 # lucide icons (ISC licence), 24x24 viewBox, stroke 1.5
 _ICONS = {
+    "scissors": '<circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/>'
+                '<circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/>',
+    "bookmark": '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+    "waves": '<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>'
+             '<path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>'
+             '<path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>',
     "play": '<polygon points="6 3 20 12 6 21 6 3"/>',
     "pause": '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
     "chevron-left": '<path d="m15 18-6-6 6-6"/>',
@@ -166,6 +172,7 @@ QLabel#value {{ color: {TEXT_2}; }}
 QPushButton {{ background: {RAISED}; border: 1px solid {HAIRLINE}; border-radius: 8px;
               padding: 0 16px; min-height: 32px; color: {TEXT}; }}
 QPushButton:hover {{ background: #2a2a2d; }}
+QPushButton:checked {{ color: {ACCENT}; border-color: {ACCENT}; }}
 QPushButton:pressed {{ background: {CARD}; }}
 QPushButton:disabled {{ color: {MUTED}; background: {CARD}; }}
 QPushButton#primary {{ background: {ACCENT}; color: {ON_ACCENT}; border: none; font-weight: 500; min-height: 36px; }}
@@ -178,6 +185,10 @@ QPushButton#statusAction:disabled {{ color: {TEXT_2}; background: transparent; }
 QPushButton#transport {{ background: transparent; border: none; min-height: 32px; min-width: 32px;
                         max-width: 32px; padding: 0; border-radius: 8px; }}
 QPushButton#transport:hover {{ background: {RAISED}; }}
+QPushButton#tool {{ background: transparent; border: 1px solid {HAIRLINE}; min-height: 28px; padding: 0 12px;
+                   border-radius: 8px; color: {TEXT_2}; }}
+QPushButton#tool:hover {{ background: {RAISED}; color: {TEXT}; }}
+QPushButton#tool:checked {{ background: {RAISED}; color: {ACCENT}; border-color: {ACCENT}; }}
 
 QComboBox, QSpinBox, QLineEdit {{ background: {RAISED}; border: 1px solid {HAIRLINE}; border-radius: 8px;
                                   padding: 0 8px; min-height: 28px; selection-background-color: {ACCENT};

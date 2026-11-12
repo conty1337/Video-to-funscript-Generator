@@ -106,7 +106,8 @@ Muster-Steuerung für einen Bereich ein.
 - **Schnitt** (im Editor): Wo nichts passiert, **X** am Anfang und **X** am
   Ende drücken, oder **Umschalt+X** = Schnitt bis zum Countdown vor dem nächsten Hub.
   Schraffiert in der Kurve; der Player springt darüber. Entfernen: Bearbeiten
-  → „Schnitt hier entfernen“.
+  → „Schnitt hier entfernen“. Alles auch als Knöpfe oben in der Zeitleiste
+  (Schnitt, Bis zum nächsten Hub, Schnitt weg, Glätten, Lesezeichen, Rhythmus).
 - **Muster** (Strg+M): fertige oder eigene Muster ohne Video auf dem Gerät
   abspielen. Nur zwei Regler, **Tiefe** und **Tempo**. Sie bleiben gespeichert
   und lassen sich beim Abspielen ändern: ↑/↓ Tiefe, ←/→ Tempo, Leertaste

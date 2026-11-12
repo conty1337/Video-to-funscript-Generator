@@ -42,7 +42,6 @@ SKEL_LINE = 7            # px around a body line that still picks it
 GRAB = 8                 # px around a handle that still grabs it
 MENU_SLACK = 12          # px beside an area where a right click still means that area
 ROLE_NAMES = ("Toy", "Bezug", "Bezug")   # what area 1, 2, 3 are
-STROKE_COLOR = "#e86fd0"
 
 
 def lasso_to_box(points: list[tuple[float, float]], aspect: float):
@@ -435,7 +434,7 @@ class VideoView(QWidget):
         p.save()
         p.setClipPath(path)
         hatch = QColor("#e5534b")
-        hatch.setAlpha(110)
+        hatch.setAlpha(70)
         p.setPen(QPen(hatch, 2 * band))
         p.setBrush(Qt.NoBrush)
         p.drawPath(path)
@@ -447,7 +446,7 @@ class VideoView(QWidget):
     def _paint_stroke(self, p: QPainter, r: QRectF, line, live: bool = False) -> None:
         a = QPointF(r.x() + line[0] * r.width(), r.y() + line[1] * r.height())
         b = QPointF(r.x() + line[2] * r.width(), r.y() + line[3] * r.height())
-        color = QColor(STROKE_COLOR)
+        color = theme.qcolor(theme.TEXT)          # an annotation: neutral, the areas keep their colours
         p.setPen(QPen(color, 2.5, Qt.DashLine if live else Qt.SolidLine, Qt.RoundCap))
         p.drawLine(a, b)
         ang = math.atan2(b.y() - a.y(), b.x() - a.x())

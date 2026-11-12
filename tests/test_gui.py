@@ -1597,7 +1597,7 @@ def test_roles_outlines_and_stroke_in_the_sections(app):
     assert tb.sections[0].boxes == (toy,) and tb.sections[0].keys[0][1] == 0 and len(changes) == n + 1
     assert "Abschnitt" in tb.set_stroke(1000, (0.5, 0.6, 0.4, 0.5))
     assert tb.stroke_at(500) == (0.5, 0.6, 0.4, 0.5) and gens
-    assert "↕" in tb.list.item(0).text()
+    assert "Hub-Richtung" in tb.list.item(0).toolTip()
     tb.set_stroke(1000, None)
     assert tb.stroke_at(500) is None
     # a new section after a scene cut keeps the arrow of the one it splits
@@ -1800,6 +1800,28 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     w.seek_ms(1000)
     w.remove_cut_here()
     assert w.cuts == [] and load_cuts(path) == []
+    w.set_player_mode(False)
+    w.dirty = False
+    w.close()
+
+
+def test_timeline_buttons_for_cuts(app, sine_video):
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.set_player_mode(False)
+    w.open_video(str(sine_video))
+    assert w.edit_tools.isVisibleTo(w)
+    w.seek_ms(1000)
+    w.cut_btn.click()
+    assert w.cut_btn.isChecked() and w.cut_btn.text() == "Schnitt-Ende"
+    w.seek_ms(2500)
+    w.cut_btn.click()
+    assert not w.cut_btn.isChecked() and len(w.cuts) == 1
+    w.cuts = []
+    w._cuts_changed()
+    w.set_player_mode(True)
+    assert not w.edit_tools.isVisibleTo(w)
     w.set_player_mode(False)
     w.dirty = False
     w.close()
