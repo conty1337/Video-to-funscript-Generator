@@ -45,3 +45,36 @@ def test_server_pin_state_commands():
         srv.stop()
     assert not srv.running
     assert len(new_pin()) == 6 and local_addresses()
+
+
+def test_qr_code_holds_address_and_pin():
+    import os
+
+    import pytest
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    segno = pytest.importorskip("segno")
+    from PySide6.QtWidgets import QApplication
+
+    from vtf.gui.remote_ui import qr_pixmap
+
+    QApplication.instance() or QApplication([])
+    text = "http://192.168.1.20:8765/#pin=123456"
+    pix = qr_pixmap(text, module_px=4)
+    q = segno.make(text, error="m", micro=False)
+    n = q.symbol_size(scale=1, border=4)[0]
+    assert pix is not None and pix.width() == pix.height() == n * 4
+    img = pix.toImage()
+    rows = list(q.matrix_iter(scale=1, border=4))
+    for y in (4, n // 2, n - 5):                       # the dark modules are where segno put them
+        for x in range(n):
+            dark = img.pixelColor(x * 4 + 1, y * 4 + 1).value() < 128
+            assert dark == bool(rows[y][x])
+
+
+def test_page_takes_the_pin_from_the_qr_link():
+    from vtf import remote
+
+    page = remote.PAGE if hasattr(remote, "PAGE") else open(remote.__file__, encoding="utf-8").read()
+    assert "location.hash.match(/pin=" in page and "history.replaceState" in page

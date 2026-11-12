@@ -335,6 +335,8 @@ placeholder="······">
 </div></nav>
 
 <script>
+(()=>{const m=location.hash.match(/pin=([0-9]+)/);if(m){localStorage.setItem('vtf-pin',m[1]);
+history.replaceState(null,'',location.pathname)}})();
 let pin=localStorage.getItem('vtf-pin')||'',st=null,drag=0,listKey='',curveKey='',vlistKey='',vdrag=0;
 let tab=localStorage.getItem('vtf-tab');
 const $=id=>document.getElementById(id);

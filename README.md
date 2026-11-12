@@ -53,6 +53,7 @@ Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
 | 32 | Script-Prüfung: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin | ✅ |
 | 33 | Automatisch finden (F): Toy umrandet, Bezug und Hub-Richtung aus der rhythmischen Bewegung | ✅ |
 | 34 | Bibliothek (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche, Sortierung und Sternen | ✅ |
+| 35 | QR-Code für die Handy-Fernbedienung (PIN schon drin) | ✅ |
 
 ## Installation als AppImage (am einfachsten)
 
@@ -415,7 +416,9 @@ Unterordner durchsucht.
 
 Gerät → **Handy-Fernbedienung** → „Fernbedienung an“. Am Handy (gleiches WLAN)
 öffnest du die angezeigte Adresse im Browser, zum Beispiel
-`http://192.168.0.20:8765`, und gibst die PIN ein. Eine App ist nicht nötig. Das
+`http://192.168.0.20:8765`, und gibst die PIN ein – oder du scannst einfach den
+**QR-Code** im Fenster mit der Handy-Kamera, dann ist die PIN schon drin. Eine
+App ist nicht nötig. Das
 Handy kann Start/Stopp, **Not-Aus**, Muster/Ablauf/Zufall wählen, Tiefe und
 Tempo einstellen und Schritte springen. Im Reiter **Video** ist es die
 Fernbedienung für den Player: Abspielen/Pause, ±10 s, voriges/nächstes Video,
