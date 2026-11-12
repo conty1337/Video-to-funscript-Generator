@@ -307,6 +307,7 @@ class CurveWidget(QWidget):
             p.setPen(Qt.NoPen)
             p.setBrush(theme.qcolor(theme.ACCENT, 0.85))
             p.drawPolygon(QPolygonF([QPointF(cx - 5, r.top()), QPointF(cx + 5, r.top()), QPointF(cx, r.top() + 7)]))
+        p.setBrush(Qt.NoBrush)                  # the script line below must not be filled
         # lost tracking: red bars along the bottom
         for a, b in self.lost:
             x0, x1 = self._x(a), self._x(b)
@@ -334,6 +335,7 @@ class CurveWidget(QWidget):
                 pt = QPointF(self._x(a.at), self._y(a.pos / 100))
                 path.moveTo(pt) if k == 0 else path.lineTo(pt)
             p.setPen(QPen(theme.qcolor(theme.ACCENT), 1.5))
+            p.setBrush(Qt.NoBrush)              # a line, never a filled shape
             p.drawPath(path)
             if self.view_ms < 120_000:
                 for i in vis:

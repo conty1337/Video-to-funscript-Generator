@@ -1909,3 +1909,36 @@ def test_playing_counts_time_and_strokes_for_the_statistics(app, sine_video):
         w.dirty = False
         w.close()
         S.reset()
+
+
+def test_script_line_is_not_filled_when_check_marks_are_shown(app):
+    """The marks of the script check set a brush: the script line drawn after them must
+    stay a line (it was filled into big orange areas and bands)."""
+    import numpy as np
+    from PySide6.QtGui import QColor
+
+    from vtf.funscript import Action
+    from vtf.gui import theme
+    from vtf.gui.curve_widget import CurveWidget
+
+    c = CurveWidget()
+    c.resize(800, 200)
+    acts = [Action(k * 500, 95 if k % 2 else 5) for k in range(21)]
+    c.set_data(np.zeros(0), np.zeros(0), acts, 10_000)
+    c.view_ms, c.start_ms = 10_000, 0
+    c.set_issues([(2000, 3000)])
+    img = c.grab().toImage()
+    acc = QColor(theme.ACCENT)
+
+    def orange(x, y):
+        q = img.pixelColor(x, y)
+        return abs(q.red() - acc.red()) < 40 and abs(q.green() - acc.green()) < 40 and abs(q.blue() - acc.blue()) < 40
+
+    r = c._plot()
+    # inside the "V" under a peak, halfway down: background, not the fill colour
+    hits = 0
+    for k in range(1, 19, 2):
+        x = int(c._x(k * 500))
+        y = int(r.top() + r.height() * 0.6)
+        hits += orange(x, y)
+    assert hits == 0, hits
