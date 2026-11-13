@@ -103,3 +103,28 @@ def test_switching_pictures_off_deletes_them(cfg, sine_video):
     d.data.set_folder(cfg / "vdata2")
     assert not p2.exists() and (cfg / "vdata2" / "thumbs" / p2.name).is_file()
     d.deleteLater()
+
+
+def test_file_managers_get_the_picture_for_the_script(cfg, sine_video, monkeypatch):
+    """freedesktop thumbnail cache: <md5 of the URI>.png with Thumb::URI and Thumb::MTime."""
+    import hashlib
+
+    import cv2
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cfg / "cache"))
+    script = cfg / "Mein Clip.funscript"
+    script.write_text("{}")
+    assert not thumbs.publish(script, sine_video)                  # no picture yet
+    thumbs.make_thumb(sine_video)
+    assert thumbs.publish(script, sine_video)
+    uri = "file://" + str(script).replace(" ", "%20")
+    for size, px in (("normal", 128), ("large", 256)):
+        out = cfg / "cache" / "thumbnails" / size / (hashlib.md5(uri.encode()).hexdigest() + ".png")
+        data = out.read_bytes()
+        assert b"Thumb::URI\0" + uri.encode() in data
+        assert b"Thumb::MTime\0" + str(int(script.stat().st_mtime)).encode() in data
+        img = cv2.imread(str(out))
+        assert img is not None and max(img.shape[:2]) == px
+    first = out.stat().st_mtime_ns
+    assert thumbs.publish(script, sine_video) and out.stat().st_mtime_ns == first   # still current
+    os.utime(script, (time.time() + 5, time.time() + 5))           # saved again: new picture
+    assert thumbs.publish(script, sine_video) and out.stat().st_mtime_ns != first

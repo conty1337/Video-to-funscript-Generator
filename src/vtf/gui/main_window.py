@@ -71,7 +71,7 @@ from ..scriptdir import (
     video_stem,
 )
 from ..scriptdir import settings as script_settings
-from ..thumbs import get_thumb, make_thumb
+from ..thumbs import get_thumb, make_thumb, publish
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -2069,6 +2069,7 @@ class MainWindow(QMainWindow):
             return
         meta = make_metadata(self.video_path)
         saved: list[str] = []
+        written: list[Path] = []
         try:
             for base in bases:
                 base.parent.mkdir(parents=True, exist_ok=True)
@@ -2081,12 +2082,15 @@ class MainWindow(QMainWindow):
                         continue
                     Funscript(acts, metadata={**self._metadata_for(target, meta),
                                                 LINK_KEY: video_link(self.video_path, target)}).save(target)
+                    written.append(target)
                     if target.name not in saved:
                         saved.append(target.name)
         except OSError as e:
             QMessageBox.critical(self, tr("Fehler"), tr("Speichern fehlgeschlagen:\n{0}", e))
             return
         self.dirty = False
+        for t in written:
+            publish(t, self.video_path)              # its picture in the file manager
         near = funscript_path_for(self.video_path)
         folder = script_settings().folder
         in_folder = folder is not None and any(b.parent == folder for b in bases)

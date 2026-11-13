@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import os
+import struct
+import zlib
 from pathlib import Path
+from urllib.parse import quote
 
 import cv2
 import numpy as np
@@ -104,6 +107,73 @@ def make_thumb(video: str | Path, force: bool = False) -> Path | None:
     except OSError:
         return None
     return out
+
+
+# ------------------------------------------------------------ file managers
+# The picture of the video also stands for its .funscript in Dolphin, Nautilus & co., which
+# otherwise show the text. They look in the shared thumbnail cache (freedesktop spec):
+# <cache>/thumbnails/<size>/<md5 of the file URI>.png, valid while Thumb::MTime matches.
+DESKTOP_SIZES = {"normal": 128, "large": 256}
+
+
+def _file_uri(path: Path) -> str:
+    # as Qt writes it (QUrl FullyEncoded), so the cache name is the one the file manager looks for
+    return "file://" + quote(str(path.absolute()), safe="/!$&'()*+,;=:@")
+
+
+def desktop_thumb_path(script: Path, size: str = "normal") -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return Path(base) / "thumbnails" / size / (hashlib.md5(_file_uri(script).encode()).hexdigest() + ".png")
+
+
+def _png_with_text(png: bytes, text: dict[str, str]) -> bytes:
+    """Put tEXt chunks right after the header chunk (IHDR) of a PNG."""
+    chunks = b"".join(struct.pack(">I", len(d)) + b"tEXt" + d + struct.pack(">I", zlib.crc32(b"tEXt" + d))
+                      for d in (k.encode("latin-1") + b"\0" + v.encode("utf-8") for k, v in text.items()))
+    end = 8 + 4 + 4 + 13 + 4                     # signature + IHDR (length, type, 13 bytes, crc)
+    return png[:end] + chunks + png[end:]
+
+
+def publish(script: str | Path, video_or_stem: str | Path) -> bool:
+    """Show the video's picture for this script file in file managers. Nothing to do when
+    pictures are off, the picture is missing or the cache already has it for this version."""
+    pic = get_thumb(video_or_stem)
+    script = Path(script)
+    try:
+        mtime = str(int(script.stat().st_mtime))
+    except OSError:
+        return False
+    if pic is None:
+        return False
+    img = None
+    for size, px in DESKTOP_SIZES.items():
+        out = desktop_thumb_path(script, size)
+        try:
+            if out.is_file() and f"Thumb::MTime\0{mtime}".encode() in out.read_bytes()[:4096]:
+                continue
+        except OSError:
+            pass
+        if img is None:
+            img = cv2.imread(str(pic))
+            if img is None:
+                return False
+        h, w = img.shape[:2]
+        k = min(1.0, px / max(h, w))
+        ok, buf = cv2.imencode(".png", cv2.resize(img, (max(1, round(w * k)), max(1, round(h * k))),
+                                                  interpolation=cv2.INTER_AREA))
+        if not ok:
+            return False
+        data = _png_with_text(buf.tobytes(), {"Thumb::URI": _file_uri(script), "Thumb::MTime": mtime,
+                                              "Software": "Video-to-Funscript"})
+        try:
+            out.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            tmp = out.with_name(out.name + ".vtf.tmp")
+            tmp.write_bytes(data)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, out)
+        except OSError:
+            return False
+    return True
 
 
 def thumb_bytes(video_or_stem: str | Path) -> bytes | None:

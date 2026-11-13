@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from ..i18n import tr
 from ..library import SORTS, filtered, save_rating, scan
-from ..thumbs import get_thumb, make_thumb
+from ..thumbs import get_thumb, make_thumb, publish
 from . import theme
 from .heatbar import heat_color
 
@@ -243,9 +243,11 @@ class LibraryDialog(QDialog):
         self._make_missing_thumbs()
 
     def _make_missing_thumbs(self) -> None:
-        """Create the preview pictures that are missing, in the background (a few at a time)."""
-        todo = [e.video for e in self.entries if not e.missing and get_thumb(e.name) is None]
-        if not todo or getattr(self, "_thumb_thread", None) is not None:
+        """Create the preview pictures that are missing, in the background (a few at a time),
+        and hand them to the file manager for the script files (thumbs.publish)."""
+        found = [e for e in self.entries if not e.missing]
+        todo = [e.video for e in found if get_thumb(e.name) is None]
+        if not found or getattr(self, "_thumb_thread", None) is not None:
             return
 
         def run():
@@ -256,6 +258,8 @@ class LibraryDialog(QDialog):
                         self.thumbsMade.emit()
                     except RuntimeError:            # the window is gone
                         return
+            for e in found:
+                publish(e.script, e.video)
             self._thumb_thread = None
         self._thumb_thread = threading.Thread(target=run, daemon=True, name="library-thumbs")
         self._thumb_thread.start()
