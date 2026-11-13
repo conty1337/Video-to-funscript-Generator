@@ -2,7 +2,7 @@
 and where the video data (<video>.vtf.json: boxes, sections, cuts, bookmarks) goes.
 
 Saved in ~/.config/video-to-funscript/scripts.json:
-{"folder": "...", "next_to_video": true, "data_folder": "..."}.
+{"folder": "...", "next_to_video": true, "data_folder": "...", "thumbnails": true}.
 No folder set = next to the video only. Finding a script looks next to the video first, then
 in the script folder: directly in it, then in its subfolders (by file name). No Qt.
 """
@@ -27,6 +27,7 @@ class ScriptDir:
     folder: Path | None = None
     next_to_video: bool = True
     data_folder: Path | None = None          # video data (.vtf.json); None = next to the video
+    thumbnails: bool = True                  # keep small preview pictures of the videos (thumbs.py)
 
     @property
     def active(self) -> bool:
@@ -49,16 +50,18 @@ def settings() -> ScriptDir:
     def path(key: str) -> Path | None:
         v = str(d.get(key) or "").strip()
         return Path(v).expanduser() if v else None
-    return ScriptDir(path("folder"), bool(d.get("next_to_video", True)), path("data_folder"))
+    return ScriptDir(path("folder"), bool(d.get("next_to_video", True)), path("data_folder"),
+                     bool(d.get("thumbnails", True)))
 
 
 def save_settings(folder: str | Path | None, next_to_video: bool = True,
-                  data_folder: str | Path | None = None) -> None:
+                  data_folder: str | Path | None = None, thumbnails: bool = True) -> None:
     f = _file()
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.with_name(f.name + ".tmp")
     tmp.write_text(json.dumps({"folder": str(folder) if folder else "", "next_to_video": bool(next_to_video),
-                               "data_folder": str(data_folder) if data_folder else ""},
+                               "data_folder": str(data_folder) if data_folder else "",
+                               "thumbnails": bool(thumbnails)},
                               indent=1), encoding="utf-8")
     os.replace(tmp, f)
     _index_cache.clear()

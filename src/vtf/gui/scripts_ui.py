@@ -3,6 +3,7 @@ video data (<video>.vtf.json: boxes, sections, calibration, cuts, bookmarks)."""
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -104,6 +105,12 @@ class ScriptFolderDialog(QDialog):
         self.data = _FolderRow(tr("Ordner für Video-Daten"), tr("keiner – neben dem Video"),
                                tr("Kein Ordner: Video-Daten neben dem Video"), self._store)
         lay.addLayout(self.data)
+        self.thumbs = QCheckBox(tr("Vorschaubilder speichern"))
+        self.thumbs.setToolTip(tr("Ein kleines Bild pro Video für Bibliothek, Playlist und Handy, im Ordner für "
+                                  "Video-Daten oder im App-Ordner. Aus: vorhandene Bilder werden gelöscht"))
+        self.thumbs.setChecked(sd.thumbnails)
+        self.thumbs.toggled.connect(self._thumbs_toggled)
+        lay.addWidget(self.thumbs)
 
         self.result = QLabel()
         self.result.setObjectName("caption")
@@ -131,13 +138,39 @@ class ScriptFolderDialog(QDialog):
         old = scriptdir.settings()
         notes = [n for n in (self._offer_move(old.folder, self.scripts.folder, "scripts"),
                              self._offer_move(old.data_folder, self.data.folder, "data")) if n]
+        if old.thumbnails and old.data_folder != self.data.folder:
+            from ..thumbs import thumb_dir
+            src = thumb_dir()                    # pictures follow the folder for video data
+        else:
+            src = None
         try:
-            scriptdir.save_settings(self.scripts.folder, self.next_to.isChecked(), self.data.folder)
+            scriptdir.save_settings(self.scripts.folder, self.next_to.isChecked(), self.data.folder,
+                                    self.thumbs.isChecked())
         except OSError:
             pass
+        if src is not None:
+            from ..thumbs import thumb_dir
+            dst = thumb_dir()
+            if src != dst and src.is_dir():
+                for f in src.glob("*.jpg"):
+                    target = dst / f.name
+                    if not target.exists():
+                        try:
+                            dst.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(f), str(target))
+                        except OSError:
+                            pass
         if notes:
             self.result.setText(" · ".join(notes))
         self._refresh()
+
+    def _thumbs_toggled(self, on: bool):
+        if not on:
+            from ..thumbs import delete_all
+            n = delete_all()
+            if n:
+                self.result.setText(plural(n, "{0} Vorschaubild gelöscht", "{0} Vorschaubilder gelöscht"))
+        self._store()
 
     def _ask(self, title: str, text: str) -> bool:
         return QMessageBox.question(self, title, text) == QMessageBox.Yes

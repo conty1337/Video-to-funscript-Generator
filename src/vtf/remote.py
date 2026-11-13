@@ -47,8 +47,10 @@ def local_addresses() -> list[str]:
 
 class RemoteServer:
     def __init__(self, get_state: Callable[[], dict], on_command: Callable[[dict], None], pin: str,
-                 port: int = DEFAULT_PORT, host: str = "0.0.0.0"):
+                 port: int = DEFAULT_PORT, host: str = "0.0.0.0",
+                 get_thumb: Callable[[int], bytes | None] | None = None):
         self.get_state = get_state
+        self.get_thumb = get_thumb          # preview picture of playlist entry i (JPEG) or None
         self.on_command = on_command
         self.pin = pin
         self.port = port
@@ -103,6 +105,17 @@ class RemoteServer:
                     params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                     if self._authorized(params.get("pin", "")):
                         self._json(200, server.get_state())
+                elif path == "/api/thumb":
+                    params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
+                    if self._authorized(params.get("pin", "")):
+                        try:
+                            data = server.get_thumb(int(params.get("i", "-1"))) if server.get_thumb else None
+                        except (ValueError, OSError):
+                            data = None
+                        if data:
+                            self._send(200, data, "image/jpeg")
+                        else:
+                            self._json(404, {"error": tr("nicht gefunden")})
                 else:
                     self._json(404, {"error": tr("nicht gefunden")})
 
@@ -224,6 +237,7 @@ color:var(--t2);cursor:pointer}
 #vlist li.on{background:var(--raised);color:var(--text)}
 #vlist li .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #vlist li .k{font-family:var(--mono);font-size:12px;color:var(--muted);width:24px;text-align:right}
+#vlist li img{width:64px;height:36px;flex:none;object-fit:cover;border-radius:6px;background:var(--raised)}
 #vlist li.on .k{color:var(--accent)}
 #vempty{margin-top:8px}
 #vseek{display:block;width:100%}
@@ -403,7 +417,8 @@ const vp=$('vplay');vp.querySelector('use').setAttribute('href',v.playing?'#i-pa
 vp.setAttribute('aria-label',v.playing?'Pause':'Abspielen');
 const ck='v'+JSON.stringify(v.curve);if(ck!==curveKey){curveKey=ck;drawCurve(v.curve,v.curve.length?v.now:null)}
 const lk=v.items.join('|');if(lk!==vlistKey){vlistKey=lk;$('vlist').innerHTML=v.items.map((t,k)=>
-'<li data-i="'+k+'"><span class="k">'+(k+1)+'</span><span class="n">'+esc(t)+'</span></li>').join('');
+'<li data-i="'+k+'"><span class="k">'+(k+1)+'</span><img alt="" loading="lazy" onerror="this.remove()" src="/api/thumb?pin='+
+encodeURIComponent(pin)+'&i='+k+'&n='+encodeURIComponent(t)+'"><span class="n">'+esc(t)+'</span></li>').join('');
 $('vlist').querySelectorAll('li').forEach(li=>li.onclick=()=>cmd({cmd:'vplay',index:+li.dataset.i}))}
 $('vlist').querySelectorAll('li').forEach(li=>li.classList.toggle('on',+li.dataset.i==i));
 $('vlist').classList.toggle('hidden',!n);$('vempty').classList.toggle('hidden',!!n)}

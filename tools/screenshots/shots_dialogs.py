@@ -8,6 +8,7 @@ for k, d in (("XDG_CONFIG_HOME", "cfgd"), ("XDG_CACHE_HOME", "cached")):
     shutil.rmtree(S / f"{d}_{LANG}", ignore_errors=True)
     os.environ[k] = str(S / f"{d}_{LANG}")
 os.environ["VTF_NO_UPDATE"] = "1"
+os.environ["XDG_DATA_HOME"] = str(S / f"datad_{LANG}")      # preview pictures of this run
 sys.path.insert(0, "src")
 EN = LANG == "en"
 
@@ -19,8 +20,10 @@ titles = (["Evening session", "Slow build-up", "Short and fast", "Long weekend",
 spec = [(14, 55, 0.9, 5), (22, 40, 0.6, 4), (6, 110, 1.0, 3), (41, 70, 0.8, 5), (9, 45, 0.5, 0), (17, 80, 0.7, 4)]
 from vtf.funscript import Action, Funscript
 from vtf.library import save_rating
-for title, (minutes, bpm, depth, stars) in zip(titles, spec):
-    (lib / f"{title}.mp4").write_bytes(b"\0")                       # the library only lists, it does not decode
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import scene
+for k, (title, (minutes, bpm, depth, stars)) in enumerate(zip(titles, spec)):
+    scene.scene(lib / f"{title}.avi", seconds=1.5, seed=10 + k, warm=k % 2 == 0)   # short clips: pictures
     acts, t, k = [], 0.0, 0
     while t < minutes * 60_000:
         wave = 0.5 + 0.5 * math.sin(t / 90_000 * 2 * math.pi)
@@ -29,7 +32,7 @@ for title, (minutes, bpm, depth, stars) in zip(titles, spec):
         t += 30_000 / tempo; k += 1
     Funscript(acts).save(lib / f"{title}.funscript")
     if stars:
-        save_rating(lib / f"{title}.mp4", stars)
+        save_rating(lib / f"{title}.avi", stars)
 today = dt.date.today()
 days = {}
 for back, secs, strokes in ((0, 1900, 1450), (1, 2600, 2010), (3, 1200, 830), (6, 3300, 2600), (9, 900, 610),
@@ -88,6 +91,11 @@ d.close()
 # library
 from vtf.gui.library_dialog import LibraryDialog
 ld = LibraryDialog(w.qsettings, w); ld.set_folder(str(lib)); ld.show(); ld.resize(1080, 560)
+import time
+from vtf.thumbs import get_thumb
+end = time.monotonic() + 20
+while any(get_thumb(t) is None for t in titles) and time.monotonic() < end:     # pictures come in the background
+    settle(2); time.sleep(0.05)
 ld.sort.setCurrentIndex(ld.sort.findData("rating"))
 ld.tree.setCurrentItem(ld.tree.topLevelItem(0))
 ld.folder_label.setText("~/Videos")

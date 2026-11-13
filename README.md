@@ -350,6 +350,12 @@ default every file lies next to its video. Two folders change that:
   video folder stays tidy. Files already lying next to a video are still found and
   move into the folder the next time they are saved.
 
+- **Preview pictures** (on by default): one small picture per video, shown in the
+  library, the playlist, on the phone and when the app asks you to look for a
+  missing video. Kept in the folder for video data (`thumbs/`) or else in
+  `~/.local/share/video-to-funscript/thumbs`, never next to the video. Untick
+  “Keep preview pictures” to delete them all.
+
 When you change or clear a folder, the app offers to take the files along (into
 the new folder, or back next to their videos). Two videos with the same name in
 different folders share one file name in these folders. Stored in
@@ -696,6 +702,7 @@ src/vtf/
   batch.py       folder processing
   library.py     library, ratings
   scriptdir.py   where scripts and video data are saved and found
+  thumbs.py      preview pictures of the videos
   stats.py       local statistics
   i18n.py        languages (locale_en.py: English texts)
   gpu.py         OpenCL helpers

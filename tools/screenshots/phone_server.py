@@ -3,6 +3,10 @@ import json, math, os, sys, time
 sys.path.insert(0, "src")
 S = sys.argv[1]; LANG = os.environ.get("VTF_LANG", "en")
 os.environ["XDG_CONFIG_HOME"] = f"{S}/cfgp_{LANG}"
+os.environ["XDG_DATA_HOME"] = f"{S}/datap_{LANG}"
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import scene
 from PySide6.QtWidgets import QApplication
 app = QApplication([])
 from vtf.gui.main_window import MainWindow
@@ -21,7 +25,16 @@ names = (["Morning by the lake", "Evening session part 1", "Evening session part
          if LANG == "en" else ["Morgens am See", "Abendrunde Teil 1", "Abendrunde Teil 2", "Langes Wochenende", "Kurz und schnell"])
 st["video"] = {"title": names[2], "playing": True, "pos": 754000, "dur": 1926000, "script": True,
                "items": names, "current": 2, "player": True, "curve": curve, "now": 0.2}
-srv = RemoteServer(lambda: st, lambda c: None, "123456", 0, "127.0.0.1"); srv.start()
+from vtf.thumbs import make_thumb, thumb_bytes
+clips = Path(S) / f"phone_clips_{LANG}"; clips.mkdir(exist_ok=True)
+for k, n in enumerate(names):                     # short clips, only for their preview pictures
+    v = clips / f"{n}.avi"
+    if not v.exists():
+        scene.scene(v, seconds=1.5, seed=20 + k, warm=k % 2 == 1)
+    make_thumb(v)
+srv = RemoteServer(lambda: st, lambda c: None, "123456", 0, "127.0.0.1",
+                   get_thumb=lambda i: thumb_bytes(names[i]) if 0 <= i < len(names) else None)
+srv.start()
 print(srv.port, flush=True)
 time.sleep(40)
 srv.stop(); os._exit(0)

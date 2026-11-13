@@ -376,6 +376,12 @@ Einstellung liegt jede Datei neben ihrem Video. Zwei Ordner ändern das:
   Video liegen, werden weiter gefunden und beim nächsten Speichern in den Ordner
   verschoben.
 
+- **Vorschaubilder** (Standard: an): ein kleines Bild pro Video, zu sehen in der
+  Bibliothek, in der Playlist, auf dem Handy und wenn die App nach einem fehlenden
+  Video fragt. Sie liegen im Ordner für Video-Daten (`thumbs/`) oder sonst unter
+  `~/.local/share/video-to-funscript/thumbs`, nie neben dem Video. Ohne Häkchen bei
+  „Vorschaubilder speichern“ werden alle gelöscht.
+
 Änderst du einen Ordner oder setzt ihn zurück, bietet die App an, die Dateien
 mitzunehmen (in den neuen Ordner oder zurück neben die Videos). Heißen zwei Videos
 in verschiedenen Ordnern gleich, teilen sie sich in diesen Ordnern einen
@@ -738,6 +744,7 @@ src/vtf/
   batch.py       Ordnerverarbeitung
   library.py     Bibliothek, Bewertungen
   scriptdir.py   Wo Scripts und Video-Daten gespeichert und gesucht werden
+  thumbs.py      Vorschaubilder der Videos
   stats.py       Lokale Statistik
   i18n.py        Sprachen (locale_en.py: englische Texte)
   gpu.py         OpenCL-Hilfen

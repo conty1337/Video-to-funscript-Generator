@@ -5,13 +5,14 @@ from __future__ import annotations
 import bisect
 import json
 import math
+import threading
 from dataclasses import replace
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QPainter
+from PySide6.QtGui import QAction, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -68,6 +69,7 @@ from ..scriptdir import (
     video_stem,
 )
 from ..scriptdir import settings as script_settings
+from ..thumbs import get_thumb, make_thumb
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -607,6 +609,9 @@ class MainWindow(QMainWindow):
         box = QMessageBox(QMessageBox.Question, tr("Video nicht gefunden"),
                           tr("Zum Script „{0}“ wurde kein Video gefunden. Verschoben oder umbenannt?",
                              Path(script).name), parent=self)
+        pic = get_thumb(video_stem(script))      # the picture from before helps to recognise it
+        if pic is not None:
+            box.setIconPixmap(QPixmap(str(pic)).scaledToWidth(160, Qt.SmoothTransformation))
         look = box.addButton(tr("Video suchen…"), QMessageBox.AcceptRole)
         box.addButton(QMessageBox.Cancel)
         self._run_dialog(box)
@@ -722,6 +727,7 @@ class MainWindow(QMainWindow):
         self._l0_signal = None
         loaded = load_axes(path)
         remember_video(path)                     # a script opened later finds its video again
+        threading.Thread(target=make_thumb, args=(path,), daemon=True, name="thumb").start()
         self.axis_actions = {k: v for k, v in loaded.items()}
         self.axis = "L0"
         self.axis_box.setCurrentIndex(0)

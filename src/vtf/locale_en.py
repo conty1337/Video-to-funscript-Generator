@@ -2137,4 +2137,12 @@ EN: dict[str, str] = {
         "{0} left in the old folder",
     "{0} von {1} verschoben":
         "{0} of {1} moved",
+    "Vorschaubilder speichern":
+        "Keep preview pictures",
+    "Ein kleines Bild pro Video für Bibliothek, Playlist und Handy, im Ordner für Video-Daten oder im App-Ordner. Aus: vorhandene Bilder werden gelöscht":
+        "One small picture per video for the library, the playlist and the phone, in the folder for video data or the app's folder. Off: existing pictures are deleted",
+    "{0} Vorschaubild gelöscht":
+        "{0} preview picture deleted",
+    "{0} Vorschaubilder gelöscht":
+        "{0} preview pictures deleted",
 }
