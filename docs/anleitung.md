@@ -20,7 +20,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
 
 ## In 8 Schritten zum Script
 
-1. **Video öffnen**: Strg+O oder die Datei ins Fenster ziehen.
+1. **Video öffnen**: Strg+O oder die Datei ins Fenster ziehen. Öffnest du eine
+   `.funscript`, geht das passende Video mit auf.
 2. **Methode wählen** (links):
    - *Bewegung im Bild*: erkennt die stärkste Bewegung selbst. Schnell, gut
      bei ruhiger Kamera und einer klaren Bewegung.

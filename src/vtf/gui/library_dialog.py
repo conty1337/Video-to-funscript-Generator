@@ -196,9 +196,15 @@ class LibraryDialog(QDialog):
         shown = filtered(self.entries, self.search.text(), self.sort.currentData(), self.min_stars.currentData())
         self.tree.clear()
         for e in shown:
-            it = QTreeWidgetItem([e.name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
+            name = e.name + tr(" · Video fehlt") if e.missing else e.name
+            it = QTreeWidgetItem([name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
                                   f"{e.avg_speed:.0f}", "", ""])
-            it.setToolTip(COL_NAME, str(e.video))
+            if e.missing:
+                it.setForeground(COL_NAME, theme.qcolor(theme.MUTED))
+                it.setToolTip(COL_NAME, tr("Video nicht gefunden (verschoben oder umbenannt?) – Doppelklick sucht es\n{0}",
+                                           e.script))
+            else:
+                it.setToolTip(COL_NAME, str(e.video))
             it.setToolTip(COL_TEMPO, tr("mittleres Tempo {0:.0f} Pos./s, höchstes {1:.0f}", e.avg_speed, e.max_speed))
             for c in (COL_LEN, COL_RATE, COL_TEMPO):
                 it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
@@ -214,7 +220,7 @@ class LibraryDialog(QDialog):
 
     def rate(self, it, stars: int) -> None:
         e = self._entry(it)
-        if e is None:
+        if e is None or e.missing:
             return
         e.rating = max(0, min(5, stars))
         save_rating(e.video, e.rating)
@@ -250,12 +256,13 @@ class LibraryDialog(QDialog):
 
     def _play(self, it):
         e = self._entry(it)
-        if e is not None:
-            self.playRequested.emit(str(e.video))
+        if e is not None:                   # video missing: the script, the window looks for its video
+            self.playRequested.emit(str(e.script if e.missing else e.video))
             self.accept()
 
     def _queue(self):
-        paths = [str(self._entry(it).video) for it in self.tree.selectedItems() if self._entry(it)]
+        paths = [str(self._entry(it).video) for it in self.tree.selectedItems()
+                 if self._entry(it) and not self._entry(it).missing]
         if paths:
             self.queueRequested.emit(paths)
             self.count.setText(tr("{0} zur Playlist hinzugefügt", len(paths)))
@@ -263,6 +270,6 @@ class LibraryDialog(QDialog):
     def _edit(self):
         e = self._entry(self.tree.currentItem())
         if e is not None:
-            self.editRequested.emit(str(e.video))
+            self.editRequested.emit(str(e.script if e.missing else e.video))
             self.accept()
 

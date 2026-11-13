@@ -20,7 +20,8 @@ Ctrl+1 folds the left panel away, Ctrl+2 the right one.
 
 ## To the script in 8 steps
 
-1. **Open a video**: Ctrl+O or drop the file onto the window.
+1. **Open a video**: Ctrl+O or drop the file onto the window. Opening a
+   `.funscript` opens its video with it.
 2. **Choose a method** (left):
    - *Image motion*: finds the strongest movement by itself. Fast, good with a
      calm camera and one clear movement.

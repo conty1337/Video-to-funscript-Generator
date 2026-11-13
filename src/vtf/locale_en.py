@@ -2097,4 +2097,44 @@ EN: dict[str, str] = {
         "No folder: video data next to the video",
     "Wo Scripts und Video-Daten gespeichert und gesucht werden: neben dem Video und/oder in eigenen Ordnern":
         "Where scripts and video data are saved and looked for: next to the video and/or in folders of their own",
+    " · Video fehlt":
+        " · video missing",
+    ", {0} blieben liegen (Ziel schon vorhanden oder Video unbekannt)":
+        ", {0} stayed (target exists already or video unknown)",
+    "Dateien mitnehmen?":
+        "Take the files along?",
+    "Im bisherigen Ordner {0} liegen {1}. Sollen sie {2} verschoben werden? Sonst bleiben sie dort und werden nicht mehr gefunden.":
+        "The previous folder {0} holds {1}. Move them {2}? Otherwise they stay there and are no longer found.",
+    "Script geladen: {0}":
+        "Script loaded: {0}",
+    "Video nicht gefunden":
+        "Video not found",
+    "Video nicht gefunden (verschoben oder umbenannt?) – Doppelklick sucht es\n{0}":
+        "Video not found (moved or renamed?) – a double click looks for it\n{0}",
+    "Video oder Script öffnen":
+        "Open video or script",
+    "Video suchen…":
+        "Look for the video…",
+    "Video zu „{0}“ suchen":
+        "Look for the video of “{0}”",
+    "Videos und Scripts ({0} *.funscript);;Alle Dateien (*)":
+        "Videos and scripts ({0} *.funscript);;All files (*)",
+    "Zum Script „{0}“ wurde kein Video gefunden. Verschoben oder umbenannt?":
+        "No video was found for the script “{0}”. Moved or renamed?",
+    "in den neuen Ordner {0}":
+        "into the new folder {0}",
+    "zurück neben die Videos":
+        "back next to the videos",
+    "{0} Datei mit Video-Daten":
+        "{0} file with video data",
+    "{0} Dateien mit Video-Daten":
+        "{0} files with video data",
+    "{0} Script":
+        "{0} script",
+    "{0} Scripts":
+        "{0} scripts",
+    "{0} im alten Ordner gelassen":
+        "{0} left in the old folder",
+    "{0} von {1} verschoben":
+        "{0} of {1} moved",
 }

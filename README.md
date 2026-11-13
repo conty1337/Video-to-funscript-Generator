@@ -350,8 +350,18 @@ default every file lies next to its video. Two folders change that:
   video folder stays tidy. Files already lying next to a video are still found and
   move into the folder the next time they are saved.
 
-Two videos with the same name in different folders share one file name in these
-folders. Stored in `~/.config/video-to-funscript/scripts.json`.
+When you change or clear a folder, the app offers to take the files along (into
+the new folder, or back next to their videos). Two videos with the same name in
+different folders share one file name in these folders. Stored in
+`~/.config/video-to-funscript/scripts.json`.
+
+**Opening a script opens its video**: open a `.funscript` (File → Open, drag and
+drop, or a double click in the file manager) and the matching video opens with it,
+in the player when you are in player mode. The app finds the video next to the
+script, where it last saw it (also in subfolders there), or by name in the library
+folder. If the video was moved or renamed, it asks you to look for it once and
+remembers the new place. Scripts in the script folder whose video cannot be found
+show up in the library as “video missing”; a double click looks for it.
 
 **Statistics** (Device → Statistics…): playing time, strokes and days for today,
 7 days, 30 days and in total, plus favourite videos and patterns (by playing

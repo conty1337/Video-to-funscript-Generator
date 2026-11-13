@@ -12,12 +12,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLayout,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
 )
 
 from .. import scriptdir
-from ..i18n import tr
+from ..i18n import plural, tr
 from . import theme
 
 
@@ -104,6 +105,11 @@ class ScriptFolderDialog(QDialog):
                                tr("Kein Ordner: Video-Daten neben dem Video"), self._store)
         lay.addLayout(self.data)
 
+        self.result = QLabel()
+        self.result.setObjectName("caption")
+        self.result.setWordWrap(True)
+        lay.addWidget(self.result)
+
         foot = QHBoxLayout()
         foot.addStretch(1)
         close = QPushButton(tr("Schließen"))
@@ -122,11 +128,38 @@ class ScriptFolderDialog(QDialog):
         self.scripts.set_folder(folder)
 
     def _store(self):
+        old = scriptdir.settings()
+        notes = [n for n in (self._offer_move(old.folder, self.scripts.folder, "scripts"),
+                             self._offer_move(old.data_folder, self.data.folder, "data")) if n]
         try:
             scriptdir.save_settings(self.scripts.folder, self.next_to.isChecked(), self.data.folder)
         except OSError:
             pass
+        if notes:
+            self.result.setText(" · ".join(notes))
         self._refresh()
+
+    def _ask(self, title: str, text: str) -> bool:
+        return QMessageBox.question(self, title, text) == QMessageBox.Yes
+
+    def _offer_move(self, old: Path | None, new: Path | None, kind: str) -> str:
+        """A folder changed: offer to take the files along (into the new folder, or back next
+        to their videos). Returns a line about what happened."""
+        if old is None or old == new:
+            return ""
+        files = scriptdir.files_in(old, kind)
+        if not files:
+            return ""
+        what = (plural(len(files), "{0} Script", "{0} Scripts") if kind == "scripts"
+                else plural(len(files), "{0} Datei mit Video-Daten", "{0} Dateien mit Video-Daten"))
+        where = (tr("in den neuen Ordner {0}", new) if new is not None else tr("zurück neben die Videos"))
+        if not self._ask(tr("Dateien mitnehmen?"), tr("Im bisherigen Ordner {0} liegen {1}. Sollen sie {2} "
+                                                      "verschoben werden? Sonst bleiben sie dort und werden "
+                                                      "nicht mehr gefunden.", old, what, where)):
+            return tr("{0} im alten Ordner gelassen", what)
+        moved, left = scriptdir.move_files(old, new, kind)
+        note = tr("{0} von {1} verschoben", moved, len(files))
+        return note + (tr(", {0} blieben liegen (Ziel schon vorhanden oder Video unbekannt)", left) if left else "")
 
     def _refresh(self):
         self.next_to.setEnabled(self.scripts.folder is not None)

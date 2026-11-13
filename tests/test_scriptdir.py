@@ -165,3 +165,100 @@ def test_dialog_keeps_both_folders(cfg):
     d.data.set_folder(None)
     assert scriptdir.settings().data_folder is None and scriptdir.settings().folder == cfg / "scripts"
     d.deleteLater()
+
+
+def test_video_stem():
+    assert scriptdir.video_stem("a/Clip.funscript") == "Clip"
+    assert scriptdir.video_stem("Clip.roll.funscript") == "Clip"
+    assert scriptdir.video_stem("Clip.vtf.json") == "Clip"
+    assert scriptdir.video_stem("My.Clip.v2.funscript") == "My.Clip.v2"
+
+
+def test_find_video_for_a_script(cfg):
+    videos = cfg / "videos"; videos.mkdir()
+    s = _script(cfg / "scripts" / "Clip.funscript")
+    assert scriptdir.find_video(s) is None
+    v = videos / "Clip.mp4"; v.write_bytes(b"\0")
+    assert scriptdir.find_video(s, search=(cfg,)) == v                # by name in a search folder
+    moved = videos / "sub" / "Clip.mp4"; moved.parent.mkdir(); v.rename(moved)
+    assert scriptdir.find_video(s) == moved                           # below where it was last seen
+    other = cfg / "elsewhere" / "Renamed.mkv"; other.parent.mkdir(); other.write_bytes(b"\0")
+    scriptdir.remember_video(other, "Clip")                           # the user picked a renamed video
+    assert scriptdir.find_video(s) == other
+    near = _script(videos / "sub" / "Clip.funscript")
+    assert scriptdir.find_video(near) == moved                        # next to the script wins
+
+
+def test_move_files_on_a_folder_change(cfg):
+    old, new = cfg / "old", cfg / "new"
+    a = _script(old / "Clip.funscript")
+    b = _script(old / "2026" / "Other.funscript")
+    _script(new / "Taken.funscript"); _script(old / "Taken.funscript")      # never overwritten
+    moved, left = scriptdir.move_files(old, new, "scripts")
+    assert (moved, left) == (2, 1)
+    assert (new / "Clip.funscript").is_file() and (new / "2026" / "Other.funscript").is_file()
+    assert not a.exists() and not b.exists() and (old / "Taken.funscript").exists()
+    v = cfg / "videos" / "Clip.mp4"; v.parent.mkdir(); v.write_bytes(b"\0")
+    scriptdir.remember_video(v)
+    moved, left = scriptdir.move_files(new, None, "scripts")          # back next to the known videos
+    assert (cfg / "videos" / "Clip.funscript").is_file() and moved == 1 and left == 2
+
+
+def test_library_lists_scripts_whose_video_is_gone(cfg):
+    from vtf.library import scan
+    videos = cfg / "videos"; videos.mkdir()
+    (videos / "Here.mp4").write_bytes(b"\0")
+    scriptdir.save_settings(cfg / "scripts", True)
+    _script(cfg / "scripts" / "Here.funscript")
+    _script(cfg / "scripts" / "Gone.funscript")
+    _script(cfg / "scripts" / "Gone.roll.funscript")                 # an extra axis is no entry of its own
+    entries = scan(videos)
+    assert [(e.name, e.missing) for e in entries] == [("Gone", True), ("Here", False)]
+    assert entries[0].script == cfg / "scripts" / "Gone.funscript"
+
+
+def test_opening_a_script_opens_its_video(cfg, sine_video, monkeypatch):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from vtf.gui.main_window import MainWindow
+
+    script = _script(cfg / "anywhere" / f"{sine_video.stem}.funscript", n=5)
+    _script(cfg / "anywhere" / f"{sine_video.stem}.roll.funscript", n=3)
+    w = MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(sine_video))                                 # seen once: remembered
+        w.close_video()
+        w.open_video(str(script))                                     # a script: its video comes along
+        assert w.video_path and w.video_path.endswith(sine_video.name)
+        assert len(w.curve.actions) == 5 and len(w.axis_actions.get("R1", [])) == 3
+        lost = _script(cfg / "anywhere" / "Lost.funscript")           # unknown video: the user looks for it
+        monkeypatch.setattr(w, "_run_dialog", lambda box: box.buttons()[0].click())
+        monkeypatch.setattr(QtWidgets.QFileDialog, "getOpenFileName", lambda *a, **k: (str(sine_video), ""))
+        w.dirty = False
+        w.open_video(str(lost))
+        assert len(w.curve.actions) == 4 and scriptdir.find_video(lost) == sine_video.resolve()
+    finally:
+        w.dirty = False
+        w.close()
+
+
+def test_dialog_offers_to_move_files(cfg):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from vtf.gui.scripts_ui import ScriptFolderDialog
+
+    scriptdir.save_settings(cfg / "old", True)
+    _script(cfg / "old" / "Clip.funscript")
+    d = ScriptFolderDialog()
+    d._ask = lambda *_a: False                                        # no: the files stay
+    d.scripts.set_folder(cfg / "other")
+    assert (cfg / "old" / "Clip.funscript").is_file() and "1" in d.result.text()
+    d.scripts.set_folder(cfg / "old", notify=False); scriptdir.save_settings(cfg / "old", True)
+    d._ask = lambda *_a: True                                         # yes: they move along
+    d.scripts.set_folder(cfg / "new")
+    assert (cfg / "new" / "Clip.funscript").is_file() and not (cfg / "old" / "Clip.funscript").exists()
+    assert scriptdir.settings().folder == cfg / "new"
+    d.deleteLater()

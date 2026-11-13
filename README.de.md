@@ -376,8 +376,19 @@ Einstellung liegt jede Datei neben ihrem Video. Zwei Ordner ändern das:
   Video liegen, werden weiter gefunden und beim nächsten Speichern in den Ordner
   verschoben.
 
-Heißen zwei Videos in verschiedenen Ordnern gleich, teilen sie sich in diesen
-Ordnern einen Dateinamen. Gespeichert in `~/.config/video-to-funscript/scripts.json`.
+Änderst du einen Ordner oder setzt ihn zurück, bietet die App an, die Dateien
+mitzunehmen (in den neuen Ordner oder zurück neben die Videos). Heißen zwei Videos
+in verschiedenen Ordnern gleich, teilen sie sich in diesen Ordnern einen
+Dateinamen. Gespeichert in `~/.config/video-to-funscript/scripts.json`.
+
+**Script öffnen öffnet das Video**: Öffnest du eine `.funscript` (Datei → Öffnen,
+Drag & Drop oder Doppelklick im Dateimanager), geht das passende Video mit auf, im
+Player-Modus gleich im Player. Die App findet das Video neben dem Script, dort, wo
+sie es zuletzt gesehen hat (auch in Unterordnern), oder nach Namen im
+Bibliotheksordner. Wurde es verschoben oder umbenannt, fragt sie einmal mit
+„Video suchen…“ nach und merkt sich den neuen Ort. Scripts im Script-Ordner, deren
+Video nicht zu finden ist, stehen in der Bibliothek mit „Video fehlt“; ein
+Doppelklick sucht es.
 
 **Statistik** (Gerät → Statistik…): Spielzeit, Hübe und Tage für heute, 7 Tage,
 30 Tage und gesamt, dazu die Lieblingsvideos und Lieblingsmuster (nach Spielzeit).
