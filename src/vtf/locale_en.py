@@ -1915,8 +1915,6 @@ EN: dict[str, str] = {
         "{0:.0f} s without a stroke",
     "{0}\n{1} Schritte · {2}":
         "{0}\n{1} steps · {2}",
-    "{0}   {1} – {2}   ·  {3} Ber.  ·  {4}{5}":
-        "{0}   {1} – {2}   ·  {3} areas  ·  {4}{5}",
     "{0}   · kein Script":
         "{0}   · no script",
     "{0}  ·  {1}×{2}  ·  {3:.2f} fps":
@@ -2031,4 +2029,32 @@ EN: dict[str, str] = {
         "≈ {0:.0f} beats/min",
     "✓ {0}: {1:.0f} Bilder/s":
         "✓ {0}: {1:.0f} frames/s",
+    "Reihenfolge":
+        "Order",
+    "Wiederholungen":
+        "Repeats",
+    "von {0}":
+        "of {0}",
+    "{0} ({1} Punkte)":
+        "{0} ({1} points)",
+    "{0}   {1} – {2}   ·  {3}  ·  {4}{5}":
+        "{0}   {1} – {2}   ·  {3}  ·  {4}{5}",
+    "1 Ber.":
+        "1 area",
+    "{0} Ber.":
+        "{0} areas",
+    "{0} Durchlauf · {1:.1f} s":
+        "{0} run · {1:.1f} s",
+    " (+{0} weitere Stelle, rot in der Kurve)":
+        " (+{0} more spot, red in the curve)",
+    "{0} Punkt ausgewählt":
+        "{0} point selected",
+    "{0} Punkt kopiert":
+        "{0} point copied",
+    "{0} Punkt ausgeschnitten":
+        "{0} point cut",
+    "{0} Punkt eingefügt bei {1}":
+        "{0} point pasted at {1}",
+    "{0} Punkt gelöscht":
+        "{0} point deleted",
 }

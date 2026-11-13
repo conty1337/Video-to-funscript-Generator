@@ -1,678 +1,681 @@
 # Video-to-Funscript Generator
 
-Kostenlose, quelloffene Software zur **lokalen** Videoanalyse und automatischen
-Erstellung von Funscripts. Keine Cloud, keine Abos, keine API-Kosten.
+**English** · [Deutsch](README.de.md)
 
-**→ [Anleitung: in 8 Schritten vom Video zum Script](docs/anleitung.md)**
+Free, open-source software that analyses videos **on your own computer** and turns
+the motion into funscripts. No cloud, no subscription, no API costs.
 
-![Bearbeiten: links Analyse und Tracking, Mitte Video, rechts Script, unten die Zeitleiste](docs/screenshot.png)
+**→ [Guide: from video to script in 8 steps](docs/guide.md)**
 
-| Tracking | Player | Gerät |
+![Editor: analysis and tracking on the left, the video in the middle, script settings on the right, the timeline at the bottom](docs/images/en/editor.png)
+
+| Tracking | Player | Pattern control |
 |---|---|---|
-| [![Kästchen markieren, gezoomt, mit Optionen](docs/tracking.png)](docs/tracking.png) | [![Player-Modus mit Playlist und Countdown](docs/player.png)](docs/player.png) | [![Geräte-Dialog mit Simulation](docs/device.png)](docs/device.png) |
-| Kästchen markieren und zoomen, verankern, Optionen | Playlist, Countdown vor dem Start | Fredorch F21S über Intiface oder Simulation |
+| [![Toy outlined, reference and stroke arrow, zoomed in](docs/images/en/tracking.png)](docs/images/en/tracking.png) | [![Player mode with playlist and countdown](docs/images/en/player.png)](docs/images/en/player.png) | [![Pattern control with over 50 patterns](docs/images/en/patterns.png)](docs/images/en/patterns.png) |
+| Found automatically: toy outlined, reference, stroke direction | Playlist, countdown, cuts are skipped | Patterns, programs, random and music without a video |
+| **Library** | **Phone remote** | **Accent colour** |
+| [![Library with heatmaps and ratings](docs/images/en/library.png)](docs/images/en/library.png) | [![Phone remote in the browser](docs/images/en/remote.png)](docs/images/en/remote.png) | [![The editor in four accent colours](docs/images/en/accents.png)](docs/images/en/accents.png) |
+| Every script in a folder, with heatmap and stars | Start, stop, depth, tempo and the player from your phone | Six colours or one of your own |
 
-Entwickelt und getestet für Nobara Linux (KDE) mit AMD Ryzen 7 3700X und
-Radeon RX 5700 XT – läuft aber auf jedem Linux mit Python ≥ 3.10.
+Built and tested on Nobara Linux (KDE) with an AMD Ryzen 7 3700X and a Radeon
+RX 5700 XT, but it runs on any Linux with Python ≥ 3.10. The interface is in
+**English and German**.
 
-## Funktionen (Stand 0.10)
+## What it does
 
-| | Funktion | Status |
-|---|---|---|
-| 1 | Grafische Oberfläche (PySide6) | ✅ |
-| 2 | Videovorschau mit Abspielen, Frame-Schritt, Suchleiste | ✅ |
-| 3 | Automatische Bewegungsanalyse (dichter optischer Fluss) | ✅ |
-| 4 | Bewegungsrichtung (vertikal / horizontal / automatisch) und Bewegungsumfang | ✅ |
-| 5 | Einstellbare Empfindlichkeit, Glättung, Mindestabstand, Drift-Filter | ✅ (Live-Vorschau) |
-| 6 | Analysekurve anzeigen und Punkte bearbeiten (inkl. Rückgängig) | ✅ |
-| 7 | Funscript-Export (`<Video>.funscript` neben dem Video) | ✅ |
-| 8 | Stapelverarbeitung ganzer Ordner (GUI + Kommandozeile) | ✅ |
-| 9 | Bereits analysierte Videos überspringen | ✅ |
-| 10 | Gerätesteuerung (Fredorch F21S über Intiface Central, Simulation) | ✅ Teil 1, Test mit echtem Gerät steht aus |
-| 11 | Ton bei der Wiedergabe | ✅ |
-| 12 | Player-Modus mit Playlist | ✅ |
-| 13 | Tracking: markierte Körperteile/Objekte verfolgen, Abschnitte, Tiefen-Kalibrierung | ✅ |
-| 14 | Editor: Mehrfachauswahl, Kopieren/Einfügen, Abschnitt glätten/verstärken | ✅ |
-| 15 | Weitere Achsen (Surge, Sway, Twist, Roll, Pitch) | ✅ |
-| 16 | Robusteres Tracking: drehbare Kästchen, Drift-Korrektur, Nachjustieren | ✅ |
-| 17 | Stapel mit Tracking (Videos vorbereiten, dann durchlaufen lassen) | ✅ |
-| 18 | Heatmap und Tempo-Grenze | ✅ |
-| 19 | Layout wie ein Schnittprogramm: links Analyse, Mitte Video, rechts Script, unten Zeitleiste | ✅ |
-| 20 | Verdeckung erkennen (auch durch eine Hand) und Bereich danach wiederfinden | ✅ |
-| 21 | Video-Zoom zum Markieren kleiner Stellen, Kästchen direkt anpacken und korrigieren | ✅ |
-| 22 | Bereiche 2/3 fest verankern, Kästchen nur verschieben (für Maschinen) | ✅ |
-| 23 | Lesezeichen/Kapitel, Rhythmus-Vorlagen, Abschnitte in der Kurve ziehen | ✅ |
-| 24 | Player: ruhigen Anfang überspringen, Countdown vor dem Start | ✅ |
-| 25 | Muster-Steuerung: über 50 Muster, eigene aus Bausteinen, Abläufe (z.B. 1 Stunde), Controller | ✅ |
-| 26 | Zufallsgenerator, Musik-Modus (Gerät folgt dem Takt), Script aus Musik | ✅ |
-| 27 | Handy-Fernbedienung im Browser, Einrichtungs-Assistent, Sicherheits-Timer | ✅ |
-| 28 | Andere Player (mpv, VLC, DeoVR, HereSphere), Vibratoren, TCode-Geräte (OSR2/SR6) mit allen Achsen | ✅ |
-| 29 | Bildrand und kurze Verdeckungen überbrücken, KI-Körpererkennung: Kästchen-Vorschlag und KI-Kontrolle | ✅ |
-| 30 | Toy umranden statt Rechteck, Rollen (Toy / Bezug), Hub-Richtung als Pfeil | ✅ |
-| 31 | Schnitte (X): Stellen ohne Handlung markieren, der Player springt darüber; Pausen ohne Hübe überspringen | ✅ |
-| 32 | Script-Prüfung: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt setzt aus, verlorene Bereiche; F3 springt hin | ✅ |
-| 33 | Automatisch finden (F): Toy umrandet, Bezug und Hub-Richtung aus der rhythmischen Bewegung | ✅ |
-| 34 | Bibliothek (Strg+L): alle Scripts eines Ordners mit Heatmap, Suche, Sortierung und Sternen | ✅ |
-| 35 | QR-Code für die Handy-Fernbedienung (PIN schon drin) | ✅ |
-| 36 | Sitzungs-Statistik (nur lokal): Spielzeit, Hübe, Lieblingsvideos und -muster | ✅ |
-| 37 | Sprachen: Deutsch und Englisch (Ansicht → Sprache) | ✅ |
-| 38 | Akzentfarbe: sechs Vorgaben oder eine eigene Farbe (Ansicht → Akzentfarbe) | ✅ |
+**Create scripts**
+- Motion analysis by dense optical flow, or **tracking** of the parts you mark
+  (up to 3 areas: the toy and a reference, so camera moves do not matter)
+- **Find automatically** (F): the app spots what moves in a rhythm, outlines the
+  toy, picks a reference and draws the stroke direction
+- **Outline** instead of a rectangle, **stroke direction** as an arrow, rotating
+  boxes, readjusting, occlusion and image edges bridged
+- Optional **AI body detection**: boxes suggested on body parts, and an AI check
+  that keeps each box on its body part (runs locally)
+- **Depth calibration** (all the way in / out) for real stroke depth
+- More axes for multi-axis devices: surge, sway, twist, roll, pitch
+- Batch processing of whole folders (GUI and command line)
 
-## Installation als AppImage (am einfachsten)
+**Edit**
+- Curve editor with multi-select, copy/paste, smooth, stronger/weaker strokes, undo
+- **Script check**: too fast, gaps, tremble, sudden small strokes, beat drops out,
+  lost areas; F3 jumps to the next spot
+- **Cuts** (X) for stretches where nothing happens, bookmarks, rhythm templates,
+  script from music, heatmap and tempo limit
 
-Eine Datei, keine Installation, Python wird nicht benötigt:
+**Play**
+- Player mode with playlist, sound, countdown before the start, quiet starts,
+  cuts and long pauses skipped
+- **Library** (Ctrl+L) with heatmap, search, sorting and ratings, local **statistics**
+- **Pattern control** without a video: over 50 patterns, your own made of building
+  blocks, programs (e.g. one hour), random, music mode, game controller
+- Other players: mpv, VLC, DeoVR, HereSphere
 
-1. Die neueste Version herunterladen:
+**Devices**
+- Fredorch F21S and hundreds more via [Intiface Central](https://intiface.com/central/),
+  OSR2/SR6 and other TCode devices with all axes, vibrators; a simulation without a device
+- Setup assistant, **phone remote** in the browser (QR code), safety timer, emergency stop (Esc)
+
+## Install as an AppImage (easiest)
+
+One file, nothing to install, no Python needed:
+
+1. Download the latest version:
    [Video-to-Funscript-x86_64.AppImage](https://github.com/conty1337/Video-to-funscript-Generator/releases/latest/download/Video-to-Funscript-x86_64.AppImage)
-   (oder unter **Releases**).
-2. Ausführbar machen und starten:
+   (or under **Releases**).
+2. Make it executable and start it:
    ```bash
    chmod +x Video-to-Funscript-*.AppImage
    ./Video-to-Funscript-*.AppImage
    ```
-   Oder in Dolphin: Rechtsklick → Eigenschaften → Berechtigungen → „Ausführbar“.
-3. Beim ersten Start trägt sich die App selbst ins Startmenü ein (abschaltbar
-   unter Hilfe → „Im Startmenü anzeigen“). Am besten legst du die Datei vorher
-   an ihren festen Platz, z. B. `~/Applications`. Wird sie verschoben, passt
-   der nächste Start den Eintrag an. Wer **Gear Lever** nutzt, bekommt keinen
-   doppelten Eintrag.
+   Or in Dolphin: right click → Properties → Permissions → “Is executable”.
+3. On its first start the app adds itself to the start menu (can be switched off
+   under Help → “Show in the start menu”). Best put the file in its permanent
+   place first, e.g. `~/Applications`. If you move it, the next start updates
+   the entry. **Gear Lever** users get no duplicate entry.
 
-**Updates kommen automatisch:** Beim Start sucht die App nach einer neuen
-Version, lädt sie im Hintergrund, prüft sie per SHA-256 und ersetzt die
-AppImage-Datei. Der nächste Start oder „Neu starten“ in der Statusleiste nutzt
-dann die neue Version. Manuell: Hilfe → „Nach Updates suchen“, abschaltbar
-über Hilfe → „Automatisch aktualisieren“. Dafür muss der Ordner mit dem
-AppImage beschreibbar sein (z. B. `~/Applications`, wie bei Gear Lever).
+**Updates come by themselves:** on start the app looks for a new version,
+downloads it in the background, checks it by SHA-256 and replaces the AppImage
+file. The next start, or “Restart” in the status bar, uses the new version.
+Manually: Help → “Check for updates”; switch off under Help → “Update
+automatically”. The folder with the AppImage must be writable (e.g.
+`~/Applications`, as with Gear Lever).
 
-FFmpeg und die OpenCL-Treiber kommen weiterhin vom System (siehe unten).
-Ohne FFmpeg dekodiert das AppImage über das mitgelieferte OpenCV.
+FFmpeg and the OpenCL drivers still come from the system (see below). Without
+FFmpeg the AppImage decodes with its bundled OpenCV.
 
-## Installation aus dem Quellcode (Nobara / Fedora)
+## Install from source (Nobara / Fedora)
 
 ```bash
-sudo dnf install git python3 ffmpeg          # ffmpeg ist bei Nobara meist schon da
+sudo dnf install git python3 ffmpeg          # ffmpeg is usually there on Nobara
 git clone https://github.com/conty1337/Video-to-funscript-Generator.git
 cd Video-to-funscript-Generator
 ./install.sh
 ```
 
-`install.sh` legt eine virtuelle Umgebung `.venv` an, installiert NumPy, OpenCV
-und PySide6, erstellt einen **Startmenü-Eintrag** und die Befehle `vtf-gui` und
-`vtf` in `~/.local/bin`.
+`install.sh` creates a virtual environment `.venv`, installs NumPy, OpenCV and
+PySide6, adds a **start menu entry** and the commands `vtf-gui` and `vtf` in
+`~/.local/bin`.
 
-Starten: Startmenü → „Video-to-Funscript Generator“, oder `./start.sh`.
+Start: start menu → “Video-to-Funscript Generator”, or `./start.sh`.
 
 ### GPU (RX 5700 XT)
 
-Die Software nutzt die Grafikkarte auf zwei Wegen, beides optional:
+The software can use the graphics card in two ways, both optional:
 
-* **Hardware-Dekodierung (VAAPI)** über FFmpeg – funktioniert mit dem
-  Mesa-Treiber von Nobara direkt. Einstellung „Hardware-Dekodierung“.
-* **OpenCL** für den optischen Fluss (OpenCV T-API). Dafür eine
-  OpenCL-Laufzeit installieren, z. B.
-  `sudo dnf install mesa-libOpenCL` (Mesa rusticl, wird von `start.sh` mit
-  `RUSTICL_ENABLE=radeonsi` aktiviert) oder `rocm-opencl`. Danach in der GUI
-  „GPU (OpenCL)“ anhaken. `vtf info` zeigt, ob ein Gerät gefunden wurde.
+* **Hardware decoding (VAAPI)** via FFmpeg: works with Nobara's Mesa driver
+  right away. Setting “Decoding”.
+* **OpenCL** for the optical flow (OpenCV T-API). Install an OpenCL runtime,
+  e.g. `sudo dnf install mesa-libOpenCL` (Mesa rusticl, enabled by `start.sh`
+  with `RUSTICL_ENABLE=radeonsi`) or `rocm-opencl`. Then tick “GPU via OpenCL”
+  in the options. `vtf info` shows whether a device was found.
 
-Hinweis: Bei der Standard-Analyseauflösung (320 px) ist die CPU (8 Kerne) oft
-genauso schnell wie OpenCL, weil das Kopieren zur GPU Zeit kostet. Bei höheren
-Auflösungen lohnt sich OpenCL eher.
+At the default analysis size the CPU (8 cores) is often as fast as OpenCL,
+because copying to the GPU costs time. At higher resolutions OpenCL pays off more.
 
-## Bedienung
+## Using the app
 
-Eine kurze Schritt-für-Schritt-Anleitung steht in
-[docs/anleitung.md](docs/anleitung.md). Hier alle Funktionen im Einzelnen.
+A short step-by-step guide is in [docs/guide.md](docs/guide.md). Here is
+everything in detail.
 
-**Aufbau**: links die Analyse (Methode, Tracking, Optionen, „Analysieren“),
-in der Mitte das Video mit der Hub-Leiste, rechts die Script-Einstellungen,
-unten die Zeitleiste mit den Spuren Video, Tempo und Kurve. Ansicht →
-Strg+1 / Strg+2 klappt die linke bzw. rechte Leiste ein. Strg+W schließt das
-Video.
+**Layout**: analysis on the left (method, tracking, options, “Analyse”), the
+video in the middle with the stroke rail, script settings on the right, and the
+timeline at the bottom with the tracks video, tempo and curve. Ctrl+1 / Ctrl+2
+fold the left / right panel away, Ctrl+W closes the video.
 
-1. Video öffnen (Strg+O oder per Drag & Drop).
-2. Optional: im Vorschaubild ein Rechteck um den relevanten Bereich ziehen
-   (ROI). Rechtsklick entfernt die ROI. Das verbessert die Erkennung deutlich.
-3. **Analysieren** klicken. Die Rohdaten werden zwischengespeichert
-   (`~/.cache/video-to-funscript`), eine erneute Analyse desselben Videos mit
-   denselben Einstellungen ist sofort fertig.
-4. Script-Einstellungen anpassen – die Kurve aktualisiert sich sofort:
-   * **Empfindlichkeit**: höher = auch kleine Bewegungen werden zu Punkten.
-   * **Glättung**: entfernt Zittern.
-   * **Mindestabstand**: kleinster zeitlicher Abstand zwischen zwei Punkten.
-   * **Drift-Filter**: entfernt langsames Wegdriften der Position.
-   * **Normalisierung**: Fenster, in dem der Hub auf den vollen Bereich
-     skaliert wird (0 = über das ganze Video).
-   * **Bewegungsumfang**: minimale/maximale Position (0–100).
-   * **Umkehren** / **Immer voller Hub**.
-   * **Plateaus: ein Punkt in der Mitte** (an): Bleibt es ganz drin oder ganz
-     draußen kurz stehen oder zittert dort, kommt ein Punkt in die Mitte statt
-     zwei an die Ränder. Aus, wenn dort echte kleine Doppelstöße sind.
-5. Punkte bearbeiten: ziehen = verschieben, Doppelklick = neuer Punkt,
-   Rechtsklick oder Entf = löschen, Mausrad = Zoom, Klick in die Kurve = zu
-   dieser Stelle springen. Strg+Z / Strg+Umschalt+Z.
-   **Mehrere Punkte**: Umschalt- oder Strg+Ziehen auf freier Fläche zieht ein
-   Auswahlrechteck, Strg+Klick schaltet einzelne Punkte um, Strg+A wählt alle.
-   Ausgewählte Punkte werden zusammen verschoben. Strg+X/C/V schneidet aus,
-   kopiert und fügt an der Abspielposition ein (auch in ein anderes Video),
-   Strg+G glättet die Auswahl, Strg+↑/↓ verstärkt oder schwächt den Hub.
-   Kurve verschieben: freie Fläche ziehen (oder mittlere Maustaste), die
-   Scrollleiste darunter, Umschalt+Mausrad oder waagrecht wischen (Touchpad).
-   Video-Zeitleiste: Klick springt direkt an die Stelle und lässt sich gleich
-   weiterziehen, Mausrad = 1 s vor/zurück.
-6. **Strg+S** speichert `<Video>.funscript` neben dem Video – so finden es
-   Player automatisch.
+1. Open a video (Ctrl+O or drag and drop).
+2. Optional: draw a rectangle around the relevant part of the picture (ROI).
+   A right click removes it. This helps the detection a lot.
+3. Click **Analyse**. The raw data is cached (`~/.cache/video-to-funscript`);
+   analysing the same video with the same settings again is instant.
+4. Adjust the script settings; the curve follows at once:
+   * **Sensitivity**: higher = small movements become points too.
+   * **Smoothing**: removes tremble.
+   * **Minimum spacing**: shortest time between two points.
+   * **Drift filter**: removes slow drifting of the position.
+   * **Normalisation**: window in which the stroke is stretched to the full
+     range (0 = the whole video).
+   * **Stroke range**: lowest/highest position (0–100).
+   * **Reverse direction** / **Always a full stroke**.
+   * **Plateaus: one point in the middle** (on): if it rests briefly all the way
+     in or out, or trembles there, one point goes in the middle instead of two
+     at the edges. Switch off where there are real small double thrusts.
+5. Edit points: drag = move, double click = new point, right click or Del =
+   delete, mouse wheel = zoom, click in the curve = jump there. Ctrl+Z /
+   Ctrl+Shift+Z. **Several points**: Shift or Ctrl+drag on empty space draws a
+   selection rectangle, Ctrl+click toggles single points, Ctrl+A selects all.
+   Selected points move together. Ctrl+X/C/V cut, copy and paste at the playback
+   position (into another video too), Ctrl+G smooths the selection, Ctrl+↑/↓
+   makes the strokes stronger or weaker. Move the curve: drag empty space (or
+   the middle mouse button), the scroll bar below, Shift+mouse wheel or a
+   sideways swipe on the touchpad. Video timeline: a click jumps right there
+   and can be dragged on, the mouse wheel steps 1 s.
+6. **Ctrl+S** saves `<video>.funscript` next to the video, where players find it.
 
-**Ton**: Beim Abspielen läuft der Ton des Videos mit, synchron zum Bild und
-zum Gerät. Lautsprecher-Knopf oder **M** schaltet ihn stumm, der Regler daneben
-stellt die Lautstärke ein. Beides merkt sich die App.
+**Sound** plays along, in sync with the picture and the device. The speaker
+button or **M** mutes it, the slider sets the volume. Both are remembered.
 
-**Tracking** (genauer bei unruhigen Videos): In den Analyse-Einstellungen
-„Methode: Tracking“ wählen, an eine Stelle spulen, wo alles gut zu sehen ist,
-und im Video bis zu 3 Bereiche aufziehen, z.B. um die beiden Körperteile.
-Jeder Bereich wird mit vielen Bildpunkten verfolgt.
-* 1 Bereich: dessen Bewegung (Kamerabewegung wird abgezogen).
-* 2–3 Bereiche: Bereich 1 (das Toy, was sich bewegt) relativ zu den anderen
-  (Bezug, z.B. der Körper). Dann spielt die Kamera keine Rolle mehr, auch Zoom
-  und Schwenks stören kaum. Rechtsklick auf ein Kästchen ändert die Rolle.
-* **Automatisch finden** (F oder Knopf): Die App schaut sich ein paar Sekunden ab
-  der Abspielposition an. Was sich weit, gleichmäßig im Rhythmus und gemeinsam
-  bewegt, wird das Toy (gleich umrandet), eine Stelle mit Muster daneben, die sich
-  wenig bewegt, der Bezug, dazu die Hub-Richtung (Spitze vom Bezug weg = raus).
-  Danach kurz prüfen und bei Bedarf anpassen. Am besten an einer Stelle mit
-  gleichmäßigen Hüben und ruhiger Kamera.
-* **Umranden** (U): eng um das Toy fahren statt ein Rechteck aufzuziehen. Nur
-  Punkte innen, mit ein paar Pixeln Abstand zum Rand, werden verfolgt – Finger
-  oder Fuß direkt daneben ziehen das Kästchen nicht mehr weg.
-* **Hub-Richtung** (H): Pfeil entlang der Stoßrichtung, Spitze = raus. Das
-  Script misst nur entlang des Pfeils, seitliches Wackeln zählt nicht.
+### Tracking
 
-*Abschnitte*: Das Markieren startet einen Abschnitt an dieser Stelle. **Ende
-hier** (Taste E) beendet ihn, z.B. wenn die Szene vorbei ist. Nach einem
-Szenenwechsel einfach an der neuen Stelle wieder markieren, dann beginnt dort
-ein neuer Abschnitt. Nur in Abschnitten entstehen Punkte. Die Abschnitte stehen
-als Liste in den Einstellungen (Klick springt zum Start) und als helle Bänder in
-der Kurve. Rechtsklick ins Video öffnet ein Menü: auf einem Kästchen (auch knapp
-daneben) für dieses Kästchen (Rolle, Umrandung, entfernen), sonst für den
-Abschnitt (löschen, Hub-Richtung entfernen). Sofort gelöscht wird per Rechtsklick
-nichts mehr, und **Strg+Z** macht auch Tracking-Änderungen rückgängig.
+More precise for busy videos. Choose “Method: Tracking”, go to a spot where
+everything is easy to see and draw up to 3 areas in the video, e.g. around the
+two body parts. Each area is followed by many image points.
 
-*Tiefen-Kalibrierung*: Zu einer Stelle spulen, wo es ganz drin ist, und **Ganz
-drin** (Taste D) klicken, dann zu einer Stelle ganz draußen und **Ganz
-draußen** (Taste A). Ab dann nutzt das Script in diesem Abschnitt den echten
-Abstand der Bereiche: ganz drin = 0, ganz draußen = 100, kurze Hübe bleiben kurz.
-Ohne Kalibrierung wird jeder Hub auf den vollen Bereich gestreckt. Die
-Kalibrierung wirkt sofort, ohne neue Analyse.
+* 1 area: its own movement (camera movement is subtracted).
+* 2–3 areas: area 1 (the toy, what moves) relative to the others (the
+  reference, e.g. the body). The camera no longer matters, zoom and pans
+  hardly disturb. A right click on a box changes its role.
+* **Find automatically** (F or the button): the app looks at a few seconds from
+  the playback position. What moves far, evenly in a rhythm and together becomes
+  the toy (outlined right away), a textured spot next to it that moves little
+  becomes the reference, plus the stroke direction (tip away from the reference
+  = out). Then check briefly and adjust if needed. Works best at a spot with
+  even strokes and a calm camera.
+* **Outline** (U): trace closely around the toy instead of drawing a rectangle.
+  Only points inside, a few pixels away from the edge, are followed, so a finger
+  or foot right next to it no longer pulls the box away.
+* **Stroke direction** (H): an arrow along the thrust, tip = out. The script
+  measures only along the arrow, sideways wobbling does not count.
 
-Beim Abspielen zeigt die Vorschau, wo die Bereiche gerade sind.
+[![Tracking close-up: outline with its inset band, reference, stroke arrow, options](docs/images/en/tracking.png)](docs/images/en/tracking.png)
 
-*Kästchen anpassen*: Am Start eines Abschnitts (Klick in der Liste) innen
-ziehen = verschieben, an einer Ecke = Größe, am runden Griff oder mit dem
-Mausrad = drehen (Umschalt = feinere Schritte). Kleine Stellen: **Strg+Mausrad**
-zoomt ins Video, die mittlere Maustaste verschiebt den Ausschnitt, Strg+0
-setzt zurück. Bei sehr kleinen Kästchen erinnert die Statuszeile an eine
-höhere Analyse-Auflösung (Standard 640 px).
+*Sections*: marking starts a section at that spot. **End here** (E) ends it,
+e.g. when the scene is over. After a scene change simply mark again at the new
+spot, and a new section starts there. Points are only created inside sections.
+The sections are listed in the settings (a click jumps to the start) and shown
+as light bands in the curve. A right click in the video opens a menu: on a box
+(or just next to it) for that box (role, outline, remove), elsewhere for the
+section (delete, remove stroke direction). Nothing is deleted by a right click
+directly, and **Ctrl+Z** undoes tracking changes too.
 
-*Optionen* (links, eingeklappt): Auflösung, Frame-Schritt, Dekodierung,
-Kamerabewegung ausgleichen, **Kästchen drehen und skalieren mit** (aus für
-Maschinen und starre Teile: die Kästchen verschieben sich dann nur) und
-**Bereich 2 und 3 fest verankern** (sie bleiben, wo sie markiert sind, und
-gehen nur mit der Kamera mit, nichts kann sie wegziehen; bei Kamerafahrten
-aus).
+*Depth calibration*: go to a spot where it is all the way in and click **All
+the way in** (D), then to a spot all the way out and click **All the way out**
+(A). From then on the script in this section uses the real distance of the
+areas: all the way in = 0, all the way out = 100, short strokes stay short.
+Without calibration every stroke is stretched to the full range. Calibration
+applies at once, without a new analysis.
 
-*Wandernde Kästchen und Verdeckung*: Das Tracking prüft auf unmögliche
-Sprünge und gleicht alle paar Bilder mit dem Aussehen beim Markieren (und bei
-jeder Korrektur) ab, auch gedreht und skaliert. Schiebt sich etwas davor,
-auch nur teilweise wie eine Hand, springt der Bereich an die letzte sichere
-Stelle zurück, wird rot und wartet, bis er wieder zu sehen ist. Rote Stellen
-in der Kurve: dort war ein Bereich verdeckt oder verloren, dort entstehen
-keine Hübe. Geht etwas über den **Bildrand**, folgt das Kästchen dem
-sichtbaren Rest, bis weniger als 40 % davon im Bild sind. Dann wartet es am
-Rand und wird wiedergefunden, sobald es zurückkommt. Die Strecke draußen
-(bis 2,5 s) wird aus der Bewegung beim Verlassen und beim Zurückkommen
-weitergerechnet, so landet auch der Wendepunkt außerhalb des Bildes im Script.
-Kurze Verdeckungen (bis 1 s, z.B. eine Hand, die drüberwischt) werden genauso
-überbrückt, auch die Bilder kurz davor, in denen das Kästchen schon mitgezogen
-wurde. Liegt ein Kästchen trotzdem daneben: an der Stelle **anpacken und
-richtig hinschieben** (*nachjustieren*). Nach der nächsten Analyse folgt der
-Bereich von dort aus, und die Strecke davor wird rückwärts verfolgt und
-ausgeglichen. Anfang und Ende eines Abschnitts lassen sich in der Kurve mit
-der Maus verschieben.
+While playing, the preview shows where the areas are.
 
-**KI-Körpererkennung** (optional, lokal, ohne Internet nach dem ersten Laden,
-Schritt für Schritt mit Bildern in der [Anleitung](docs/anleitung.md#kästchen-mit-der-ki)):
+*Adjusting boxes*: at the start of a section (click in the list) drag inside =
+move, a corner = size, the round handle or the mouse wheel = rotate (Shift =
+finer steps). Small spots: **Ctrl+mouse wheel** zooms into the video, the middle
+mouse button moves the view, Ctrl+0 resets. For very small boxes the status bar
+suggests a higher analysis resolution (default 640 px).
 
-![KI-Vorschlag: Liste der erkannten Körperteile](docs/ki-vorschlag.png)
+*Options* (left, folded): resolution, frame step, decoding, compensate camera
+movement, **Boxes rotate and scale along** (off for machines and rigid parts:
+the boxes then only move) and **Anchor areas 2 and 3** (they stay where they
+were marked and only move with the camera, nothing can pull them away; off
+with camera moves).
 
-- **KI-Vorschlag** (Taste K): erkennt die Personen im aktuellen Bild und bietet
-  Kästchen für Becken/Schritt, Hüfte, Mund, Kopf, Brust und beide Hände an. Ein
-  Klick setzt das Kästchen, danach wie gewohnt anpassen. Gleichzeitig zeigt
-  die KI ihr **Gerüst** im Video (Gelenke, Linien, Hände mit Fingern). Ein
-  Klick auf einen Punkt setzt dort ein Kästchen, ein Klick auf eine Linie (z.B.
-  Oberschenkel) ein gedrehtes Kästchen entlang der Linie.
-- **KI-Kontrolle beim Verfolgen** (Häkchen unter dem Knopf): Während der Analyse
-  prüft die Körpererkennung etwa jede Sekunde, bei Unsicherheit alle drei Bilder,
-  ob jedes Kästchen noch auf dem Körperteil sitzt, auf das es gesetzt wurde.
-  Rutscht es weg, wird es zurückgeholt. Liegt länger eine Hand darauf, wartet das
-  Kästchen dort, wo die KI das Körperteil sieht, und die Strecke wird durch diese
-  Stellen überbrückt (einzelne Ausreißer der KI werden dabei verworfen). Kostet
-  Zeit: Eine Prüfung mit Personensuche dauert etwa 0,5 s auf der CPU, die
-  häufigen Zwischenblicke suchen die Person dort, wo sie gerade war, und
-  brauchen etwa ein Drittel davon. Im Härtefall (10 s Hand auf dem Becken)
-  bleibt der Fehler unter 10 px statt 200 px, fast alle Hübe sind im Script.
-- **Modelle**: YOLOX-m (findet Personen) und RTMW-l (133 Körperpunkte mit Händen,
-  Füßen und Gesicht) von OpenMMLab, Lizenz Apache-2.0, zusammen etwa 330 MB.
-  Sie werden beim ersten Benutzen nach Rückfrage geladen, zuerst aus der Kopie
-  im Release [ki-modelle](https://github.com/conty1337/Video-to-funscript-Generator/releases/tag/ki-modelle)
-  hier auf GitHub (schnell), sonst direkt von OpenMMLab. Ein abgebrochener
-  Download wird beim nächsten Mal fortgesetzt, die Prüfsummen werden
-  kontrolliert, und sie liegen danach unter `~/.local/share/video-to-funscript/models`.
-  Bringt ein App-Update neuere Modelle mit, fragt die App erneut und löscht die
-  alten danach. Sie laufen über OpenCV, das
-  schon in der App steckt, das AppImage wird dadurch nicht größer.
-- Gut bei ganzen Körpern und halbnahen Einstellungen. Bei sehr nahen
-  Ausschnitten, in denen kaum Körperpunkte zu sehen sind, findet die KI nichts.
-  Dann gibt es keinen Vorschlag, und die Kontrolle bleibt für dieses Kästchen aus.
+*Drifting boxes and occlusion*: the tracker checks for impossible jumps and
+compares every few frames with the look at marking time (and at each
+correction), turned and scaled too. If something moves in front, even partly
+like a hand, the area jumps back to its last safe spot, turns red and waits
+until it can be seen again. Red stretches in the curve: an area was covered or
+lost there, no strokes are created. If something goes over the **image edge**,
+the box follows the visible rest until less than 40 % of it is in the picture.
+Then it waits at the edge and is found again when it comes back. The stretch
+outside (up to 2.5 s) is continued from the movement when leaving and when
+coming back, so even a turning point outside the picture lands in the script.
+Short occlusions (up to 1 s, e.g. a hand wiping across) are bridged the same
+way, including the frames just before, in which the box was already dragged
+along. If a box still sits wrong: **grab it at that spot and push it into
+place** (*readjust*). After the next analysis the area follows from there, and
+the stretch before is tracked backwards and evened out. The start and end of a
+section can be dragged in the curve.
 
-*Vorbereitung*: Bereiche, Abschnitte und Kalibrierung werden sofort als
-`<Video>.vtf.json` neben dem Video gespeichert und beim nächsten Öffnen
-geladen. Strg+Bild↓ / Strg+Bild↑ öffnet das nächste/vorige Video im Ordner,
-so lassen sich viele Videos schnell vorbereiten. Die Stapelverarbeitung nutzt
-die Vorbereitung, Videos ohne sie laufen mit „Bewegung im Bild“.
+### AI body detection
 
-**Weitere Achsen**: Über der Kurve wählst du die Achse: Hub (L0), Surge (L1),
-Sway (L2), Twist (R0), Roll (R1) oder Pitch (R2). Jede Achse hat eigene Punkte
-und wird beim Speichern als `<Video>.roll.funscript` usw. neben dem Video
-abgelegt, wie es Mehrachsen-Player (MultiFunPlayer, OFS) erwarten.
-Bearbeiten → „Weitere Achsen aus Analyse erzeugen“ berechnet Sway aus der
-seitlichen Bewegung und Roll aus dem Winkel zwischen den Tracking-Bereichen 1
-und 2. Twist und Pitch setzt du von Hand. Der Fredorch F21S hat nur eine Achse,
-das Gerät folgt deshalb immer „Hub“.
+Optional, local, no internet after the first download. Step by step with
+pictures in the [guide](docs/guide.md#boxes-with-the-ai).
 
-**Player-Modus**: Oben auf **Player** (Strg+P). Die Seitenleiste zeigt dann die
-Playlist: Videos oder Ordner mit + hinzufügen oder hineinziehen, per Ziehen
-umsortieren, Entf entfernt. Abgespielt wird jeweils das Funscript neben dem
-Video, auf dem verbundenen Gerät, eins nach dem anderen. Optionen:
-wiederholen, zufällige Reihenfolge, Videos ohne Script überspringen. Bild ↑/↓
-springt zum vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es,
-zusammen mit dem Not-Aus). Playlists lassen sich als `.m3u` laden und
-speichern, die letzte merkt sich die App. Ein ruhiger Anfang wird übersprungen
-(Start kurz vor dem ersten Hub), und vor dem Start zählt ein Countdown herunter.
-Beides ist abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s,
-Standard 10 s).
+![AI suggestion: list of the body parts found](docs/images/en/ai-suggestion.png)
 
-**Prüfung**: Nach jeder Änderung prüft die App das Script und markiert Stellen,
-die einen zweiten Blick wert sind, orange oben in der Kurve: zu schnell fürs
-Gerät (Tempo-Grenze bzw. 500 Pos./s), Lücken ab 4 s, Zittern (viele winzige
-Bewegungen), Hübe plötzlich viel kleiner als drumherum (Kästchen verrutscht?),
-ein Hub viel langsamer als die anderen (Takt setzt aus) und Stellen, wo das
-Tracking einen Bereich verloren hat. Der Knopf „Prüfung“ in der Zeitleiste zeigt
-die Liste, **F3** / **Umschalt+F3** springen zur nächsten/vorigen Stelle (eine
-Sekunde davor). Schnitte werden nicht geprüft.
+- **AI suggestion** (K): finds the people in the current picture and offers
+  boxes for pelvis/crotch, hips, mouth, head, chest and both hands. A click sets
+  the box, then adjust as usual. At the same time the AI shows its **skeleton**
+  in the video (joints, lines, hands with fingers). A click on a point sets a
+  box there, a click on a line (e.g. a thigh) a turned box along the line.
+- **AI check while tracking** (tick under the button): during the analysis,
+  body detection checks about every second, when unsure every third frame,
+  whether each box still sits on the body part it was put on. If it slips away,
+  it is brought back. If a hand lies on it for longer, the box waits where the
+  AI sees the body part, and the stretch is bridged through these spots (single
+  outliers of the AI are dropped). It costs time: a check with a person search
+  takes about 0.5 s on the CPU, the frequent glances in between look for the
+  person where they just were and take about a third of that. In a hard case
+  (a hand on the pelvis for 10 s) the error stays under 10 px instead of 200 px,
+  and almost all strokes make it into the script.
+- **Models**: YOLOX-m (finds people) and RTMW-l (133 body points with hands, feet
+  and face) by OpenMMLab, licence Apache-2.0, about 330 MB together. They are
+  downloaded on first use after asking, first from the copy in the release
+  [ki-modelle](https://github.com/conty1337/Video-to-funscript-Generator/releases/tag/ki-modelle)
+  here on GitHub (fast), otherwise directly from OpenMMLab. An interrupted
+  download resumes next time, the checksums are verified, and they end up in
+  `~/.local/share/video-to-funscript/models`. If an app update brings newer
+  models, the app asks again and deletes the old ones afterwards. They run on
+  the OpenCV already inside the app, so the AppImage does not get bigger.
+- Good with whole bodies and medium shots. In very close shots with hardly any
+  body points visible the AI finds nothing; then there is no suggestion and the
+  check stays off for that box.
 
-**Schnitte**: Wo im Video nichts passiert, im Editor **X** am Anfang und noch
-einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis zum
-Countdown vor dem nächsten Hub). Schnitte stehen schraffiert in der Kurve, werden in
-`<Video>.vtf.json` gespeichert, und der Player springt darüber („Schnitte
-überspringen“). Bearbeiten → „Schnitt hier entfernen“ nimmt einen wieder raus.
-Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s von selbst
-(„Pausen ohne Hübe überspringen“; nach dem letzten Hub kommt das nächste
-Video). Wie am Anfang zählt dann der Countdown herunter, bis es weitergeht –
-nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
+*Preparation*: areas, sections and calibration are saved at once as
+`<video>.vtf.json` next to the video and loaded the next time it opens.
+Ctrl+Page↓ / Ctrl+Page↑ opens the next/previous video in the folder, so many
+videos can be prepared quickly. Batch processing uses the preparation; videos
+without one run with “Image motion”.
 
-**Bibliothek** (Strg+L oder Knopf oben): zeigt alle Videos mit Script aus einem
-Ordner (mit Unterordnern) mit Länge, Hüben pro Minute, mittlerem Tempo, Bewertung
-und Heatmap. Suchen, sortieren (Name, Bewertung, Tempo, Neueste, Länge) und nach
-Sternen filtern. Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
-Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Editor
-öffnen“ zum Bearbeiten. Die Bewertungen bleiben auf dem Rechner
-(`~/.config/video-to-funscript/library.json`).
+### More axes
 
-**Statistik** (Gerät → Statistik…): Spielzeit, Hübe und Tage für heute, 7 Tage,
-30 Tage und gesamt, dazu die Lieblingsvideos und Lieblingsmuster (nach Spielzeit).
-Gezählt wird, was mit Script abgespielt wird, und Muster/Abläufe/Zufall/Musik
-aus der Muster-Steuerung. Alles bleibt auf dem Rechner
-(`~/.config/video-to-funscript/stats.json`), „Zurücksetzen“ löscht es.
+Above the curve you choose the axis: stroke (L0), surge (L1), sway (L2), twist
+(R0), roll (R1) or pitch (R2). Each axis has its own points and is saved as
+`<video>.roll.funscript` etc. next to the video, as multi-axis players
+(MultiFunPlayer, OFS) expect. Edit → “Create more axes from the analysis”
+computes sway from the sideways movement and roll from the angle between
+tracking areas 1 and 2. Twist and pitch you set by hand. The Fredorch F21S has
+one axis only, so the device always follows “Stroke”.
 
-**Sprache und Akzentfarbe** (Menü Ansicht): Die Oberfläche gibt es auf Deutsch
-und Englisch, voreingestellt ist die Sprache des Systems. Die Sprache wechselt
-nach einem Neustart, als AppImage startet die App auf Wunsch gleich neu. Die
-Akzentfarbe (Kurve, Hauptknopf, Fortschritt, Bereich 1 beim Tracking, auch auf
-der Handy-Fernbedienung) wechselt sofort: Bernstein, Blau, Türkis, Grün,
-Violett, Pink oder über „Eigene Farbe…“ jede beliebige, mit Vorschau beim
-Aussuchen. Ist die Farbe dunkel, wird die Schrift darauf weiß. Beides steht in
-`~/.config/video-to-funscript/ui.json`.
+### Check, cuts, bookmarks
 
-**Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
-springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen
-in Kurve und Zeitleiste und werden in `<Video>.vtf.json` gespeichert.
-Strg+T („Rhythmus einfügen“) füllt einen Bereich mit einem Takt: gleichmäßig,
-schneller oder langsamer werdend, Doppelschlag oder Wellen, mit Tempo und Tiefe.
+**Check**: after every change the app checks the script and marks spots worth a
+second look at the top of the curve: too fast for the device (tempo limit or
+500 pos./s), gaps from 4 s, tremble (many tiny movements), strokes suddenly much
+smaller than around them (box slipped?), one stroke much slower than the others
+(beat drops out) and spots where tracking lost an area. The “Check” button in
+the timeline shows the list, **F3** / **Shift+F3** jump to the next/previous
+spot (one second before). Cuts are not checked.
 
-**Heatmap und Tempo-Grenze**: Die Tempo-Spur in der Zeitleiste und die Farbe der
-Hub-Leiste neben dem Video zeigen das Tempo des Scripts (dunkel = langsam, grün, gelb, rot = schnell). Mit
-**Tempo-Grenze** (Script-Einstellungen) werden zu schnelle Hübe schon beim
-Erzeugen gekürzt. Für den F21S passt etwa 500 /s (voller Hub in ca. 200 ms).
+**Cuts**: where nothing happens, press **X** at the start and **X** again at the
+end (or **Shift+X**: cut from here to the countdown before the next stroke).
+Cuts are hatched in the curve, saved in `<video>.vtf.json`, and the player skips
+them (“Skip cuts”). Edit → “Remove the cut here” takes one out. Optionally the
+player also skips every pause without strokes from 15 s (“Skip pauses without
+strokes”; after the last stroke the next video comes). As at the start, the
+countdown runs before it goes on, after every skipped cut and every pause from 10 s.
 
-**Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
-ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
-die schon ein `.funscript` existiert, werden übersprungen (abschaltbar).
+**Bookmarks and rhythm**: B sets a named bookmark, Alt+→/← jump to the
+next/previous one, the “Bookmarks” menu lists them all. They show in curve and
+timeline and are saved in `<video>.vtf.json`. Ctrl+T (“Insert rhythm”) fills a
+range with a beat: even, getting faster or slower, double beat or waves, with
+tempo and depth, or with any pattern from the pattern control.
 
-## Gerät steuern (Phase 2)
+**Heatmap and tempo limit**: the tempo track in the timeline and the colour of
+the stroke rail next to the video show the script's tempo (dark = slow, green,
+yellow, red = fast). With **Tempo limit** (script settings) strokes that are too
+fast are shortened right when created. For the F21S about 500 /s fits (a full
+stroke in about 200 ms).
 
-Die App spielt das Script synchron zum Video auf einem Gerät ab. Die
-Bluetooth-Verbindung übernimmt **[Intiface Central](https://intiface.com/central/)**
-(kostenlos, Open Source, für Linux als AppImage). Es unterstützt den
-**Fredorch F21S** über sein Protokoll „fredorch“, das Gerät meldet sich als
-`YXlinksSPP`.
+**Batch processing**: File → Batch processing (Ctrl+B) or drop a folder onto the
+window. The current settings are used. Videos that already have a `.funscript`
+are skipped (can be switched off).
 
-1. Intiface Central starten und auf **„Start Server“** klicken (Adresse
+### Player
+
+Click **Player** at the top (Ctrl+P). The side panel then shows the playlist:
+add videos or folders with + or drag them in, drag to reorder, Del removes.
+The funscript next to each video plays on the connected device, one after the
+other. Options: repeat, random order, skip videos without a script. Page ↑/↓
+jumps to the previous/next video, F11 is full screen (Esc ends it, together with
+the emergency stop). Playlists can be loaded and saved as `.m3u`, the app
+remembers the last one. A quiet start is skipped (start shortly before the first
+stroke), and a countdown runs before the start. Both can be switched off, the
+**countdown length** is adjustable (3–30 s, default 10 s).
+
+### Library and statistics
+
+**Library** (Ctrl+L or the button at the top): every video with a script in a
+folder (with subfolders), with length, strokes per minute, average tempo,
+rating and heatmap. Search, sort (name, rating, tempo, newest, length) and
+filter by stars. Rate: click the stars or press 1–5 (0 = none). A double click
+plays, “Add to playlist” appends the selected ones, “Open in editor” to edit.
+The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
+
+![Library](docs/images/en/library.png)
+
+**Statistics** (Device → Statistics…): playing time, strokes and days for today,
+7 days, 30 days and in total, plus favourite videos and patterns (by playing
+time). Counted is what plays with a script, and patterns/programs/random/music
+from the pattern control. Everything stays on your computer
+(`~/.config/video-to-funscript/stats.json`), “Reset” deletes it.
+
+<img src="docs/images/en/stats.png" alt="Statistics" width="460">
+
+### Language and accent colour
+
+View → **Language**: English or German, by default the language of the system.
+The language changes after a restart; as an AppImage the app offers to restart
+right away. Everything is translated, including the patterns and the phone
+remote.
+
+View → **Accent colour**: amber, blue, teal, green, violet, pink, or any colour
+via “Custom colour…”, with a live preview while choosing. The accent marks the
+script curve, the main button, progress, the stroke rail and tracking area 1,
+on the phone remote too. If the colour is dark, the text on it turns white.
+Both are stored in `~/.config/video-to-funscript/ui.json`.
+
+![The editor in amber, blue, violet and green](docs/images/en/accents.png)
+
+## Controlling a device
+
+The app plays the script on a device in sync with the video. The Bluetooth
+connection is handled by **[Intiface Central](https://intiface.com/central/)**
+(free, open source, an AppImage for Linux). It supports the **Fredorch F21S**
+via its “fredorch” protocol; the device shows up as `YXlinksSPP`.
+
+1. Start Intiface Central and click **“Start Server”** (address
    `ws://127.0.0.1:12345`).
-2. Gerät einschalten. Die Hersteller-App am Handy darf nicht verbunden sein,
-   das Gerät erlaubt nur eine Verbindung.
-3. In dieser App: **Gerät** (Toolbar oder Strg+D) → Art „Intiface Central“ →
-   **Verbinden**. Die App startet die Gerätesuche, und das Gerät erscheint in der Liste.
-4. Mit **Oben/Unten** testen, dann das Video abspielen: Das Gerät folgt dem Script.
+2. Switch the device on. The maker's phone app must not be connected, the device
+   allows one connection only.
+3. In this app: **Device** (toolbar or Ctrl+D) → type “Intiface Central” →
+   **Connect**. The app starts the device search, and the device appears in the list.
+4. Test with **Top/Bottom**, then play the video: the device follows the script.
 
-**Am einfachsten beim ersten Mal:** Gerät → **Einrichtungs-Assistent**. Er führt
-durch Verbinden, Richtung, Hubbereich, Höchsttempo (4 Hübe zum Ausprobieren
-pro Stufe) und Verzögerung. Für die Verzögerung leuchtet ein Kreis im Takt auf
-und klickt, das Gerät soll genau dann unten sein. Den Regler schiebst du, bis
-es passt.
+**Easiest the first time:** Device → **Setup assistant**. It walks through
+connecting, direction, stroke range, top speed (4 strokes to try per step) and
+delay. For the delay a circle lights up in a beat and clicks; the device should
+be at the bottom exactly then. Move the slider until it fits.
 
-![Einrichtungs-Assistent](docs/wizard.png)
+<img src="docs/images/en/wizard.png" alt="Setup assistant, delay step" width="520"> <img src="docs/images/en/device.png" alt="Device window with the simulation" width="300">
 
-Ohne Gerät: Art **„Simulation“**. Die Hubschiene neben dem Video zeigt mit
-einer weißen Umrandung, wo das Gerät gerade wäre. Die Simulation bildet den
-F21S nach: 16 Positionen, voller Hub frühestens in etwa 200 ms.
+Without a device: type **“Simulation”**. The stroke rail next to the video shows
+with a white outline where the device would be. The simulation behaves like
+the F21S: 16 positions, a full stroke in about 200 ms at the earliest.
 
-Einstellungen im Geräte-Dialog:
+Settings in the device window:
 
-- **Zeitversatz**: gleicht die Bluetooth-Verzögerung aus. Positiv heißt, das Gerät
-  bekommt seine Befehle früher. Startwert 0, typisch 50–150 ms.
-- **Max. Tempo**: Hübe, die schneller wären, werden verkürzt, nicht verzögert.
-  So bleibt das Gerät synchron und wird geschont.
-- **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).
-- **Richtung umkehren**.
+- **Time offset**: makes up for the Bluetooth delay. Positive means the device
+  gets its commands earlier. Starts at 0, typically 50–150 ms.
+- **Max. tempo**: strokes that would be faster are shortened, not delayed. So the
+  device stays in sync and is spared.
+- **Stroke range**: which part of the device's travel is used (depth).
+- **Reverse direction**.
 
-**Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
-das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen
-Script-Position und folgt erst dann.
+**Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
+device stops at once. After a start or a seek it first moves slowly to the
+current script position and only then follows.
 
-**Sicherheits-Timer** (im Fenster „Gerät“, standardmäßig aus): stoppt nach
-einer Höchstdauer am Stück, stoppt, wenn so lange nichts bedient wurde
-(Taste, Maus, Controller, Handy), und macht auf Wunsch alle paar Minuten eine
-kurze Pause, danach geht es von selbst weiter. Jeder Wert ist einzeln
-abschaltbar (0 = aus). Gezählt wird nur, solange sich das Gerät bewegt.
+**Safety timer** (in the “Device” window, off by default): stops after a
+maximum time in one go, stops if nothing was used for that long (key, mouse,
+controller, phone), and if you like pauses briefly every few minutes, then goes
+on by itself. Each value can be switched off on its own (0 = off). Only counted
+while the device moves.
 
-### Andere Geräte
+### Other devices
 
-- **Vibratoren und andere Geräte ohne Hub** über Intiface (Lovense, We-Vibe und
-  hunderte mehr): Die Stärke kommt aus dem Script. Unter „Vibration folgt“
-  stellst du ein, ob schnelle Hübe stark sind (**Tempo**) oder tiefe Stellen
-  (**Tiefe**).
-- **OSR2, SR6 und andere TCode-Geräte**: Art „OSR2/SR6 u.a. (TCode)“, als
-  Adresse den USB-Port (`/dev/ttyUSB0` oder `/dev/ttyACM0`) oder
-  `udp://IP:Port` für WLAN. Alle Achsen werden genutzt: Hub, Surge, Sway,
-  Twist, Roll und Pitch, also auch die, die die App selbst erzeugt. Wenn der
-  USB-Port nicht aufgeht: `sudo usermod -aG dialout $USER`, dann neu anmelden.
+- **Vibrators and other devices without a stroke** via Intiface (Lovense, We-Vibe
+  and hundreds more): the strength comes from the script. Under “Vibration
+  follows” you choose whether fast strokes are strong (**Tempo**) or deep spots
+  (**Depth**).
+- **OSR2, SR6 and other TCode devices**: type “OSR2/SR6 etc. (TCode)”, as the
+  address the USB port (`/dev/ttyUSB0` or `/dev/ttyACM0`) or `udp://IP:port`
+  for Wi-Fi. All axes are used: stroke, surge, sway, twist, roll and pitch, also
+  the ones the app creates itself. If the USB port does not open:
+  `sudo usermod -aG dialout $USER`, then log in again.
 
-### Andere Player
+### Other players
 
-Gerät → **Andere Player (mpv, VLC, VR)**: Das Gerät folgt dem Script, während du
-das Video in einem anderen Player schaust. Das Script wird neben dem Video
-gesucht (gleicher Name, `.funscript`) oder in einem Script-Ordner, der auch
-Unterordner durchsucht.
+Device → **Other players (mpv, VLC, VR)**: the device follows the script while
+you watch the video in another player. The script is looked for next to the
+video (same name, `.funscript`) or in a script folder, subfolders included.
 
-| Player | So einschalten |
+| Player | How to switch it on |
 |---|---|
-| mpv (am genauesten) | `mpv --input-ipc-server=/tmp/mpvsocket video.mp4` oder `input-ipc-server=/tmp/mpvsocket` in `~/.config/mpv/mpv.conf` |
-| VLC | Einstellungen → Alle → Schnittstellen → Hauptschnittstellen → „Web“, unter Lua ein Passwort setzen, VLC neu starten |
-| DeoVR | Einstellungen → Remote control an, Adresse = IP der Brille |
-| HereSphere | Einstellungen → DeoVR Remote an, Adresse = IP der Brille |
+| mpv (most precise) | `mpv --input-ipc-server=/tmp/mpvsocket video.mp4` or `input-ipc-server=/tmp/mpvsocket` in `~/.config/mpv/mpv.conf` |
+| VLC | Preferences → All → Interface → Main interfaces → “Web”, set a password under Lua, restart VLC |
+| DeoVR | Settings → Remote control on, address = IP of the headset |
+| HereSphere | Settings → DeoVR Remote on, address = IP of the headset |
 
-### Handy-Fernbedienung
+### Phone remote
 
-Gerät → **Handy-Fernbedienung** → „Fernbedienung an“. Am Handy (gleiches WLAN)
-öffnest du die angezeigte Adresse im Browser, zum Beispiel
-`http://192.168.0.20:8765`, und gibst die PIN ein – oder du scannst einfach den
-**QR-Code** im Fenster mit der Handy-Kamera, dann ist die PIN schon drin. Eine
-App ist nicht nötig. Das
-Handy kann Start/Stopp, **Not-Aus**, Muster/Ablauf/Zufall wählen, Tiefe und
-Tempo einstellen und Schritte springen. Im Reiter **Video** ist es die
-Fernbedienung für den Player: Abspielen/Pause, ±10 s, voriges/nächstes Video,
-mit dem Regler an jede Stelle springen, Restzeit sehen und ein Video aus der
-Playlist antippen; dazu die Script-Kurve um die aktuelle Stelle. Die PIN lässt sich jederzeit neu
-erzeugen, falsche PINs sperren das Handy kurz. Klappt die Verbindung nicht,
-blockiert die Firewall den Port:
+Device → **Phone remote** → “Remote on”. On your phone (same Wi-Fi) open the
+address shown in the browser, for example `http://192.168.0.20:8765`, and enter
+the PIN, or simply scan the **QR code** in the window with the phone camera;
+then the PIN is already filled in. No app needed. The phone can start/stop,
+**emergency stop**, choose pattern/program/random, set depth and tempo and jump
+steps. In the **Video** tab it is the remote for the player: play/pause, ±10 s,
+previous/next video, jump anywhere with the slider, see the time left and tap a
+video in the playlist, plus the script curve around the current spot. The PIN
+can be renewed any time, wrong PINs lock the phone out briefly. If the
+connection does not work, the firewall blocks the port:
 `sudo firewall-cmd --add-port=8765/tcp --permanent && sudo firewall-cmd --reload`.
 
-<img src="docs/remote.png" alt="Handy-Fernbedienung" width="300"> <img src="docs/remote-video.png" alt="Handy als Video-Fernbedienung" width="300">
+<img src="docs/images/en/remote-dialog.png" alt="Phone remote window with QR code" width="300"> <img src="docs/images/en/remote.png" alt="Phone remote: random mode" width="250"> <img src="docs/images/en/remote-video.png" alt="Phone as a remote for the player" width="250">
 
-### Zurücksetzen
+### Reset
 
-Wo man etwas verstellen kann, steht rechts neben der Überschrift **„Standard“**:
-Script und Analyse-Optionen, Gerät (Wiedergabe, Sicherheit) sowie in der
-Muster-Steuerung Tempo/Tiefe, Zufall und Musik. Ein **Doppelklick auf einen
-Regler** setzt nur diesen zurück.
+Wherever something can be adjusted, **“Default”** sits to the right of the
+heading: script and analysis options, device (playback, safety), and in the
+pattern control tempo/depth, random and music. A **double click on a slider**
+resets just that one.
 
-### Muster-Steuerung (ohne Video)
+## Pattern control (without a video)
 
-**Muster** in der Toolbar oder **Strg+M** öffnet die Muster-Steuerung. Damit
-spielst du Muster direkt auf dem Gerät ab, ohne Video und ohne Script.
+**Pattern** in the toolbar or **Ctrl+M** opens the pattern control. It plays
+patterns directly on the device, without a video and without a script.
 
-![Muster-Steuerung](docs/patterns.png)
+![Pattern control](docs/images/en/patterns.png)
 
-- **Links** die Bibliothek mit Vorschaubildern: über 50 fertige Muster in den
-  Gruppen Grundlagen, Rhythmus, Steigerung, Necken, Mehr Rhythmus, Mehr
-  Steigerung und Intensiv, darunter deine eigenen. Oben schaltest du zwischen
-  **Muster** und **Abläufe** um.
-  Doppelklick startet.
-- Nur zwei Regler: **Tiefe** (wie weit es reingeht, 10–100 %) und **Tempo**
-  (Hübe pro Minute). Beide gelten für alle Muster und bleiben gespeichert.
-  Du kannst sie jederzeit ändern, auch beim Abspielen, das Gerät springt
-  dabei nicht. Hubbereich, Richtung und Tempo-Limit aus dem Geräte-Dialog
-  gelten zusätzlich.
-- **Tasten**: ↑/↓ Tiefe, ←/→ Tempo (je 5), Leertaste Start/Stopp, Bild↑/↓
-  voriges/nächstes Muster.
-- **Controller** (Xbox, PlayStation und andere, per USB oder Bluetooth): wird
-  automatisch erkannt, solange die Muster-Steuerung offen ist, auch wenn ein
-  anderes Fenster vorne ist.
+- **On the left** the library with previews: over 50 ready-made patterns in the
+  groups Basics, Rhythm, Build-up, Teasing, More rhythm, More build-up and
+  Intense, below them your own. At the top you switch between **Pattern**,
+  **Programs**, **Random** and **Music**. A double click starts.
+- Only two sliders: **Depth** (how far in it goes, 10–100 %) and **Tempo**
+  (strokes per minute). Both apply to all patterns and are remembered. You can
+  change them any time, while playing too, and the device does not jump. Stroke
+  range, direction and tempo limit from the device window apply as well.
+- **Keys**: ↑/↓ depth, ←/→ tempo (5 each), Space start/stop, Page↑/↓
+  previous/next pattern.
+- **Controller** (Xbox, PlayStation and others, via USB or Bluetooth): detected
+  automatically while the pattern control is open, even if another window is in front.
 
-  | Taste | Funktion |
+  | Button | Function |
   |---|---|
-  | A / ✕ oder Start | Start/Stopp |
-  | B / ○ | Stopp |
-  | linker Stick ↕ | Tiefe stufenlos |
-  | rechter Stick ↕ | Tempo stufenlos |
-  | Steuerkreuz ↕ / ↔ | Tiefe / Tempo in 5er-Schritten |
-  | LB / RB (L1 / R1) | voriges/nächstes Muster |
+  | A / ✕ or Start | start/stop |
+  | B / ○ | stop |
+  | left stick ↕ | depth, stepless |
+  | right stick ↕ | tempo, stepless |
+  | d-pad ↕ / ↔ | depth / tempo in steps of 5 |
+  | LB / RB (L1 / R1) | previous/next pattern |
 
-- **Start/Stopp**. Esc, Schließen des Fensters, Abspielen eines Videos oder ein
-  Controller, der während der Steuerung verloren geht, stoppt das Muster sofort.
+- **Start/Stop**. Esc, closing the window, playing a video or a controller lost
+  during control stops the pattern at once.
 
-**Eigene Muster (Baukasten):** **Neu** oder bei einer Vorlage **Als Kopie
-ändern**. Bausteine wie Voller Hub, Kurz oben, Zittern, Schneller werdend oder
-Pause oben anklicken, sie werden hinten angehängt. Jeder Baustein hat:
+**Your own patterns (building blocks):** **New**, or **Change as a copy** on a
+template. Click building blocks such as Full stroke, Short at the top, Tremble,
+Getting faster or Pause at the top; they are appended at the end. Each block has:
 
-| Feld | Bedeutung |
+| Field | Meaning |
 |---|---|
-| Art | *Hub* (runter und rauf), *Fahren* (eine Bewegung zu einer Position), *Halten* (dort bleiben) |
-| Wiederholen | wie oft der Hub kommt |
-| Tempo | 1× = ein Hub im eingestellten Tempo, 2× doppelt so schnell |
-| Tiefe | von–bis in Prozent der eingestellten Tiefe (0 = ganz rein, 100 = ganz raus) |
-| Verlauf | Tempo und Tiefe ändern sich gleichmäßig über die Wiederholungen |
+| Type | *Stroke* (down and up), *Move* (one movement to a position), *Hold* (stay there) |
+| Repeats | how often the stroke comes |
+| Tempo | 1× = one stroke at the set tempo, 2× twice as fast |
+| Depth | from–to in percent of the set depth (0 = all the way in, 100 = all the way out) |
+| Ramp | tempo and depth change evenly over the repeats |
 
-Die Reihenfolge änderst du mit den Pfeilen oder per Ziehen. Unten zeigt das
-Bild das Ergebnis, der gewählte Baustein ist hervorgehoben. Eigene Muster
-liegen in `~/.config/video-to-funscript/patterns.json`. Alle Muster gibt es
-auch beim **Rhythmus einfügen** (Strg+T) im Editor, so kommt ein Muster
-direkt ins Script.
+Change the order with the arrows or by dragging. The picture below shows the
+result, the selected block highlighted. Your own patterns are kept in
+`~/.config/video-to-funscript/patterns.json`. All patterns are also offered by
+**Insert rhythm** (Ctrl+T) in the editor, so a pattern goes straight into a script.
 
-![Baukasten](docs/pattern-editor.png)
+![Building a pattern](docs/images/en/pattern-editor.png)
 
-### Abläufe (z.B. eine Stunde)
+### Programs (e.g. one hour)
 
-Ein **Ablauf** spielt mehrere Schritte nacheinander. Jeder Schritt hat ein
-Muster, eine **Dauer** in Minuten und ein eigenes **Tempo** und eine eigene
-**Tiefe**. Vorlagen: „Eine Stunde“, „Kurz und knackig (15 min)“,
-„Langsam steigern (30 min)“ und „Necken ohne Ende“ (Schleife).
+A **program** plays several steps one after the other. Each step has a pattern,
+a **duration** in minutes and its own **tempo** and **depth**. Templates: “One
+hour”, “Short and sharp (15 min)”, “Slow build-up (30 min)” and “Endless
+teasing” (loop).
 
-![Ablauf](docs/program.png)
+![Program](docs/images/en/program.png)
 
-- Die Zeitleiste zeigt alle Schritte mit ihrem Muster, die Breite entspricht
-  der Dauer. Der Strich zeigt, wo du bist, darunter stehen Schritt, Tempo,
-  Tiefe und die Restzeit.
-- Beim Abspielen verschieben ↑/↓ und ←/→ (oder der Controller) Tiefe und Tempo
-  des **ganzen** Ablaufs, z.B. alles 10 Hübe/min schneller.
-  „Anpassung zurücksetzen“ nimmt das zurück. Bild↑/↓ bzw. LB/RB springt zum
-  vorigen/nächsten Schritt.
-- **Neu** oder **Als Kopie ändern** öffnet den Editor. Dort fügst du Schritte
-  hinzu, sortierst sie und wählst pro Schritt Muster, Dauer, Tempo und Tiefe.
-- **Muster kürzen**: Mit **Teil** spielt ein Schritt nur einen Teil des Musters,
-  z.B. von „Kurz vor Schluss“ nur Baustein 1 (den schnellen Anfang). Das Bild
-  hebt den gewählten Teil hervor.
-- **Weiche Übergänge**: Tempo und Tiefe gleiten in den ersten 8 Sekunden eines
-  Schritts vom vorigen Schritt her, statt hart umzuschalten.
-- **Am Ende von vorne anfangen**: sonst stoppt das Gerät am Ende.
+- The timeline shows all steps with their pattern, the width matches the
+  duration. The line shows where you are; step, tempo, depth and the time left
+  are shown below.
+- While playing, ↑/↓ and ←/→ (or the controller) shift depth and tempo of the
+  **whole** program, e.g. everything 10 strokes/min faster. “Reset adjustment”
+  takes that back. Page↑/↓ or LB/RB jumps to the previous/next step.
+- **New** or **Change as a copy** opens the editor: add steps, sort them and
+  choose pattern, duration, tempo and depth per step.
+- **Shorten a pattern**: with **Part** a step plays only part of the pattern,
+  e.g. only building block 1 of “Almost there” (the fast start). The picture
+  highlights the chosen part.
+- **Smooth transitions**: tempo and depth glide over from the previous step in
+  the first 8 seconds of a step instead of switching hard.
+- **Start over at the end**: otherwise the device stops at the end.
 
-Eigene Abläufe liegen in `~/.config/video-to-funscript/programs.json`.
+Your own programs are kept in `~/.config/video-to-funscript/programs.json`.
 
-![Ablauf bauen](docs/program-editor.png)
+![Building a program](docs/images/en/program-editor.png)
 
-### Zufall und Musik
+### Random and music
 
-- **Zufall**: wechselt Muster und Tempo von selbst, nie zweimal dasselbe
-  Muster hintereinander, manchmal nur ein Stück davon. Jeder Abschnitt wird
-  **live gewürfelt**, wenn er drankommt. Alles lässt sich beim Abspielen ändern:
-  - Eine neue **Stimmung** (Ruhig, Gemischt, Intensiv oder **Alles** mit allen
-    Mustern) wechselt sofort in einen neuen Abschnitt.
-  - Ein neuer **Tempo-Bereich** zieht den laufenden Abschnitt gleich mit hinein.
-  - Die **Tiefe** ist ein Regler wie bei Mustern und Abläufen. Mit „Tiefe leicht
-    variieren“ bekommt jeder Abschnitt 70–100 % davon, ohne Häkchen gilt sie genau.
-    Für Abwechslung in der Tiefe sorgen die Muster selbst (Welle, Treppe, …).
-  - Die **Wechselzeit** (z.B. alle 1–3 Minuten) gilt ab dem nächsten Abschnitt.
-  - „Neu würfeln“ bzw. Bild↓/RB springt sofort weiter.
+- **Random**: changes pattern and tempo by itself, never the same pattern twice
+  in a row, sometimes only part of one. Each section is **rolled live** when its
+  turn comes. Everything can be changed while playing:
+  - A new **mood** (Calm, Mixed, Intense or **Everything** with all patterns)
+    switches to a new section at once.
+  - A new **tempo range** pulls the running section into it right away.
+  - The **depth** is a slider as with patterns and programs. With “Vary the depth
+    slightly” each section gets 70–100 % of it, unticked it applies exactly. The
+    patterns themselves (Wave, Staircase, …) bring variety in depth.
+  - The **change time** (e.g. every 1–3 minutes) applies from the next section.
+  - “Roll again”, Page↓ or RB jumps on at once.
 
-  Auch vom Handy aus lässt sich die Stimmung wechseln.
-- **Musik**: Das Gerät folgt dem Takt der Musik, die gerade auf dem PC läuft
-  (Spotify, YouTube, …), oder dem, was das Mikrofon hört. Die App erkennt die
-  Schläge, schätzt das Tempo und sagt die nächsten Schläge voraus, so ist das
-  Gerät trotz Verzögerung pünktlich unten. Einstellbar: Hub auf jeden, jeden
-  2. oder 4. Schlag, Empfindlichkeit, Tiefe und ob die Tiefe der Lautstärke
-  folgt. Aufgenommen wird mit `parec` oder `pw-record`, die unter Nobara
-  normalerweise schon installiert sind.
-- **Script aus Musik** (Bearbeiten → Script aus Musik): Für Videos, bei denen
-  Musik den Takt vorgibt. Setzt auf jeden Schlag in der Tonspur einen Hub,
-  für das ganze Video oder die markierten Punkte, mit Rückgängig.
+  The mood can be changed from the phone too.
+- **Music**: the device follows the beat of the music playing on the PC
+  (Spotify, YouTube, …) or of what the microphone hears. The app detects the
+  beats, estimates the tempo and predicts the next beats, so the device is at the
+  bottom on time despite the delay. Adjustable: a stroke on every, every 2nd or
+  4th beat, sensitivity, depth and whether the depth follows the volume.
+  Recording uses `parec` or `pw-record`, normally already installed on Nobara.
+- **Script from music** (Edit → Script from music): for videos where music sets
+  the beat. Puts a stroke on every beat of the audio track, for the whole video
+  or the selected points, with undo.
 
-## Kommandozeile
+## Command line
 
 ```bash
-vtf analyze video.mp4                      # erzeugt video.funscript
+vtf analyze video.mp4                      # creates video.funscript
 vtf analyze video.mp4 --sensitivity 70 --roi 0.2 0.1 0.6 0.8
-vtf batch ~/Videos                         # ganzer Ordner, bereits analysierte überspringen
+vtf batch ~/Videos                         # a whole folder, already analysed ones skipped
 vtf batch ~/Videos --overwrite --opencl
-vtf info                                   # FFmpeg/OpenCL prüfen
-vtf analyze --help                         # alle Optionen
+vtf info                                   # check FFmpeg/OpenCL
+vtf analyze --help                         # all options
 ```
 
-## AppImage selbst bauen
+## Building the AppImage yourself
 
 ```bash
-sudo dnf install squashfs-tools   # mksquashfs, meist schon installiert
-./scripts/build-appimage.sh       # erzeugt dist/Video-to-Funscript-<Version>-x86_64.AppImage
+sudo dnf install squashfs-tools   # mksquashfs, usually installed
+./scripts/build-appimage.sh       # creates dist/Video-to-Funscript-<version>-x86_64.AppImage
 ```
 
-Der Build braucht keine Downloads außer den Python-Paketen: Die AppImage-Runtime
-liegt in `packaging/` (siehe [packaging/RUNTIME.md](packaging/RUNTIME.md)).
+The build needs no downloads apart from the Python packages: the AppImage
+runtime is in `packaging/` (see [packaging/RUNTIME.md](packaging/RUNTIME.md)).
 
-Die GitHub-Action `appimage` baut das AppImage bei jedem Push auf `main` und bei
-jedem PR automatisch und testet es (Video analysieren, Screenshot).
+The GitHub action `appimage` builds the AppImage on every push to `main` and on
+every PR and tests it (analyses a video, takes a screenshot).
 
-**Release erstellen:** Version in `src/vtf/__init__.py` und `pyproject.toml`
-erhöhen und mergen. Dann auf GitHub unter Actions → appimage → „Run workflow“
-mit Haken bei „release“ auf `main` starten (oder einen Tag `v0.2.0` pushen).
-Die Action legt den Tag an, bricht ab, wenn es die Version schon gibt, und veröffentlicht
-`Video-to-Funscript-x86_64.AppImage` und `SHA256SUMS`. Installierte Versionen
-aktualisieren sich daraufhin selbst.
+**Making a release:** raise the version in `src/vtf/__init__.py` and
+`pyproject.toml` and merge. Then on GitHub start Actions → appimage → “Run
+workflow” with “release” ticked on `main` (or push a tag like `v0.2.0`). The
+action creates the tag, stops if the version exists already, and publishes
+`Video-to-Funscript-x86_64.AppImage` and `SHA256SUMS`. Installed copies then
+update themselves.
 
-## Wie die Analyse funktioniert
+## How the analysis works
 
-1. FFmpeg dekodiert das Video verkleinert in Graustufen. Mit VAAPI (AMD/Intel)
-   dekodiert *und* verkleinert die Grafikkarte, zur CPU gehen nur die kleinen
-   Analysebilder. Klappt das nicht (z.B. Codec von der Karte nicht unterstützt),
-   wird automatisch auf CPU-Dekodierung zurückgefallen.
-   Hilfe → „Dekodierung testen…“ zeigt, welcher Weg bei einem Video klappt und
-   wie schnell. Die „GPU-Auslastung“ in Systemmonitoren zeigt meist nur die
-   3D-Einheit; das Dekodieren läuft im Video-Block (VCN), sichtbar z.B. mit
-   `amdgpu_top`. Das Tracking selbst rechnet die CPU.
-2. Für jedes Bildpaar berechnet OpenCV den dichten optischen Fluss
-   (Farnebäck). Die globale Kamerabewegung (Median) wird abgezogen und aus den
-   am stärksten bewegten Pixeln ein Bewegungsvektor gebildet.
-3. Die Geschwindigkeit wird auf die gewählte Achse projiziert und zu einer
-   Position aufsummiert, Drift wird entfernt, geglättet und normalisiert.
-4. Hoch- und Tiefpunkte (mit Hysterese = Empfindlichkeit) werden zu
-   Funscript-Punkten. Die Schwelle richtet sich nach den Hüben der letzten
-   Sekunde, so werden kleine Hübe direkt neben großen nicht übersehen. Der
-   Zeitpunkt jedes Wendepunkts wird zwischen zwei Bildern berechnet (auf wenige
-   Millisekunden statt auf ein ganzes Bild genau).
+1. FFmpeg decodes the video scaled down in greyscale. With VAAPI (AMD/Intel) the
+   graphics card decodes *and* scales, only the small analysis frames go to the
+   CPU. If that does not work (e.g. a codec the card does not support), it falls
+   back to CPU decoding automatically. Help → “Test decoding…” shows which way
+   works for a video and how fast. The “GPU usage” in system monitors usually
+   shows only the 3D unit; decoding runs in the video block (VCN), visible e.g.
+   with `amdgpu_top`. The tracking itself is computed by the CPU.
+2. For every pair of frames OpenCV computes the dense optical flow (Farnebäck).
+   The global camera movement (median) is subtracted, and a motion vector is
+   formed from the pixels that move most.
+3. The speed is projected onto the chosen axis and summed up to a position,
+   drift is removed, then it is smoothed and normalised.
+4. Highs and lows (with hysteresis = sensitivity) become funscript points. The
+   threshold follows the strokes of the last second, so small strokes right next
+   to big ones are not missed. The moment of each turning point is computed
+   between two frames (to a few milliseconds instead of a whole frame).
 
-Beim **Tracking** ersetzt Schritt 2 der optische Fluss nur innerhalb der
-markierten Bereiche: Bis zu 60 Merkmalspunkte je Bereich werden mit
-Lucas-Kanade verfolgt, eine Vorwärts-Rückwärts-Prüfung verwirft abgerutschte
-Punkte, und der Bereich bewegt sich um den Median der übrigen. Bei schnellen
-Hüben beginnt die Suche dort, wohin die letzte Bewegung zeigt (Vorhersage), so
-bleibt das Kästchen auch bei großen Sprüngen zwischen zwei Bildern dran. Alle paar
-Bilder wird das Aussehen verglichen und der Bereich (mit Zwischenpixeln)
-zurückgezogen, falls er weggedriftet ist. Ragt er über den Bildrand oder ist er
-durch schnelle Bewegung verwischt, wird dieser Vergleich nicht als Verdeckung
-gewertet. Die Strecke außerhalb des Bildes oder unter einer Verdeckung wird
-mit einer kubischen Kurve überbrückt, die die Geschwindigkeit an beiden Enden
-übernimmt. Bei längeren Lücken geht die Kurve durch die Stellen, an denen die
-KI-Kontrolle das Körperteil gesehen hat. Die KI-Kontrolle merkt sich beim
-Markieren, welche Körperpunkte im Kästchen liegen und wo die Mitte von jedem
-aus gesehen liegt, gemessen in Körperhöhen. So passt das auch, wenn die Person
-näher kommt.
+With **tracking**, step 2 is replaced by following the marked areas: up to 60
+feature points per area are tracked with Lucas-Kanade, a forward-backward check
+drops points that slipped, and the area moves by the median of the rest. Points
+are taken only inside an outline, with an inset from its edge. With fast strokes
+the search starts where the last movement points (prediction), so the box stays
+on even with big jumps between two frames. Every few frames the look is
+compared and the area pulled back (with sub-pixel precision) if it drifted. If
+it reaches over the image edge or is blurred by fast movement, this comparison
+does not count as occlusion. The stretch outside the picture or under an
+occlusion is bridged with a cubic curve that takes over the speed at both ends.
+With longer gaps the curve goes through the spots where the AI check saw the
+body part. The AI check remembers at marking time which body points lie in the
+box and where its centre lies from each of them, measured in body heights, so
+it still fits when the person comes closer.
 
-Da Schritt 1–2 (teuer) von 3–4 (billig) getrennt sind, wirken
-Script-Einstellungen sofort ohne neue Analyse.
+Since steps 1–2 (expensive) are separate from 3–4 (cheap), script settings apply
+at once without a new analysis.
 
-## Gestaltung
+## Design
 
-Die Oberfläche folgt einer festen Gestaltungsrichtung (Schnittplatz bei Nacht,
-ein Bernstein-Akzent nur für das Script). Details und Quellen stehen in
-[docs/design.md](docs/design.md).
+The interface follows a fixed design direction (an edit bay at night, one accent
+for the script only), made with the method of
+[unslop](https://github.com/heydamir/unslop). Details are in
+[docs/design.md](docs/design.md) (German).
 
-## Entwicklung
+## Development
 
 ```bash
 .venv/bin/pytest
 ```
 
-Wie genau das Tracking ist, misst `python tools/measure_tracking.py`: künstliche
-Videos mit bekannter Bewegung (schneller werdend, kleine Hübe, groß/klein im
-Wechsel, wenig Muster, Pausen, schnelle Hübe, halb und ganz aus dem Bild), dazu Fehler beim Verfolgen in Pixeln, Abweichung
-der Wendepunkte in ms, Hubhöhe, verpasste und falsche Punkte. `--shake 0.5`
-fügt Zittern hinzu, `--width` ändert die Analysebreite, `--only "aus dem Bild"` misst nur
-passende Szenen, `--seed` wählt andere Texturen.
+How precise the tracking is, `python tools/measure_tracking.py` measures:
+synthetic videos with known movement (getting faster, small strokes, big and
+small in turn, little texture, pauses, fast strokes, half and fully out of the
+picture), with the tracking error in pixels, deviation of the turning points in
+ms, stroke height, missed and false points. `--shake 0.5` adds tremble,
+`--width` changes the analysis width, `--only "aus dem Bild"` measures only
+matching scenes (the scene names are German), `--seed` picks other textures.
 
-Projektstruktur:
+**Screenshots**: `tools/screenshots/run.sh WORKDIR [PERSON_VIDEO]` recreates every
+picture in `docs/images/` in both languages from synthetic demo videos (no real
+footage); the AI pictures need a clip with a whole figure and the AI models.
+
+**Translations**: the German text in the code is the key (`tr("…")`), English
+is in `src/vtf/locale_en.py`. A test checks that every text has a translation
+and that the fields `{0}`, `{1:.0f}` … survive. Another language is one more
+file of that kind.
+
+Project layout:
 
 ```
 src/vtf/
-  video.py       Video-Infos + schnelles Dekodieren (FFmpeg/OpenCV)
-  analysis.py    Optischer Fluss -> Bewegungsdaten (+ Cache)
-  tracking.py    Markierte Bereiche verfolgen
-  pose.py        KI-Körpererkennung (Modelle laden, Personen und Punkte, Anker)
-  generator.py   Bewegungsdaten -> Kurve -> Funscript-Punkte
-  funscript.py   Dateiformat
-  batch.py       Ordnerverarbeitung
-  gpu.py         OpenCL-Hilfen
-  device/        Gerätesteuerung: Simulation, Intiface (Buttplug), Synchronisation
-  cli.py         Kommandozeile (vtf)
-  gui/           PySide6-Oberfläche (vtf-gui), Gestaltung in gui/theme.py
+  video.py       video info + fast decoding (FFmpeg/OpenCV)
+  analysis.py    optical flow -> motion data (+ cache)
+  tracking.py    follow marked areas
+  autofind.py    find toy, reference and stroke direction automatically
+  pose.py        AI body detection (loading models, people and points, anchors)
+  generator.py   motion data -> curve -> funscript points
+  quality.py     script check
+  funscript.py   file format
+  batch.py       folder processing
+  library.py     library, ratings
+  stats.py       local statistics
+  i18n.py        languages (locale_en.py: English texts)
+  gpu.py         OpenCL helpers
+  device/        device control: simulation, Intiface (Buttplug), TCode, sync
+  cli.py         command line (vtf)
+  gui/           PySide6 interface (vtf-gui), design in gui/theme.py
 ```
 
-## Lizenz
+The [roadmap](docs/roadmap.md) (German) collects ideas for later.
 
-MIT – siehe [LICENSE](LICENSE).
+## Licence
+
+MIT, see [LICENSE](LICENSE).

@@ -171,9 +171,10 @@ class MainWindow(QMainWindow):
             self.axis_box.addItem(f"{label} ({code})", code)
         self.axis_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.axis_box.setStyleSheet("QComboBox { padding-right: 28px; }")
-        self.curve_meta = QLabel(tr("Noch nicht analysiert"))
+        self.curve_meta = ElidedLabel(tr("Noch nicht analysiert"))
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
+        self.curve_meta.setMinimumWidth(120)          # longer languages: shortened, the window stays narrow
         curve_hint = self.curve_hint = ElidedLabel(tr("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · Rechtsklick löscht · Mausrad zoomt"))
         curve_hint.setObjectName("caption")
         # long hint must not widen the window: shortened with … when there is no room
@@ -1735,7 +1736,7 @@ class MainWindow(QMainWindow):
         if lost:
             a, _b, areas = lost[0]
             lost_txt = (tr(" · Bereich {0} ab {1} verloren", ', '.join(map(str, areas)), _fmt(a))
-                        + (tr(" (+{0} weitere Stellen, rot in der Kurve)", len(lost) - 1) if len(lost) > 1 else
+                        + (plural(len(lost) - 1, " (+{0} weitere Stelle, rot in der Kurve)", " (+{0} weitere Stellen, rot in der Kurve)") if len(lost) > 1 else
                            tr(" (rot in der Kurve) – dort nachjustieren")))
         notes = motion.meta.get("notes") or []
         note_txt = "".join(f" · {n}" for n in notes)        # only the AI check writes notes
@@ -1788,7 +1789,7 @@ class MainWindow(QMainWindow):
         self.redo_stack.clear()
         self.dirty = True
         self._update_axis_labels()
-        names = ", ".join(f"{AXES[c][0]} ({len(a)} Punkte)" for c, a in axes.items())
+        names = ", ".join(tr("{0} ({1} Punkte)", AXES[c][0], len(a)) for c, a in axes.items())
         hint = "" if "R1" in axes else tr(" · Roll braucht Tracking mit 2 Bereichen")
         self._status(tr("Erzeugt: {0}{1}", names, hint))
 
@@ -1838,6 +1839,11 @@ class MainWindow(QMainWindow):
             n = len(self.actions_for(code))
             label = AXES[code][0]
             self.axis_box.setItemText(i, f"{label} ({code})" + (f" · {n}" if n else ""))
+        # the box does not grow by itself when a text gets longer (point count added)
+        self.axis_box.ensurePolished()               # the style sheet sets the real font size
+        fm = self.axis_box.fontMetrics()
+        widest = max(fm.horizontalAdvance(self.axis_box.itemText(i)) for i in range(self.axis_box.count()))
+        self.axis_box.setMinimumWidth(widest + 64)
 
     # ------------------------------------------------------------ editing
     # ------------------------------------------------------------ point editing
@@ -1852,30 +1858,30 @@ class MainWindow(QMainWindow):
 
     def select_all_points(self):
         self.curve.select_all()
-        self._status(tr("{0} Punkte ausgewählt", len(self.curve.selection)))
+        self._status(plural(len(self.curve.selection), "{0} Punkt ausgewählt", "{0} Punkte ausgewählt"))
 
     def copy_points(self):
         if self._need_selection():
-            self._status(tr("{0} Punkte kopiert", self.curve.copy_selection()))
+            self._status(plural(self.curve.copy_selection(), "{0} Punkt kopiert", "{0} Punkte kopiert"))
 
     def cut_points(self):
         if self._need_selection():
             n = self.curve.copy_selection()
             self.curve.delete_selection()
-            self._status(tr("{0} Punkte ausgeschnitten", n))
+            self._status(plural(n, "{0} Punkt ausgeschnitten", "{0} Punkte ausgeschnitten"))
 
     def paste_points(self):
         if not self.curve.editable:
             return
         n = self.curve.paste()
-        self._status(tr("{0} Punkte eingefügt bei {1}", n, _fmt(self.curve.playhead_ms)) if n else
+        self._status(plural(n, "{0} Punkt eingefügt bei {1}", "{0} Punkte eingefügt bei {1}", _fmt(self.curve.playhead_ms)) if n else
                      tr("Nichts zum Einfügen – erst Punkte kopieren (Strg+C)"))
 
     def delete_points(self):
         if self._need_selection():
             n = len(self.curve.selection)
             self.curve.delete_selection()
-            self._status(tr("{0} Punkte gelöscht", n))
+            self._status(plural(n, "{0} Punkt gelöscht", "{0} Punkte gelöscht"))
 
     def smooth_points(self):
         if self._need_selection():

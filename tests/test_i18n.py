@@ -62,7 +62,9 @@ def test_tr_plural_dec(english):
     assert i18n.plural(1, "{0} Stelle prüfen: {1}", "{0} Stellen prüfen: {1}", "x") == "Check 1 spot: x"
     assert i18n.plural(3, "{0} Stelle prüfen: {1}", "{0} Stellen prüfen: {1}", "x") == "Check 3 spots: x"
     assert i18n.dec("1.5 s") == "1.5 s"
+    assert i18n.num(10500) == "10,500"
     i18n.set_language("de")
+    assert i18n.num(10500) == "10.500"
     assert i18n.tr("Abspielen") == "Abspielen"
     assert i18n.dec("1.5 s") == "1,5 s"
 

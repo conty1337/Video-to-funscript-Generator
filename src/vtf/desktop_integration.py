@@ -51,8 +51,10 @@ def entry_text(appimage: Path) -> str:
         "[Desktop Entry]\n"
         "Type=Application\n"
         "Name=Video-to-Funscript Generator\n"
-        "GenericName=Funscript-Generator\n"
-        "Comment=Videos analysieren und Funscripts erstellen\n"
+        "GenericName=Funscript generator\n"
+        "GenericName[de]=Funscript-Generator\n"
+        "Comment=Analyse videos and create funscripts\n"
+        "Comment[de]=Videos analysieren und Funscripts erstellen\n"
         f"Exec={_quote(str(appimage))} %f\n"
         f"TryExec={appimage}\n"
         # full path instead of a theme name: Plasma caches theme icons and often

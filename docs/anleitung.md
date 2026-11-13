@@ -1,9 +1,11 @@
 # Anleitung: vom Video zum Script
 
-Kurz und der Reihe nach. Die ausführliche Beschreibung aller Funktionen steht
-in der [README](../README.md).
+[English](guide.md) · **Deutsch**
 
-![Tracking: Kästchen markieren, gezoomt, mit Optionen](tracking.png)
+Kurz und der Reihe nach. Die ausführliche Beschreibung aller Funktionen steht
+in der [README](../README.de.md).
+
+![Tracking: automatisch gefunden, Toy umrandet, Bezug und Hub-Pfeil, gezoomt, mit Optionen](images/de/tracking.png)
 
 ## Aufbau des Fensters
 
@@ -176,6 +178,7 @@ Muster-Steuerung für einen Bereich ein.
 | Strg+W | Video schließen |
 | Strg+P | Player |
 | Strg+M | Muster-Steuerung |
+| Strg+L | Bibliothek |
 | Strg+1 / Strg+2 | linke/rechte Leiste ein/aus |
 | F11 | Vollbild |
 | Esc | Not-Aus (Gerät stoppen) |
@@ -191,7 +194,7 @@ wählen und zu einer Stelle spulen, wo die Person gut zu sehen ist. Es
 erscheint eine Liste der gefundenen Körperteile, bei mehreren Personen mit
 „Person 1“, „Person 2“. Ein Klick setzt das Kästchen.
 
-![KI-Vorschlag: Liste der erkannten Körperteile](ki-vorschlag.png)
+![KI-Vorschlag: Liste der erkannten Körperteile](images/de/ai-suggestion.png)
 
 **Oder selbst im Bild wählen:** Gleichzeitig zeichnet die KI die erkannten
 Punkte und Linien ins Video, also Gelenke, Hände mit Fingern, Füße und
@@ -201,7 +204,7 @@ dorthin. Ein Klick auf eine **Linie** (z.B. Oberschenkel) setzt ein gedrehtes
 Kästchen entlang der Linie. Das gibt dem Tracker mehr Fläche zum Verfolgen.
 Esc oder Weiterspulen blendet das Gerüst aus.
 
-![Gerüst der KI: Linie „Oberschenkel rechts“ unter der Maus](ki-geruest.png)
+![Gerüst der KI: Linie „Oberschenkel rechts“ unter der Maus](images/de/ai-skeleton.png)
 
 **2. Kästchen prüfen** (2) und bei Bedarf wie gewohnt verschieben oder in
 der Größe ändern. Für ein Gegenstück (Kästchen 2) noch einmal KI-Vorschlag
@@ -212,14 +215,14 @@ verrutscht oder oft verdeckt wird, zum Beispiel durch eine Hand. Das geht
 auch bei selbst gezogenen Kästchen, solange darin Körperpunkte liegen
 (Hüftgelenke, Hand, Mund).
 
-![Kästchen auf dem Becken, KI-Kontrolle an](ki-kaestchen.png)
+![Kästchen auf dem Becken, KI-Kontrolle an](images/de/ai-box.png)
 
 **4. Analysieren.** Die Analyse dauert mit KI-Kontrolle länger. Die Hübe
 misst weiterhin der normale Tracker, Bild für Bild. Die KI sorgt nur dafür,
 dass das Kästchen auf seinem Körperteil bleibt. Ist es länger verdeckt,
 überbrückt sie die Stelle mit dem, was sie vom Körper noch sieht.
 
-![Nach der Analyse: Kästchen folgt dem Becken, Hübe in der Kurve](ki-analyse.png)
+![Nach der Analyse: Kästchen folgt dem Becken, Hübe in der Kurve](images/de/ai-analysis.png)
 
 **Wann die KI nichts findet:** bei sehr nahen Ausschnitten, in denen kaum
 etwas vom Körper zu sehen ist. Dann wie gewohnt selbst aufziehen.
