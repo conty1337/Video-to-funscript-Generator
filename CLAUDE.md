@@ -10,6 +10,7 @@ Gilt für jede Sitzung in diesem Repository.
 
 ## Ablauf
 - Arbeiten auf dem Sitzungs-Branch, dann einen PR öffnen und ihn beobachten (CI, Kommentare).
+- PRs nicht als Entwurf anlegen, sondern gleich bereit zum Mergen (draft: false).
 - **Der Nutzer merged.** Nicht selbst mergen, außer der Nutzer erlaubt es ausdrücklich für diesen PR.
 - Nach einem Merge den Branch neu auf `origin/main` setzen, bevor weitergearbeitet wird.
 - Kein Force-Push, kein Amend. Nur eigene temporäre Dateien löschen.
