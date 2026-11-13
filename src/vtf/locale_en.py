@@ -2145,4 +2145,6 @@ EN: dict[str, str] = {
         "{0} preview picture deleted",
     "{0} Vorschaubilder gelöscht":
         "{0} preview pictures deleted",
+    "Kein gültiges Funscript: {0}":
+        "Not a valid funscript: {0}",
 }

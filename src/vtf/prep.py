@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 from .analysis import TrackSection
-from .scriptdir import settings
+from .scriptdir import foreign, settings
 
 PREP_VERSION = 1
 
@@ -25,7 +25,9 @@ def _near(video: str | Path) -> Path:
 def _target(video: str | Path) -> Path:
     """Where saving writes the file."""
     folder = settings().data_folder
-    return folder / _near(Path(video).name).name if folder is not None else _near(video)
+    if folder is None or foreign(video) is not None:     # same name as another video: next to it
+        return _near(video)
+    return folder / _near(Path(video).name).name
 
 
 def prep_path(video: str | Path) -> Path:

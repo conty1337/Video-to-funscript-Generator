@@ -8,13 +8,14 @@ the pictures are deleted. No Qt.
 
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
 import cv2
 import numpy as np
 
-from .scriptdir import settings
+from .scriptdir import foreign, settings
 
 WIDTH = 320
 QUALITY = 82
@@ -32,8 +33,12 @@ def thumb_dir() -> Path:
 def thumb_path(video_or_stem: str | Path) -> Path:
     """Where the picture of a video (or a video name) lies or will lie."""
     p = Path(video_or_stem)
-    stem = p.stem if p.suffix else p.name
-    return thumb_dir() / f"{stem}.jpg"
+    if not p.suffix:
+        return thumb_dir() / f"{p.name}.jpg"
+    if foreign(p) is not None:                  # same name as another video: its own picture
+        tag = hashlib.sha1(str(p.resolve().parent).encode()).hexdigest()[:8]
+        return thumb_dir() / f"{p.stem}.{tag}.jpg"
+    return thumb_dir() / f"{p.stem}.jpg"
 
 
 def enabled() -> bool:

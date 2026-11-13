@@ -42,12 +42,22 @@ class Funscript:
 
     @classmethod
     def load(cls, path: str | Path) -> "Funscript":
+        """Raises OSError or ValueError (also for a file of the wrong shape). An inverted script
+        is flipped here, so the actions are always meant as written."""
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
-        acts = [Action(int(a["at"]), int(a["pos"])) for a in d.get("actions", [])]
+        try:
+            inverted = d.get("inverted") is True
+            acts = [Action(int(a["at"]), int(a["pos"])) for a in d.get("actions", [])]
+            meta = d.get("metadata") or {}
+            if not isinstance(meta, dict):
+                meta = {}
+        except (AttributeError, KeyError, TypeError) as e:
+            raise ValueError(tr("Kein gültiges Funscript: {0}", e)) from e
+        if inverted:
+            acts = [Action(a.at, 100 - a.pos) for a in acts]
         acts.sort(key=lambda a: a.at)
-        return cls(acts, bool(d.get("inverted", False)), int(d.get("range", 100)),
-                   d.get("metadata", {}) or {})
+        return cls(acts, metadata=meta)
 
 
 def position_at(actions: list[Action], ms: float) -> float | None:

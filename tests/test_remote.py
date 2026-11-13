@@ -37,6 +37,14 @@ def test_server_pin_state_commands():
         assert _post(base + "/api/cmd", {"pin": "123456", "cmd": "toggle"}) == 200
         assert _post(base + "/api/cmd", {"pin": "1", "cmd": "toggle"}) == 401
         assert got == [{"cmd": "toggle"}]                 # the PIN is not passed on
+        req = urllib.request.Request(base + "/api/cmd", data=b'{"pin":"123456","cmd":"nudge","depth":NaN}',
+                                     method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=3)
+            code = 200
+        except urllib.error.HTTPError as e:
+            code = e.code
+        assert code == 400 and len(got) == 1             # NaN/Infinity are refused
         for _ in range(MAX_WRONG):
             _get(base + "/api/state?pin=999999")
         assert _get(base + "/api/state?pin=123456")[0] == 429   # locked for a while

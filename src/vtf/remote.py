@@ -22,6 +22,10 @@ MAX_WRONG = 8
 LOCK_S = 60
 
 
+def _no_constant(name: str):
+    raise ValueError(name)              # NaN/Infinity would get stuck in tempo and depth
+
+
 def new_pin() -> str:
     return f"{secrets.randbelow(10**6):06d}"
 
@@ -125,7 +129,7 @@ class RemoteServer:
                     return
                 try:
                     n = min(int(self.headers.get("Content-Length", 0)), 4096)
-                    data = json.loads(self.rfile.read(n) or b"{}")
+                    data = json.loads(self.rfile.read(n) or b"{}", parse_constant=_no_constant)
                 except (ValueError, OSError):
                     self._json(400, {"error": tr("ungültig")})
                     return
