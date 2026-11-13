@@ -2209,6 +2209,8 @@ class MainWindow(QMainWindow):
             lines.append(tr("Die NVIDIA-Karte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „NVIDIA“ wird das genutzt."))
         elif "vaapi-gpu" in ok:
             lines.append(tr("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „VAAPI“ wird das genutzt."))
+        elif "cuda" in ok:
+            lines.append(tr("Die NVIDIA-Karte dekodiert, die CPU verkleinert (diesem ffmpeg fehlt scale_cuda). Ist „CPU (FFmpeg)“ oben schneller, ist „Dekodierung: Software“ die bessere Wahl."))
         elif nvidia:
             lines.append(tr("Die NVIDIA-Karte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne NVDEC). Unter Nobara hilft meist: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs"))
         else:

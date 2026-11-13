@@ -326,3 +326,21 @@ def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
     finally:
         w.dirty = False
         w.close()
+
+
+def test_library_lists_scripts_whose_video_lies_elsewhere(cfg):
+    """Scripts (and data) on a network folder, videos local: the library of that folder lists them."""
+    from vtf.library import scan
+    nas, local = cfg / "nas", cfg / "local"
+    local.mkdir()
+    v = local / "Clip.mp4"; v.write_bytes(b"\0")
+    scriptdir.save_settings(nas, False, data_folder=nas)
+    scriptdir.remember_video(v)
+    _script(nas / "Clip.funscript")
+    _script(nas / "Loose.funscript")
+    entries = scan(nas)
+    assert [(e.name, e.missing, e.video) for e in entries] == [
+        ("Clip", False, v), ("Loose", True, nas / "Loose")]
+    assert [e.name for e in scan(local)] == ["Clip", "Loose"]      # Clip once, not twice
+    scriptdir.save_settings(None)                                  # script folder not set: still found
+    assert [(e.name, e.missing) for e in scan(nas)] == [("Clip", False), ("Loose", True)]

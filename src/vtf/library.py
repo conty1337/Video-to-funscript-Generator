@@ -67,15 +67,17 @@ def _numbers(e: Entry) -> None:
 
 def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
     """Every video in the folder (and below) that has a script (next to it or in the script
-    folder), plus the scripts in the script folder whose video is gone (moved or renamed)."""
+    folder), plus the scripts in the script folder or this folder that no video here brought in."""
     root = Path(folder)
     if not root.is_dir():
         return []
     files = root.rglob("*") if recursive else root.iterdir()
     ratings = load_ratings()
     sd = script_settings()
-    out = []
+    out, loose = [], []
     for v in files:
+        if v.name.lower().endswith(".funscript") and v.is_file():
+            loose.append(v)
         if not v.is_file() or v.suffix.lower() not in VIDEO_EXTS:
             continue
         s = find_script(v, "L0", sd)
@@ -84,18 +86,28 @@ def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
         e = Entry(v, s, mtime=s.stat().st_mtime, rating=int(ratings.get(_key(v), 0)))
         _numbers(e)
         out.append(e)
-    out += _orphans(sd, {e.script for e in out})
+    out += _orphans(sd, out, loose, ratings)
     return sorted(out, key=lambda e: e.name.lower())
 
 
-def _orphans(sd, listed: set) -> list[Entry]:
-    """Scripts in the script folder whose video cannot be found anywhere."""
+def _orphans(sd, listed: list[Entry], loose: list[Path], ratings: dict) -> list[Entry]:
+    """Scripts in the script folder or the library folder that no video above brought in:
+    with their video when it lies elsewhere (e.g. scripts on a network folder, videos local),
+    else marked as missing."""
+    scripts = {e.script for e in listed}
+    videos = {_key(e.video) for e in listed}
     out = []
-    for s in files_in(sd.folder, "scripts") if sd.active else []:
+    for s in dict.fromkeys([*(files_in(sd.folder, "scripts") if sd.active else []), *loose]):
         stem = video_stem(s)
-        if s in listed or s.name.lower() != (stem + ".funscript").lower() or find_video(s) is not None:
-            continue                      # listed already, an extra axis, or its video is somewhere else
-        e = Entry(s.with_name(stem), s, mtime=s.stat().st_mtime, missing=True)
+        if s in scripts or s.name.lower() != (stem + ".funscript").lower():
+            continue                      # listed already, or an extra axis
+        video = find_video(s)
+        if video is not None and _key(video) in videos:
+            continue                      # a copy of a script already listed with its video
+        e = Entry(video or s.with_name(stem), s, mtime=s.stat().st_mtime, missing=video is None)
+        if video is not None:
+            e.rating = int(ratings.get(_key(video), 0))
+            videos.add(_key(video))
         _numbers(e)
         out.append(e)
     return out

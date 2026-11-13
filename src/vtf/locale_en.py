@@ -2161,4 +2161,6 @@ EN: dict[str, str] = {
         "The NVIDIA card can't decode this video (driver, codec or ffmpeg without NVDEC). On Nobara this usually helps: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs",
     'Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (NVDEC) und taucht dort kaum auf – sichtbar z.B. mit nvidia-smi dmon oder nvtop. Das Tracking selbst rechnet die CPU.':
         "Note: the “GPU usage” display mostly shows only the 3D unit. Decoding runs in the card's own video block (NVDEC) and hardly shows up there – visible e.g. with nvidia-smi dmon or nvtop. The tracking itself is computed by the CPU.",
+    "Die NVIDIA-Karte dekodiert, die CPU verkleinert (diesem ffmpeg fehlt scale_cuda). Ist „CPU (FFmpeg)“ oben schneller, ist „Dekodierung: Software“ die bessere Wahl.":
+        "The NVIDIA card decodes, the CPU scales (this ffmpeg lacks scale_cuda). If “CPU (FFmpeg)” above is faster, “Decoding: Software” is the better choice.",
 }
