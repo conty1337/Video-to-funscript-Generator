@@ -25,7 +25,7 @@ from . import theme
 from .tracking_ui import TrackingBox
 
 AXES = [(tr("Vertikal"), "vertical"), (tr("Horizontal"), "horizontal"), (tr("Automatisch"), "auto")]
-HWACCEL = [(tr("Automatisch"), "auto"), (tr("VAAPI, AMD-GPU"), "vaapi"), (tr("Software"), "none")]
+HWACCEL = [(tr("Automatisch"), "auto"), (tr("VAAPI, AMD-GPU"), "vaapi"), (tr("NVIDIA (NVDEC)"), "cuda"), (tr("Software"), "none")]
 
 
 def _slider(lo, hi, val, suffix=""):

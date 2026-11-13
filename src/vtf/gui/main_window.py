@@ -2202,12 +2202,20 @@ class MainWindow(QMainWindow):
             else:
                 err = (r["error"] or "keine Bilder").replace("FFmpeg lieferte keine Frames: ", "")
                 lines.append(f"✗ {r['label']}:\n    {err[:300]}")
-        gpu_ok = any(r["ok"] and r["mode"] == "vaapi-gpu" for r in results)
+        ok = {r["mode"] for r in results if r["ok"]}
+        nvidia = any(r["mode"] == "cuda-gpu" for r in results)
         lines.append("")
-        lines.append(tr("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „VAAPI“ wird das genutzt.") if gpu_ok else
-                     tr("Die Grafikkarte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne VAAPI). Unter Nobara hilft meist: sudo dnf install ffmpeg libva-utils mesa-va-drivers-freeworld"))
+        if "cuda-gpu" in ok:
+            lines.append(tr("Die NVIDIA-Karte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „NVIDIA“ wird das genutzt."))
+        elif "vaapi-gpu" in ok:
+            lines.append(tr("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „VAAPI“ wird das genutzt."))
+        elif nvidia:
+            lines.append(tr("Die NVIDIA-Karte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne NVDEC). Unter Nobara hilft meist: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs"))
+        else:
+            lines.append(tr("Die Grafikkarte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne VAAPI). Unter Nobara hilft meist: sudo dnf install ffmpeg libva-utils mesa-va-drivers-freeworld"))
         lines.append("")
-        lines.append(tr("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (VCN) und taucht dort kaum auf – sichtbar z.B. mit amdgpu_top. Das Tracking selbst rechnet die CPU."))
+        lines.append(tr("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (NVDEC) und taucht dort kaum auf – sichtbar z.B. mit nvidia-smi dmon oder nvtop. Das Tracking selbst rechnet die CPU.") if nvidia else
+                     tr("Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (VCN) und taucht dort kaum auf – sichtbar z.B. mit amdgpu_top. Das Tracking selbst rechnet die CPU."))
         QMessageBox.information(self, tr("Dekodierung testen"), "\n".join(lines))
         self._status(tr("Dekodierungstest fertig"))
 
