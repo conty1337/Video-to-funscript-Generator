@@ -2057,10 +2057,6 @@ EN: dict[str, str] = {
         "{0} point pasted at {1}",
     "{0} Punkt gelöscht":
         "{0} point deleted",
-    "Speicherort für Scripts":
-        "Where scripts are saved",
-    "Speicherort für Scripts…":
-        "Where scripts are saved…",
     "Ohne Script-Ordner liegt jedes Script neben seinem Video, so finden es die meisten Player. Mit Script-Ordner landen alle Scripts zusätzlich (oder nur) dort. Bibliothek, Player, Stapel und andere Player suchen erst neben dem Video, dann im Script-Ordner und seinen Unterordnern.":
         "Without a script folder every script lies next to its video, where most players find it. With a script folder all scripts also (or only) go there. Library, player, batch and other players look next to the video first, then in the script folder and its subfolders.",
     "Wählen…":
@@ -2079,12 +2075,26 @@ EN: dict[str, str] = {
         "Scripts: next to the video and in {0}",
     "Scripts: in {0}":
         "Scripts: in {0}",
-    "Script-Ordner…":
-        "Script folder…",
-    "Wo Scripts gespeichert und gesucht werden: neben dem Video und/oder in einem Script-Ordner":
-        "Where scripts are saved and looked for: next to the video and/or in a script folder",
     " (neben dem Video und im Script-Ordner)":
         " (next to the video and in the script folder)",
     " (im Script-Ordner)":
         " (in the script folder)",
+    "Speicherorte":
+        "Storage locations",
+    "Speicherorte…":
+        "Storage locations…",
+    "Scripts":
+        "Scripts",
+    "Video-Daten":
+        "Video data",
+    "Tracking-Kästchen, Abschnitte, Kalibrierung, Schnitte und Lesezeichen stehen in <Video>.vtf.json. Mit einem Ordner für Video-Daten liegt diese Datei dort statt neben dem Video, so bleibt der Video-Ordner aufgeräumt. Vorhandene Dateien neben dem Video werden beim nächsten Speichern in den Ordner verschoben.":
+        "Tracking boxes, sections, calibration, cuts and bookmarks are kept in <video>.vtf.json. With a folder for video data this file lies there instead of next to the video, so the video folder stays tidy. Existing files next to the video move into the folder the next time they are saved.",
+    "Ordner für Video-Daten":
+        "Folder for video data",
+    "keiner – neben dem Video":
+        "none – next to the video",
+    "Kein Ordner: Video-Daten neben dem Video":
+        "No folder: video data next to the video",
+    "Wo Scripts und Video-Daten gespeichert und gesucht werden: neben dem Video und/oder in eigenen Ordnern":
+        "Where scripts and video data are saved and looked for: next to the video and/or in folders of their own",
 }

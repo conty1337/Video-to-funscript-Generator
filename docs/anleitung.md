@@ -75,7 +75,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    = Liste, **F3** springt zur nächsten Stelle. Steht dort „Prüfung ok“, musst du
    nicht das ganze Script ansehen.
 9. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video. Alle Scripts
-   lieber (oder zusätzlich) in einem Ordner sammeln: Datei → „Speicherort für Scripts…“.
+   lieber (oder zusätzlich) in einem Ordner sammeln: Datei → „Speicherorte…“ (dort gibt es auch einen Ordner für die Video-Daten,
+   dann liegt neben den Videos nichts mehr von der App).
 
 ## Optionen (links unter „Optionen“)
 

@@ -39,7 +39,7 @@ Oberfläche gibt es auf **Deutsch und Englisch**.
 - Stapelverarbeitung ganzer Ordner (Oberfläche und Kommandozeile)
 
 **Bearbeiten**
-- Scripts neben dem Video und/oder in einem frei wählbaren **Script-Ordner**
+- Scripts neben dem Video und/oder in einem **Script-Ordner**, Video-Daten in einem eigenen Ordner
 - Kurven-Editor mit Mehrfachauswahl, Kopieren/Einfügen, Glätten,
   Hub verstärken/abschwächen, Rückgängig
 - **Script-Prüfung**: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt
@@ -282,7 +282,8 @@ Bildern in der [Anleitung](docs/anleitung.md#kästchen-mit-der-ki).
   Dann gibt es keinen Vorschlag, und die Kontrolle bleibt für dieses Kästchen aus.
 
 *Vorbereitung*: Bereiche, Abschnitte und Kalibrierung werden sofort als
-`<Video>.vtf.json` neben dem Video gespeichert und beim nächsten Öffnen
+`<Video>.vtf.json` neben dem Video (oder im Ordner für Video-Daten, siehe
+*Speicherorte*) gespeichert und beim nächsten Öffnen
 geladen. Strg+Bild↓ / Strg+Bild↑ öffnet das nächste/vorige Video im Ordner,
 so lassen sich viele Videos schnell vorbereiten. Die Stapelverarbeitung nutzt
 die Vorbereitung, Videos ohne sie laufen mit „Bewegung im Bild“.
@@ -360,14 +361,23 @@ Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Edi
 
 ![Bibliothek](docs/images/de/library.png)
 
-**Script-Ordner** (Datei → „Speicherort für Scripts…“ oder „Script-Ordner…“ in
-der Bibliothek): ein Ordner für alle deine Scripts. Strg+S speichert dann dort
-hinein und, wenn „Zusätzlich neben dem Video speichern“ angehakt ist (Standard),
-auch neben das Video, wo die meisten Player suchen. Bibliothek, Player-Modus,
-Stapelverarbeitung und andere Player suchen erst neben dem Video, dann im
-Script-Ordner und seinen Unterordnern (nach Dateiname, z.B. `Clip.funscript` zu
-`Clip.mp4`). Die Tracking-Vorbereitung (`<Video>.vtf.json`) bleibt neben dem
-Video. Gespeichert in `~/.config/video-to-funscript/scripts.json`.
+**Speicherorte** (Datei → „Speicherorte…“, auch in der Bibliothek): Ohne
+Einstellung liegt jede Datei neben ihrem Video. Zwei Ordner ändern das:
+
+- **Script-Ordner**: ein Ordner für alle deine Scripts. Strg+S speichert dann
+  dort hinein und, wenn „Zusätzlich neben dem Video speichern“ angehakt ist
+  (Standard), auch neben das Video, wo die meisten Player suchen. Bibliothek,
+  Player-Modus, Stapelverarbeitung und andere Player suchen erst neben dem Video,
+  dann im Script-Ordner und seinen Unterordnern (nach Dateiname, z.B.
+  `Clip.funscript` zu `Clip.mp4`).
+- **Ordner für Video-Daten**: Tracking-Kästchen, Abschnitte, Kalibrierung,
+  Schnitte und Lesezeichen (`<Video>.vtf.json`) kommen dorthin statt neben das
+  Video, so bleibt der Video-Ordner aufgeräumt. Dateien, die schon neben einem
+  Video liegen, werden weiter gefunden und beim nächsten Speichern in den Ordner
+  verschoben.
+
+Heißen zwei Videos in verschiedenen Ordnern gleich, teilen sie sich in diesen
+Ordnern einen Dateinamen. Gespeichert in `~/.config/video-to-funscript/scripts.json`.
 
 **Statistik** (Gerät → Statistik…): Spielzeit, Hübe und Tage für heute, 7 Tage,
 30 Tage und gesamt, dazu die Lieblingsvideos und Lieblingsmuster (nach Spielzeit).
@@ -716,7 +726,7 @@ src/vtf/
   funscript.py   Dateiformat
   batch.py       Ordnerverarbeitung
   library.py     Bibliothek, Bewertungen
-  scriptdir.py   Wo Scripts gespeichert und gesucht werden (Script-Ordner)
+  scriptdir.py   Wo Scripts und Video-Daten gespeichert und gesucht werden
   stats.py       Lokale Statistik
   i18n.py        Sprachen (locale_en.py: englische Texte)
   gpu.py         OpenCL-Hilfen

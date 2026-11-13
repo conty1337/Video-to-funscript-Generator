@@ -1,4 +1,6 @@
-"""Tracking preparation per video: <video>.vtf.json next to the video.
+"""Tracking preparation per video: <video>.vtf.json, next to the video or in the folder for
+video data (Datei → Speicherorte). A file found next to the video moves into that folder the
+next time it is saved.
 
 Holds the tracking sections (areas, start/end, calibration, corrections) so a
 video can be prepared once in the editor and later processed in a batch.
@@ -11,12 +13,29 @@ import os
 from pathlib import Path
 
 from .analysis import TrackSection
+from .scriptdir import settings
 
 PREP_VERSION = 1
 
 
-def prep_path(video: str | Path) -> Path:
+def _near(video: str | Path) -> Path:
     return Path(video).with_suffix(".vtf.json")
+
+
+def _target(video: str | Path) -> Path:
+    """Where saving writes the file."""
+    folder = settings().data_folder
+    return folder / _near(Path(video).name).name if folder is not None else _near(video)
+
+
+def prep_path(video: str | Path) -> Path:
+    """The file of a video: where it is now (folder for video data first, then next to the
+    video), or where it will be written."""
+    target = _target(video)
+    if target.is_file():
+        return target
+    near = _near(video)
+    return near if near.is_file() else target
 
 
 def _box(b) -> tuple:
@@ -39,18 +58,27 @@ def _read(path: Path) -> dict:
         return {}
 
 
-def _write(path: Path, data: dict) -> Path | None:
-    """Write the file; with no sections, bookmarks or cuts it is removed."""
-    if not data.get("sections") and not data.get("bookmarks") and not data.get("cuts"):
+def _write(video: str | Path, data: dict) -> Path | None:
+    """Write the file to its target; a copy left next to the video is removed (moved). With
+    no sections, bookmarks or cuts there is no file."""
+    target, near = _target(video), _near(video)
+    keep = data_has(data)
+    if keep:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(target.name + ".tmp")
+        tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        os.replace(tmp, target)
+    stale = ([near] if near != target else []) if keep else list({target, near})
+    for p in stale:
         try:
-            path.unlink()
+            p.unlink()
         except FileNotFoundError:
             pass
-        return None
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
-    return path
+    return target if keep else None
+
+
+def data_has(data: dict) -> bool:
+    return bool(data.get("sections") or data.get("bookmarks") or data.get("cuts"))
 
 
 def save_bookmarks(video: str | Path, bookmarks) -> Path | None:
@@ -59,7 +87,7 @@ def save_bookmarks(video: str | Path, bookmarks) -> Path | None:
     data = _read(path)
     data.setdefault("version", PREP_VERSION)
     data["bookmarks"] = [[int(ms), str(name)] for ms, name in sorted(bookmarks)]
-    return _write(path, data)
+    return _write(video, data)
 
 
 def load_bookmarks(video: str | Path) -> list[tuple[int, str]]:
@@ -75,7 +103,7 @@ def save_cuts(video: str | Path, cuts) -> Path | None:
     data = _read(path)
     data.setdefault("version", PREP_VERSION)
     data["cuts"] = [[int(a), int(b)] for a, b in sorted(cuts)]
-    return _write(path, data)
+    return _write(video, data)
 
 
 def load_cuts(video: str | Path) -> list[tuple[int, int]]:
@@ -109,7 +137,7 @@ def save_prep(video: str | Path, sections) -> Path | None:
     for key in ("bookmarks", "cuts"):
         if old.get(key):
             data[key] = old[key]
-    return _write(path, data) if secs or data.get("bookmarks") or data.get("cuts") else _write(path, {})
+    return _write(video, data)
 
 
 def load_prep(video: str | Path) -> list[TrackSection]:

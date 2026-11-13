@@ -1,6 +1,8 @@
-"""Where scripts are kept: next to the video (what players expect) and/or in one script folder.
+"""Where scripts are kept: next to the video (what players expect) and/or in one script folder;
+and where the video data (<video>.vtf.json: boxes, sections, cuts, bookmarks) goes.
 
-Saved in ~/.config/video-to-funscript/scripts.json: {"folder": "...", "next_to_video": true}.
+Saved in ~/.config/video-to-funscript/scripts.json:
+{"folder": "...", "next_to_video": true, "data_folder": "..."}.
 No folder set = next to the video only. Finding a script looks next to the video first, then
 in the script folder: directly in it, then in its subfolders (by file name). No Qt.
 """
@@ -23,6 +25,7 @@ MAX_FILES = 50_000           # stop indexing huge trees
 class ScriptDir:
     folder: Path | None = None
     next_to_video: bool = True
+    data_folder: Path | None = None          # video data (.vtf.json); None = next to the video
 
     @property
     def active(self) -> bool:
@@ -39,16 +42,22 @@ def settings() -> ScriptDir:
         d = json.loads(_file().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return ScriptDir()
-    folder = str(d.get("folder") or "").strip() if isinstance(d, dict) else ""
-    nxt = bool(d.get("next_to_video", True)) if isinstance(d, dict) else True
-    return ScriptDir(Path(folder).expanduser() if folder else None, nxt)
+    if not isinstance(d, dict):
+        return ScriptDir()
+
+    def path(key: str) -> Path | None:
+        v = str(d.get(key) or "").strip()
+        return Path(v).expanduser() if v else None
+    return ScriptDir(path("folder"), bool(d.get("next_to_video", True)), path("data_folder"))
 
 
-def save_settings(folder: str | Path | None, next_to_video: bool = True) -> None:
+def save_settings(folder: str | Path | None, next_to_video: bool = True,
+                  data_folder: str | Path | None = None) -> None:
     f = _file()
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.with_name(f.name + ".tmp")
-    tmp.write_text(json.dumps({"folder": str(folder) if folder else "", "next_to_video": bool(next_to_video)},
+    tmp.write_text(json.dumps({"folder": str(folder) if folder else "", "next_to_video": bool(next_to_video),
+                               "data_folder": str(data_folder) if data_folder else ""},
                               indent=1), encoding="utf-8")
     os.replace(tmp, f)
     _index_cache.clear()

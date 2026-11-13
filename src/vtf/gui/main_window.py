@@ -419,7 +419,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
-        self._act(m, tr("Speicherort für Scripts…"), self.open_script_folder)
+        self._act(m, tr("Speicherorte…"), self.open_script_folder)
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
         self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
@@ -1958,7 +1958,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ files
     def export(self):
-        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherort für Scripts)."""
+        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherorte)."""
         if self.video_path:
             self._save(save_paths(self.video_path))
 

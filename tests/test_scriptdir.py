@@ -127,3 +127,41 @@ def test_folder_dialog_stores_the_choice(cfg):
     d._set_folder(None)
     assert scriptdir.settings().folder is None
     d.deleteLater()
+
+
+def test_video_data_folder(cfg):
+    from vtf.analysis import TrackSection
+    from vtf.prep import load_bookmarks, load_cuts, load_prep, prep_path, save_bookmarks, save_cuts, save_prep
+
+    v = cfg / "videos" / "Clip.mp4"; v.parent.mkdir()
+    secs = [TrackSection(0, ((0.1, 0.1, 0.2, 0.2),))]
+    near = cfg / "videos" / "Clip.vtf.json"
+    save_prep(v, secs)                                              # no folder: next to the video
+    assert prep_path(v) == near and near.is_file()
+    data = cfg / "data"
+    scriptdir.save_settings(None, True, data)
+    assert scriptdir.settings().data_folder == data
+    assert prep_path(v) == near and load_prep(v)                    # the old file is still found
+    save_cuts(v, [(1000, 2000)])                                    # saving moves it into the folder
+    assert not near.exists() and prep_path(v) == data / "Clip.vtf.json"
+    assert load_prep(v) and load_cuts(v) == [(1000, 2000)]
+    save_bookmarks(v, [(500, "a")])
+    assert load_bookmarks(v) == [(500, "a")] and not near.exists()
+    save_prep(v, []); save_cuts(v, []); save_bookmarks(v, [])      # nothing left: no file anywhere
+    assert not (data / "Clip.vtf.json").exists() and not near.exists()
+
+
+def test_dialog_keeps_both_folders(cfg):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from vtf.gui.scripts_ui import ScriptFolderDialog
+
+    d = ScriptFolderDialog()
+    d.data.set_folder(cfg / "data")
+    d.scripts.set_folder(cfg / "scripts")                           # changing one keeps the other
+    sd = scriptdir.settings()
+    assert sd.folder == cfg / "scripts" and sd.data_folder == cfg / "data"
+    d.data.set_folder(None)
+    assert scriptdir.settings().data_folder is None and scriptdir.settings().folder == cfg / "scripts"
+    d.deleteLater()
