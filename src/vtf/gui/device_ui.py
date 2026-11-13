@@ -392,36 +392,10 @@ class DeviceDialog(QDialog):
         lay.addLayout(f)
 
         lay.addSpacing(16)
-        lay.addWidget(theme.section_title(tr("Sicherheit"), self.reset_safety, tr("Sicherheits-Timer auf Standard")))
-        g = ctl.safety.settings
-        self.safe_on = QCheckBox(tr("Sicherheits-Timer an"))
-        self.safe_on.setChecked(g.enabled)
-        lay.addWidget(self.safe_on)
-        f = QFormLayout()
-        f.setHorizontalSpacing(12)
-        f.setVerticalSpacing(12)
-        self.safe_max = self._minutes(g.max_minutes, 600)
-        self.safe_idle = self._minutes(g.idle_minutes, 240)
-        self.safe_every = self._minutes(g.break_every, 240)
-        self.safe_secs = QSpinBox()
-        self.safe_secs.setRange(5, 600)
-        self.safe_secs.setSuffix(" s")
-        self.safe_secs.setValue(max(5, g.break_seconds))
-        f.addRow(self._label(tr("Höchstens")), self._row(self.safe_max, tr("am Stück, dann Stopp")))
-        f.addRow(self._label(tr("Ohne Bedienung")), self._row(self.safe_idle, tr("dann Stopp")))
-        f.addRow(self._label(tr("Pause alle")), self._row(self.safe_every, tr("für"), self.safe_secs))
-        self.safe_form = QWidget()
-        f.setContentsMargins(0, 0, 0, 0)
-        self.safe_form.setLayout(f)
-        lay.addWidget(self.safe_form)
-        cap = QLabel(tr("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy."))
-        cap.setObjectName("caption")
-        cap.setWordWrap(True)
-        lay.addWidget(cap)
-        for w in (self.safe_max, self.safe_idle, self.safe_every, self.safe_secs):
-            w.valueChanged.connect(self._apply_safety)
-        self.safe_on.toggled.connect(self._apply_safety)
-        self.safe_form.setEnabled(g.enabled)
+        self.safety_box = SafetyBox(ctl)
+        lay.addWidget(self.safety_box)
+        self.safe_on, self.safe_max = self.safety_box.safe_on, self.safety_box.safe_max
+        self.reset_safety = self.safety_box.reset
 
         lay.addSpacing(16)
         title = QLabel(tr("Test"))
@@ -540,27 +514,6 @@ class DeviceDialog(QDialog):
         self.vibe.setCurrentIndex(max(0, self.vibe.findData(VIBE_MODES[0][0])))
         self._apply()
 
-    def reset_safety(self):
-        d = SafetySettings()
-        for w, v in ((self.safe_max, d.max_minutes), (self.safe_idle, d.idle_minutes),
-                     (self.safe_every, d.break_every), (self.safe_secs, d.break_seconds)):
-            w.blockSignals(True)
-            w.setValue(v)
-            w.blockSignals(False)
-        self.safe_on.setChecked(d.enabled)
-        self._apply_safety()
-
-    def _apply_safety(self):
-        g = self.ctl.safety.settings
-        g.enabled = self.safe_on.isChecked()
-        g.max_minutes = self.safe_max.value()
-        g.idle_minutes = self.safe_idle.value()
-        g.break_every = self.safe_every.value()
-        g.break_seconds = self.safe_secs.value()
-        self.safe_form.setEnabled(g.enabled)
-        self.ctl.touch()
-        self.ctl.save_safety()
-
     def _apply(self):
         s = self.ctl.sync.settings
         s.offset_ms = self.offset[1].value()
@@ -640,3 +593,66 @@ class DeviceDialog(QDialog):
         elif connected:
             self.device_box.addItem(dev.name, None)
         self.device_box.setEnabled(self.device_box.count() > 1)
+
+
+class SafetyBox(QWidget):
+    """The safety timer settings, in the device window and in the settings window. Changes
+    apply at once."""
+
+    def __init__(self, ctl: DeviceController, parent=None):
+        super().__init__(parent)
+        self.ctl = ctl
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        lay.addWidget(theme.section_title(tr("Sicherheit"), self.reset, tr("Sicherheits-Timer auf Standard")))
+        g = ctl.safety.settings
+        self.safe_on = QCheckBox(tr("Sicherheits-Timer an"))
+        self.safe_on.setChecked(g.enabled)
+        lay.addWidget(self.safe_on)
+        f = QFormLayout()
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(12)
+        self.safe_max = DeviceDialog._minutes(g.max_minutes, 600)
+        self.safe_idle = DeviceDialog._minutes(g.idle_minutes, 240)
+        self.safe_every = DeviceDialog._minutes(g.break_every, 240)
+        self.safe_secs = QSpinBox()
+        self.safe_secs.setRange(5, 600)
+        self.safe_secs.setSuffix(" s")
+        self.safe_secs.setValue(max(5, g.break_seconds))
+        f.addRow(DeviceDialog._label(tr("Höchstens")), DeviceDialog._row(self.safe_max, tr("am Stück, dann Stopp")))
+        f.addRow(DeviceDialog._label(tr("Ohne Bedienung")), DeviceDialog._row(self.safe_idle, tr("dann Stopp")))
+        f.addRow(DeviceDialog._label(tr("Pause alle")), DeviceDialog._row(self.safe_every, tr("für"), self.safe_secs))
+        self.safe_form = QWidget()
+        f.setContentsMargins(0, 0, 0, 0)
+        self.safe_form.setLayout(f)
+        lay.addWidget(self.safe_form)
+        cap = QLabel(tr("0 = aus. Gezählt wird nur, solange sich das Gerät bewegt (Video, Muster, Ablauf, Musik, anderer Player). Bedienen heißt Taste, Maus, Controller oder Handy."))
+        cap.setObjectName("caption")
+        cap.setWordWrap(True)
+        lay.addWidget(cap)
+        for w in (self.safe_max, self.safe_idle, self.safe_every, self.safe_secs):
+            w.valueChanged.connect(self._apply)
+        self.safe_on.toggled.connect(self._apply)
+        self.safe_form.setEnabled(g.enabled)
+
+    def reset(self):
+        d = SafetySettings()
+        for w, v in ((self.safe_max, d.max_minutes), (self.safe_idle, d.idle_minutes),
+                     (self.safe_every, d.break_every), (self.safe_secs, d.break_seconds)):
+            w.blockSignals(True)
+            w.setValue(v)
+            w.blockSignals(False)
+        self.safe_on.setChecked(d.enabled)
+        self._apply()
+
+    def _apply(self):
+        g = self.ctl.safety.settings
+        g.enabled = self.safe_on.isChecked()
+        g.max_minutes = self.safe_max.value()
+        g.idle_minutes = self.safe_idle.value()
+        g.break_every = self.safe_every.value()
+        g.break_seconds = self.safe_secs.value()
+        self.safe_form.setEnabled(g.enabled)
+        self.ctl.touch()
+        self.ctl.save_safety()

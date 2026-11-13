@@ -1,4 +1,4 @@
-"""View menu entries for the language and the accent colour.
+"""Language and accent colour (chosen in the settings window, settings_dialog.py).
 
 The accent changes at once (also while the colour picker is open). The language is
 read once at start (i18n), so changing it offers a restart.
@@ -7,8 +7,8 @@ read once at start (i18n), so changing it offers a restart.
 from __future__ import annotations
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QAction, QActionGroup, QColor, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QApplication, QColorDialog, QMenu, QMessageBox
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QApplication, QColorDialog, QMessageBox
 
 from .. import i18n, updater
 from ..i18n import tr
@@ -30,40 +30,11 @@ def swatch(color: str, px: int = 14) -> QIcon:
     return QIcon(pm)
 
 
-class LookMenus:
-    """Adds "Sprache" and "Akzentfarbe" to a menu of the main window."""
+class Look:
+    """Changes the language and the accent colour of the main window `win`."""
 
-    def __init__(self, win, menu: QMenu):
+    def __init__(self, win):
         self.win = win
-        lang = menu.addMenu(tr("Sprache"))
-        group = QActionGroup(lang)
-        for code, label in (("system", tr("Wie das System")), *i18n.LANGUAGES.items()):
-            a = QAction(label, lang, checkable=True)
-            a.setChecked(i18n.chosen() == code)
-            a.triggered.connect(lambda _on=False, c=code: self.set_language(c))
-            group.addAction(a)
-            lang.addAction(a)
-        self.lang_menu = lang
-        self.accent_menu = menu.addMenu(tr("Akzentfarbe"))
-        self.accent_menu.aboutToShow.connect(self._fill_accents)
-        self._fill_accents()
-
-    # ------------------------------------------------------------ accent
-    def _fill_accents(self) -> None:
-        m = self.accent_menu
-        m.clear()
-        presets = [c for _label, c in theme.ACCENTS.values()]
-        for label, color in theme.ACCENTS.values():
-            a = m.addAction(swatch(color), label)
-            a.setCheckable(True)
-            a.setChecked(theme.ACCENT == color)
-            a.triggered.connect(lambda _on=False, c=color: self.set_accent(c))
-        m.addSeparator()
-        own = theme.ACCENT not in presets
-        a = m.addAction(swatch(theme.ACCENT) if own else QIcon(), tr("Eigene Farbe…"))
-        a.setCheckable(True)
-        a.setChecked(own)
-        a.triggered.connect(lambda _on=False: self.pick_accent())
 
     def set_accent(self, color: str) -> None:
         used = theme.change_accent(QApplication.instance(), color)

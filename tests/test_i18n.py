@@ -124,7 +124,7 @@ def test_accent_colours():
         theme.set_accent(theme.DEFAULT_ACCENT)
 
 
-def test_accent_menu_changes_the_app(tmp_path):
+def test_accent_changes_the_app(tmp_path):
     """Runs in its own process: restyling the app re-polishes every widget, and the GUI
     tests before this one leave thousands behind (minutes instead of a second)."""
     pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
@@ -132,7 +132,7 @@ def test_accent_menu_changes_the_app(tmp_path):
 from PySide6 import QtWidgets
 from vtf import i18n
 from vtf.gui import theme
-from vtf.gui.look_ui import LookMenus
+from vtf.gui.look_ui import Look
 app = QtWidgets.QApplication([])
 theme.apply(app)
 
@@ -144,19 +144,15 @@ class Win(QtWidgets.QMainWindow):
 
 w = Win()
 btn = theme.accent_icon(QtWidgets.QPushButton(), "play", "Start")
-look = LookMenus(w, w.menuBar().addMenu("Ansicht"))
+look = Look(w)
 blue = theme.ACCENTS["blue"][1]
 look.set_accent(blue)
 assert theme.ACCENT == blue and blue in app.styleSheet()
 assert i18n.load_ui()["accent"] == blue
 assert w.said[-1] == "Akzentfarbe: Blau", w.said
 assert btn.text() == "Start" and not btn.icon().isNull()
-look._fill_accents()
-assert [a.text() for a in look.accent_menu.actions() if a.isChecked()] == ["Blau"]
-look.set_accent("#3a1f5c")                   # own colour: "Eigene Farbe…" is ticked
+look.set_accent("#3a1f5c")                   # own colour
 assert theme.ON_ACCENT == "#ffffff"
-look._fill_accents()
-assert [a.text() for a in look.accent_menu.actions() if a.isChecked()] == ["Eigene Farbe…"]
 QtWidgets.QColorDialog.exec = lambda self: 0  # cancelled
 look.pick_accent()
 assert theme.ACCENT == "#3a1f5c"
@@ -168,18 +164,16 @@ print("ok")
     assert "ok" in r.stdout, r.stdout + r.stderr
 
 
-def test_language_menu_stores_the_choice(tmp_path, monkeypatch):
+def test_language_choice_restarts(tmp_path, monkeypatch):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-    from vtf.gui.look_ui import LookMenus
+    from vtf.gui.look_ui import Look
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     shown = []
     monkeypatch.setattr(QtWidgets.QMessageBox, "information", lambda *a: shown.append(a[2]))
     w = QtWidgets.QMainWindow()
-    look = LookMenus(w, w.menuBar().addMenu("Ansicht"))
-    english = [a for a in look.lang_menu.actions() if a.text() == "English"][0]
-    english.trigger()
+    Look(w).set_language("en")
     assert i18n.chosen() == "en" and "restart" in shown[0]
     w.deleteLater()
 
@@ -202,6 +196,8 @@ assert w.analyze_btn.text() == "Analyse", w.analyze_btn.text()
 from vtf.gui.library_dialog import LibraryDialog
 from vtf.gui.stats_dialog import StatsDialog
 from vtf.gui.pattern_dialog import PatternDialog
+from vtf.gui.settings_dialog import SettingsDialog
+assert SettingsDialog(w).nav.item(0).text() == "General"
 assert LibraryDialog(w.qsettings, w).windowTitle() == "Library"
 StatsDialog(w)
 d = PatternDialog(w.devices, w)

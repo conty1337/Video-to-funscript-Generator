@@ -79,7 +79,7 @@ from .batch_dialog import BatchDialog
 from .curve_widget import CurveWidget
 from .device_ui import DeviceController
 from .heatbar import HeatBar
-from .look_ui import LookMenus
+from .look_ui import Look
 from .player_panel import PlayerPanel
 from .settings_panel import SettingsPanel
 from .stroke_rail import StrokeRail
@@ -430,7 +430,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
-        self._act(m, tr("Speicherorte…"), self.open_script_folder)
+        self._act(m, tr("Einstellungen…"), self.open_settings, "Ctrl+,")
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
         self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
@@ -485,8 +485,7 @@ class MainWindow(QMainWindow):
         for a, key in ((self.left_action, "show_left"), (self.right_action, "show_right")):
             a.setCheckable(True)
             a.setChecked(str(self.qsettings.value(key, "true")).lower() == "true")
-        m.addSeparator()
-        self.look = LookMenus(self, m)
+        self.look = Look(self)
         m = self.menuBar().addMenu(tr("&Lesezeichen"))
         self._act(m, tr("Lesezeichen setzen…"), self.add_bookmark, "B")
         self._act(m, tr("Nächstes Lesezeichen"), lambda: self.jump_bookmark(1), "Alt+Right")
@@ -524,7 +523,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Bedienung"), self.show_help, QKeySequence.HelpContents)
         self._act(m, tr("Dekodierung testen…"), self.test_decoding)
         self.updates.add_menu_entries(m)
-        self._setup_desktop_integration(m)
+        self._setup_desktop_integration()
 
     def _build_toolbar(self):
         tb = self.addToolBar(tr("Werkzeuge"))
@@ -2046,7 +2045,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ files
     def export(self):
-        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherorte)."""
+        """Ctrl+S: next to the video and/or into the script folder (Einstellungen → Speicherorte)."""
         if self.video_path:
             self._save(save_paths(self.video_path), prune=True)
 
@@ -2120,10 +2119,11 @@ class MainWindow(QMainWindow):
             self._update_axis_labels()
             self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path))
 
-    def open_script_folder(self):
-        from .scripts_ui import ScriptFolderDialog, describe
+    def open_settings(self, page: str = "general"):
+        from .scripts_ui import describe
+        from .settings_dialog import SettingsDialog
 
-        ScriptFolderDialog(self).exec()
+        SettingsDialog(self, page).exec()
         self.player.refresh()                    # "with script" may change for the playlist
         self._status(describe())
 
@@ -2160,8 +2160,9 @@ class MainWindow(QMainWindow):
         folder = str(Path(self.video_path).parent) if self.video_path else self.qsettings.value("last_dir", "")
         BatchDialog(self.panel, folder, self).exec()
 
-    def _setup_desktop_integration(self, menu):
-        """Start menu entry for the AppImage: added on start, switchable in the help menu."""
+    def _setup_desktop_integration(self):
+        """Start menu entry for the AppImage: added on start, switchable in the settings
+        (self.desktop_action)."""
         from .. import desktop_integration as di
         from .. import updater
 
@@ -2174,7 +2175,7 @@ class MainWindow(QMainWindow):
         act.setEnabled(self._appimage is not None)
         if self._appimage is None:
             act.setToolTip(tr("Nur verfügbar, wenn die App als AppImage läuft"))
-        menu.insertAction(menu.actions()[1] if len(menu.actions()) > 1 else None, act)
+        self.desktop_action = act
 
         def toggled(on: bool):
             self.qsettings.setValue("desktop_integration", on)

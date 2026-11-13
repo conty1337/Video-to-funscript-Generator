@@ -286,6 +286,10 @@ QListWidget#playlist {{ background: {DEEP}; border: none; outline: none; padding
 QListWidget#playlist::item {{ padding: 8px; border-radius: 8px; color: {TEXT_2}; margin: 1px 0; }}
 QListWidget#playlist::item:hover {{ background: {CARD}; }}
 QListWidget#playlist::item:selected {{ background: {RAISED}; color: {TEXT}; }}
+QListWidget#settingsNav {{ background: {DEEP}; border: none; outline: none; padding: 16px 8px; }}
+QListWidget#settingsNav::item {{ padding: 8px 12px; border-radius: 8px; color: {TEXT_2}; margin: 1px 0; }}
+QListWidget#settingsNav::item:hover {{ background: {CARD}; }}
+QListWidget#settingsNav::item:selected {{ background: {RAISED}; color: {TEXT}; }}
 QToolButton:checked {{ background: {RAISED}; color: {ACCENT}; }}
 QPushButton#transport:checked {{ background: {RAISED}; }}
 QPushButton#segment {{ background: transparent; border: none; min-height: 28px; padding: 0 12px;

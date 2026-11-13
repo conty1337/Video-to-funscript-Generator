@@ -50,7 +50,6 @@ class UpdateController(QObject):
         a = QAction(tr("Nach Updates suchen"), self.win)
         a.triggered.connect(lambda: self.check(interactive=True))
         menu.addAction(a)
-        menu.addAction(self.auto_action)
         info = QAction(tr("Version {0}", __version__), self.win)
         info.setEnabled(False)
         menu.addAction(info)
