@@ -1080,7 +1080,7 @@ class PatternDialog(QDialog):
                 elif self.mode == 1:
                     self._select_program(name)
             elif cmd == "step":
-                self.step_pattern(int(c.get("d", 1)))
+                self.step_pattern(max(-1, min(1, int(c.get("d", 1)))))     # one step at a time
             elif cmd == "mood":
                 i = self.mood.findData(str(c.get("mood", "")))
                 if i >= 0:

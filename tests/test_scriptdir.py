@@ -262,3 +262,67 @@ def test_dialog_offers_to_move_files(cfg):
     assert (cfg / "new" / "Clip.funscript").is_file() and not (cfg / "old" / "Clip.funscript").exists()
     assert scriptdir.settings().folder == cfg / "new"
     d.deleteLater()
+
+
+def test_same_name_in_two_folders_does_not_overwrite(cfg):
+    from vtf import prep, thumbs
+    from vtf.analysis import TrackSection
+
+    a, b = cfg / "A" / "video.mp4", cfg / "B" / "video.mp4"
+    for v in (a, b):
+        v.parent.mkdir(parents=True)
+        v.write_bytes(b"x")
+    scriptdir.save_settings(cfg / "scripts", False, cfg / "data")
+    scriptdir.remember_video(a)
+    scriptdir.remember_video(b)                                       # the name stays with A
+    assert scriptdir.remembered_video("video") == a.resolve() and scriptdir.foreign(b) == a.resolve()
+    assert scriptdir.save_paths(a) == [cfg / "scripts" / "video.funscript"]
+    assert scriptdir.save_paths(b) == [b.with_suffix(".funscript")]  # B keeps its script next to it
+    _script(cfg / "scripts" / "video.funscript")
+    assert scriptdir.find_script(a) is not None and scriptdir.find_script(b) is None
+    assert prep.prep_path(a).parent == cfg / "data" and prep.prep_path(b) == b.with_suffix(".vtf.json")
+    prep.save_prep(b, [TrackSection(start_ms=0, boxes=((0.1, 0.1, 0.2, 0.2),))])
+    assert prep.load_prep(a) == [] and len(prep.load_prep(b)) == 1
+    assert thumbs.thumb_path(a) != thumbs.thumb_path(b)
+    scriptdir.remember_video(b, "video")                              # the user picked B for the name
+    assert scriptdir.foreign(a) == b.resolve()
+
+
+def test_broken_scripts_give_one_error(cfg):
+    tmp_path = cfg
+    f = tmp_path / "x.funscript"
+    for text in ("[]", '{"actions":[{"at":null,"pos":1}]}', '{"actions":{"a":1}}', '{"actions":[{"at":1}]}'):
+        f.write_text(text)
+        with pytest.raises(ValueError):
+            Funscript.load(f)
+    f.write_text('{"inverted":true,"actions":[{"at":5,"pos":10}],"metadata":[]}')
+    fs = Funscript.load(f)
+    assert [(a.at, a.pos) for a in fs.actions] == [(5, 90)] and fs.metadata == {}
+    from vtf.library import scan                                      # a broken file does not stop the library
+    f.write_text("[]")
+    (tmp_path / "x.mp4").write_bytes(b"x")
+    assert [e.name for e in scan(tmp_path)] == ["x"]
+
+
+def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    from vtf.gui.main_window import MainWindow
+
+    near = sine_video.with_suffix(".funscript")
+    roll = sine_video.with_suffix(".roll.funscript")
+    Funscript([Action(0, 0), Action(500, 100)], metadata={"creator": "Someone", "title": "T"}).save(near)
+    Funscript([Action(0, 50), Action(500, 60)]).save(roll)
+    w = MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(sine_video))
+        assert w.axis_actions.get("R1")
+        w.axis_actions["R1"] = []                                     # the user cleared Roll
+        w.export()
+        assert not roll.exists()
+        assert Funscript.load(near).metadata == {"creator": "Someone", "title": "T"}
+    finally:
+        w.dirty = False
+        w.close()

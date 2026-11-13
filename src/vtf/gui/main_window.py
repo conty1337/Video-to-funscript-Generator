@@ -2046,7 +2046,7 @@ class MainWindow(QMainWindow):
     def export(self):
         """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherorte)."""
         if self.video_path:
-            self._save(save_paths(self.video_path))
+            self._save(save_paths(self.video_path), prune=True)
 
     def export_as(self):
         if not self.video_path:
@@ -2056,9 +2056,11 @@ class MainWindow(QMainWindow):
         if path:
             self._save([Path(path)])
 
-    def _save(self, bases: list[Path]):
+    def _save(self, bases: list[Path], prune: bool = False):
         """Saves the stroke to each base path and every other axis with points next to it
-        (<name>.roll.funscript etc.)."""
+        (<name>.roll.funscript etc.). prune: remove the files of axes that were emptied, so
+        they do not come back on the next open. A script made by another program keeps its
+        metadata (title, creator)."""
         axes = {a: v for a, v in self.all_axes().items() if v}
         if not axes:
             QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
@@ -2068,10 +2070,14 @@ class MainWindow(QMainWindow):
         try:
             for base in bases:
                 base.parent.mkdir(parents=True, exist_ok=True)
-                for axis, acts in axes.items():
-                    suffix = AXES[axis][1]
+                for axis, (_label, suffix) in AXES.items():
                     target = base if axis == "L0" else base.with_suffix(f".{suffix}.funscript")
-                    Funscript(acts, metadata=meta).save(target)
+                    acts = axes.get(axis)
+                    if not acts:
+                        if prune and axis != "L0":
+                            target.unlink(missing_ok=True)
+                        continue
+                    Funscript(acts, metadata=self._metadata_for(target, meta)).save(target)
                     if target.name not in saved:
                         saved.append(target.name)
         except OSError as e:
@@ -2084,6 +2090,14 @@ class MainWindow(QMainWindow):
         where = (tr(" (neben dem Video und im Script-Ordner)") if in_folder and near in bases
                  else tr(" (im Script-Ordner)") if in_folder else "")
         self._status(tr("Gespeichert: ") + ", ".join(saved) + where)
+
+    @staticmethod
+    def _metadata_for(target: Path, ours: dict) -> dict:
+        try:
+            old = Funscript.load(target).metadata if target.is_file() else {}
+        except (OSError, ValueError):
+            old = {}
+        return old if old.get("creator") not in (None, "", ours["creator"]) else ours
 
     def load_funscript_dialog(self):
         start = str(find_script(self.video_path) or save_paths(self.video_path)[-1]) if self.video_path else ""

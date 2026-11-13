@@ -74,10 +74,11 @@ def script_name(video: str | Path, axis: str = "L0") -> str:
 def save_paths(video: str | Path, axis: str = "L0", sd: ScriptDir | None = None) -> list[Path]:
     """Where saving writes the script: next to the video and/or into the script folder."""
     sd = sd or settings()
+    to_folder = sd.active and foreign(video) is None
     out = []
-    if not sd.active or sd.next_to_video:
+    if not to_folder or sd.next_to_video:
         out.append(funscript_path_for(video, axis))
-    if sd.active:
+    if to_folder:
         out.append(sd.folder / script_name(video, axis))
     return out
 
@@ -112,7 +113,7 @@ def find_script(video: str | Path, axis: str = "L0", sd: ScriptDir | None = None
     if near.is_file():
         return near
     sd = sd or settings()
-    if not sd.active or not sd.folder.is_dir():
+    if not sd.active or not sd.folder.is_dir() or foreign(video) is not None:
         return None
     name = script_name(video, axis)
     direct = sd.folder / name
@@ -179,6 +180,8 @@ def remember_video(video: str | Path, stem: str | None = None) -> None:
     """Note where this video lies, under its own name (or the script name `stem`, when the
     user picked a video with another name for a script)."""
     p = Path(video).resolve()
+    if stem is None and foreign(p) is not None:
+        return                                   # the name stays with the first video
     key = (stem or p.stem).casefold()
     links = _load_links()
     if links.get(key) != str(p):
@@ -189,6 +192,15 @@ def remember_video(video: str | Path, stem: str | None = None) -> None:
 def remembered_video(stem: str) -> Path | None:
     v = _load_links().get(stem.casefold())
     return Path(v) if v else None
+
+
+def foreign(video: str | Path) -> Path | None:
+    """Another existing video with the same name that owns this name in the script and data
+    folders (files there are named after the video only). Then this video keeps its script
+    and data next to itself, so neither overwrites the other's."""
+    p = Path(video).resolve()
+    last = remembered_video(p.stem)
+    return last if last is not None and last != p and last.is_file() else None
 
 
 def _video_exts() -> set[str]:
