@@ -37,6 +37,16 @@ def opencl_device_name() -> str | None:
         return None
 
 
+NVIDIA_PATHS = ("/dev/nvidia0", "/proc/driver/nvidia")
+
+
+def has_nvidia() -> bool:
+    """An NVIDIA card with the proprietary driver is present."""
+    import os
+
+    return any(os.path.exists(p) for p in NVIDIA_PATHS)
+
+
 _LOADER_PATHS = ("/usr/lib64/libOpenCL.so.1", "/usr/lib/x86_64-linux-gnu/libOpenCL.so.1",
                  "/usr/lib/libOpenCL.so.1", "/usr/lib64/libOpenCL.so", "/usr/lib/libOpenCL.so")
 _ICD_DIR = "/etc/OpenCL/vendors"
@@ -51,6 +61,8 @@ def opencl_hint() -> str:
     if not any(os.path.exists(p) for p in _LOADER_PATHS):
         return tr("Kein OpenCL-Loader gefunden. Installieren: sudo dnf install ocl-icd mesa-libOpenCL")
     icds = os.listdir(_ICD_DIR) if os.path.isdir(_ICD_DIR) else []
+    if has_nvidia() and not any("nvidia" in n for n in icds):
+        return tr("Kein OpenCL-Treiber für NVIDIA installiert. Unter Nobara: sudo dnf install xorg-x11-drv-nvidia-cuda-libs")
     if not icds:
         return tr("Kein OpenCL-Treiber installiert. Für AMD: sudo dnf install mesa-libOpenCL")
     if any("rusticl" in n for n in icds) and not os.environ.get("RUSTICL_ENABLE"):

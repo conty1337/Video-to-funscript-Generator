@@ -19,6 +19,7 @@ from typing import Iterator
 import cv2
 import numpy as np
 
+from .gpu import has_nvidia
 from .i18n import tr
 
 
@@ -131,14 +132,17 @@ def scaled_size(info: VideoInfo, width: int) -> tuple[int, int]:
 VAAPI_DEVICE = "/dev/dri/renderD128"
 
 
-def decode_attempts(hwaccel: str, has_vaapi_device: bool) -> list[str]:
-    """Decoder setups to try, best first. "vaapi-gpu" decodes *and* scales on the
-    GPU, so only the small analysis frames reach the CPU; with plain "-hwaccel"
+def decode_attempts(hwaccel: str, has_vaapi_device: bool, has_nvidia_gpu: bool = False) -> list[str]:
+    """Decoder setups to try, best first. "vaapi-gpu"/"cuda-gpu" decode *and* scale
+    on the GPU, so only the small analysis frames reach the CPU; with plain "-hwaccel"
     every frame comes back in full resolution and is scaled on the CPU."""
     if hwaccel == "vaapi":
         return ["vaapi-gpu", "vaapi", "none"]
+    if hwaccel == "cuda":
+        return ["cuda-gpu", "cuda", "none"]
     if hwaccel == "auto":
-        return (["vaapi-gpu"] if has_vaapi_device else []) + ["auto", "none"]
+        return ((["cuda-gpu"] if has_nvidia_gpu else []) + (["vaapi-gpu"] if has_vaapi_device else [])
+                + ["auto", "none"])
     if hwaccel in ("", "none"):
         return ["none"]
     return [hwaccel, "none"]
@@ -150,6 +154,9 @@ def ffmpeg_command(path: str, w: int, h: int, mode: str, step: int) -> list[str]
     if mode == "vaapi-gpu":
         cmd += ["-hwaccel", "vaapi", "-hwaccel_device", VAAPI_DEVICE, "-hwaccel_output_format", "vaapi"]
         vf = f"{select}scale_vaapi=w={w}:h={h}:format=nv12,hwdownload,format=nv12,format=gray"
+    elif mode == "cuda-gpu":
+        cmd += ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"]
+        vf = f"{select}scale_cuda=w={w}:h={h}:format=nv12,hwdownload,format=nv12,format=gray"
     else:
         if mode and mode != "none":
             cmd += ["-hwaccel", mode]
@@ -203,6 +210,8 @@ def _iter_cv2(info: VideoInfo, w: int, h: int, step: int) -> Iterator[np.ndarray
 
 
 DECODER_LABELS = {
+    "cuda-gpu": tr("NVIDIA-Grafikkarte (NVDEC: dekodieren und verkleinern)"),
+    "cuda": tr("NVIDIA-Grafikkarte dekodiert, CPU verkleinert (NVDEC)"),
     "vaapi-gpu": tr("Grafikkarte (VAAPI: dekodieren und verkleinern)"),
     "vaapi": tr("Grafikkarte dekodiert, CPU verkleinert (VAAPI)"),
     "auto": tr("FFmpeg mit automatischer Hardware-Beschleunigung"),
@@ -226,7 +235,7 @@ def iter_gray_frames(info: VideoInfo, width: int, hwaccel: str = "auto",
     if backend in ("auto", "ffmpeg") and not has_ffmpeg() and report is not None:
         report["errors"].append(("ffmpeg", tr("ffmpeg/ffprobe nicht gefunden")))
     if backend in ("auto", "ffmpeg") and has_ffmpeg():
-        attempts = decode_attempts(hwaccel, os.path.exists(VAAPI_DEVICE))
+        attempts = decode_attempts(hwaccel, os.path.exists(VAAPI_DEVICE), has_nvidia())
         for k, mode in enumerate(attempts):
             gen = _iter_ffmpeg(info, w, h, mode, step)
             try:
@@ -253,7 +262,8 @@ def test_decoders(info: VideoInfo, width: int = 640, frames: int = 90) -> list[d
     """Try every decoder setup on the first frames of the video:
     [{"mode", "label", "ok", "fps", "error"}, ...] (for the help menu)."""
     w, h = scaled_size(info, width)
-    modes = ["vaapi-gpu", "vaapi", "none"] if has_ffmpeg() else []
+    gpu = (["cuda-gpu", "cuda"] if has_nvidia() else []) + ["vaapi-gpu", "vaapi"]
+    modes = gpu + ["none"] if has_ffmpeg() else []
     out = []
     for mode in modes:
         t0 = time.perf_counter()

@@ -20,7 +20,7 @@ def _add_settings(p: argparse.ArgumentParser) -> None:
                    help="Bildausschnitt, normiert 0..1")
     g.add_argument("--no-camera-comp", action="store_true", help="keine Kamerabewegungs-Kompensation")
     g.add_argument("--opencl", action="store_true", help="GPU per OpenCL nutzen")
-    g.add_argument("--hwaccel", default="auto", help="FFmpeg-Hardwaredecoding: auto, vaapi, none")
+    g.add_argument("--hwaccel", default="auto", help="FFmpeg-Hardwaredecoding: auto, vaapi, cuda, none")
     g = p.add_argument_group("Script")
     g.add_argument("--axis", choices=["vertical", "horizontal", "auto"], default="vertical")
     g.add_argument("--invert", action="store_true")

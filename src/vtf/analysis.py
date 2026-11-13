@@ -97,7 +97,7 @@ class AnalysisSettings:
     frame_step: int = 1                   # analyse every n-th frame
     compensate_camera: bool = True        # subtract global (camera) motion
     use_opencl: bool = False              # OpenCV T-API (GPU)
-    hwaccel: str = "auto"                 # ffmpeg -hwaccel value ("none", "auto", "vaapi")
+    hwaccel: str = "auto"                 # ffmpeg -hwaccel value ("none", "auto", "vaapi", "cuda")
     mode: str = "flow"                    # "flow" = motion in the image, "track" = marked areas
     track_boxes: tuple = ()               # shortcut for one section: boxes marked at track_start_ms
     track_start_ms: int = 0

@@ -2147,4 +2147,18 @@ EN: dict[str, str] = {
         "{0} preview pictures deleted",
     "Kein gültiges Funscript: {0}":
         "Not a valid funscript: {0}",
+    'NVIDIA-Grafikkarte (NVDEC: dekodieren und verkleinern)':
+        'NVIDIA graphics card (NVDEC: decode and scale)',
+    'NVIDIA-Grafikkarte dekodiert, CPU verkleinert (NVDEC)':
+        'NVIDIA graphics card decodes, CPU scales (NVDEC)',
+    'NVIDIA (NVDEC)':
+        'NVIDIA (NVDEC)',
+    'Kein OpenCL-Treiber für NVIDIA installiert. Unter Nobara: sudo dnf install xorg-x11-drv-nvidia-cuda-libs':
+        'No OpenCL driver for NVIDIA installed. On Nobara: sudo dnf install xorg-x11-drv-nvidia-cuda-libs',
+    'Die NVIDIA-Karte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „NVIDIA“ wird das genutzt.':
+        'The NVIDIA card decodes and scales – “Decoding: Automatic” or “NVIDIA” uses it.',
+    'Die NVIDIA-Karte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne NVDEC). Unter Nobara hilft meist: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs':
+        "The NVIDIA card can't decode this video (driver, codec or ffmpeg without NVDEC). On Nobara this usually helps: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs",
+    'Hinweis: Die Anzeige „GPU-Auslastung“ zeigt meist nur die 3D-Einheit. Das Dekodieren läuft im eigenen Video-Block der Karte (NVDEC) und taucht dort kaum auf – sichtbar z.B. mit nvidia-smi dmon oder nvtop. Das Tracking selbst rechnet die CPU.':
+        "Note: the “GPU usage” display mostly shows only the 3D unit. Decoding runs in the card's own video block (NVDEC) and hardly shows up there – visible e.g. with nvidia-smi dmon or nvtop. The tracking itself is computed by the CPU.",
 }
