@@ -61,11 +61,13 @@ from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
+    LINK_KEY,
     find_script,
     find_video,
     remember_video,
     remembered_video,
     save_paths,
+    video_link,
     video_stem,
 )
 from ..scriptdir import settings as script_settings
@@ -2077,7 +2079,8 @@ class MainWindow(QMainWindow):
                         if prune and axis != "L0":
                             target.unlink(missing_ok=True)
                         continue
-                    Funscript(acts, metadata=self._metadata_for(target, meta)).save(target)
+                    Funscript(acts, metadata={**self._metadata_for(target, meta),
+                                                LINK_KEY: video_link(self.video_path, target)}).save(target)
                     if target.name not in saved:
                         saved.append(target.name)
         except OSError as e:

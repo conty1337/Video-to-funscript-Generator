@@ -227,15 +227,41 @@ def _search(stem: str, folders, exts) -> Path | None:
     return None
 
 
+LINK_KEY = "vtf_video"      # funscript metadata: the video, relative to the script
+
+
+def video_link(video: str | Path, script: str | Path) -> str:
+    """The video as seen from the script's folder. Relative, so it holds on every computer
+    that reaches both through the same network share, wherever that is mounted."""
+    return Path(os.path.relpath(os.path.abspath(video), os.path.abspath(Path(script).parent))).as_posix()
+
+
+def linked_video(script: str | Path) -> Path | None:
+    """The video a funscript names in its metadata (written on saving), if it is there."""
+    try:
+        with open(script, encoding="utf-8") as f:
+            rel = (json.load(f).get("metadata") or {}).get(LINK_KEY)
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(rel, str) or not rel:
+        return None
+    p = Path(os.path.normpath(Path(script).parent / rel))
+    return p if p.is_file() else None
+
+
 def find_video(script: str | Path, search: tuple = ()) -> Path | None:
-    """The video of a script or data file: next to it, where it was last seen, or by name
-    in the folder it was last seen in and in `search` (e.g. the library folder)."""
+    """The video of a script or data file: next to it, the one the script names, where it was
+    last seen, or by name in the folder it was last seen in and in `search` (e.g. the library
+    folder)."""
     script = Path(script)
     stem, exts = video_stem(script), _video_exts()
     for ext in sorted(exts):
         for cand in (script.with_name(stem + ext), script.with_name(stem + ext.upper())):
             if cand.is_file():
                 return cand
+    linked = linked_video(script.with_name(stem + ".funscript"))
+    if linked is not None:
+        return linked
     last = remembered_video(stem)
     if last is not None and last.is_file():
         return last

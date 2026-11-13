@@ -12,7 +12,7 @@ from .funscript import Funscript
 from .generator import GeneratorSettings, generate
 from .i18n import tr
 from .prep import is_prepared, load_prep
-from .scriptdir import has_script, save_paths
+from .scriptdir import LINK_KEY, has_script, save_paths, video_link
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts"}
 
@@ -47,10 +47,9 @@ def process_video(video: str | Path, an: AnalysisSettings, gen: GeneratorSetting
     motion = analyze_motion_cached(video, an, progress, cancel)
     script = generate(motion, gen, sections)
     targets = [Path(output)] if output else save_paths(video)
-    fs = Funscript(script.actions, metadata=make_metadata(video))
     for t in targets:
         t.parent.mkdir(parents=True, exist_ok=True)
-        fs.save(t)
+        Funscript(script.actions, metadata={**make_metadata(video), LINK_KEY: video_link(video, t)}).save(t)
     return targets[0]
 
 
