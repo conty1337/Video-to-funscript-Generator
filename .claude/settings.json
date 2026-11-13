@@ -2,9 +2,25 @@
   "extraKnownMarketplaces": {
     "ponytail": {
       "source": { "source": "github", "repo": "DietrichGebert/ponytail" }
+    },
+    "thedotmack": {
+      "source": { "source": "github", "repo": "thedotmack/claude-mem" }
+    },
+    "headroom-marketplace": {
+      "source": { "source": "github", "repo": "headroomlabs-ai/headroom" }
+    },
+    "one-skill-to-rule-them-all": {
+      "source": { "source": "github", "repo": "rebelytics/one-skill-to-rule-them-all" }
+    },
+    "claude-plugins-official": {
+      "source": { "source": "github", "repo": "anthropics/claude-plugins-official" }
     }
   },
   "enabledPlugins": {
-    "ponytail@ponytail": true
+    "ponytail@ponytail": true,
+    "claude-mem@thedotmack": true,
+    "headroom@headroom-marketplace": true,
+    "task-observer@one-skill-to-rule-them-all": true,
+    "claude-code-setup@claude-plugins-official": true
   }
 }
