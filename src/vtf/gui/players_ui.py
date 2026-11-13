@@ -24,6 +24,7 @@ from .. import players as PL
 from ..device.sync import ScriptSync
 from ..funscript import Funscript
 from ..i18n import tr
+from ..scriptdir import settings as script_settings
 from . import theme
 
 HINTS = {
@@ -65,8 +66,14 @@ class ExternalSync(QObject):
     def running(self) -> bool:
         return self.player is not None
 
-    def folders(self) -> list[str]:
+    def own_folders(self) -> list[str]:
         return [f for f in str(self.qs.value("players/folder", "") or "").split(";") if f]
+
+    def folders(self) -> list[str]:
+        """Its own script folders, then the app's script folder (Datei → Speicherort für Scripts)."""
+        own = self.own_folders()
+        shared = script_settings().folder
+        return own + ([str(shared)] if shared is not None and str(shared) not in own else [])
 
     # ------------------------------------------------------------ connection
     def connect_player(self, kind: str, **kw) -> str:
@@ -238,7 +245,7 @@ class PlayersDialog(QDialog):
         self.hint.setFixedWidth(TEXT_W)
         lay.addWidget(self.hint)
         row = QHBoxLayout()
-        self.folder = QLineEdit(";".join(ext.folders()))
+        self.folder = QLineEdit(";".join(ext.own_folders()))
         self.folder.setPlaceholderText(tr("Script-Ordner (optional)"))
         pick = QPushButton(tr("Ordner…"))
         pick.clicked.connect(self._pick)

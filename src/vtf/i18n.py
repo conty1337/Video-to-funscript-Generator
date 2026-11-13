@@ -106,3 +106,9 @@ def plural(n: int, one: str, many: str, *args) -> str:
 def dec(text: str) -> str:
     """Decimal comma in German, point in English."""
     return text.replace(".", ",") if current() == "de" else text
+
+
+def num(n: int) -> str:
+    """A whole number with thousands separators: 1.450 in German, 1,450 in English."""
+    s = f"{int(n):,}"
+    return s.replace(",", ".") if current() == "de" else s

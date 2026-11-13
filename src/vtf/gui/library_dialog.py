@@ -94,10 +94,17 @@ class LibraryDialog(QDialog):
         rescan = QPushButton(theme.icon("rotate-ccw"), "")
         rescan.setToolTip(tr("Ordner neu einlesen"))
         rescan.clicked.connect(self.reload)
+        scripts = QPushButton(theme.icon("save"), tr("Script-Ordner…"))
+        scripts.setToolTip(tr("Wo Scripts gespeichert und gesucht werden: neben dem Video und/oder in einem Script-Ordner"))
+        scripts.clicked.connect(self._scripts)
         top.addWidget(pick)
         top.addWidget(rescan)
         top.addWidget(self.folder_label, 1)
+        top.addWidget(scripts)
         lay.addLayout(top)
+        self.where = QLabel()
+        self.where.setObjectName("caption")
+        lay.addWidget(self.where)
 
         bar = QHBoxLayout()
         bar.setSpacing(8)
@@ -161,9 +168,8 @@ class LibraryDialog(QDialog):
         lay.addWidget(hint)
 
         self.folder = str(self.qs.value("library/folder", "") or "")
-        if self.folder:
-            self.reload()
-        else:
+        self.reload()
+        if not self.folder:
             self.folder_label.setText(tr("Noch kein Ordner gewählt"))
 
     # ------------------------------------------------------------ data
@@ -173,6 +179,9 @@ class LibraryDialog(QDialog):
         self.reload()
 
     def reload(self) -> None:
+        from .scripts_ui import describe
+
+        self.where.setText(describe())
         if not self.folder:
             return
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -216,6 +225,12 @@ class LibraryDialog(QDialog):
         d = QFileDialog.getExistingDirectory(self, tr("Ordner der Bibliothek"), self.folder or "")
         if d:
             self.set_folder(d)
+
+    def _scripts(self):
+        from .scripts_ui import ScriptFolderDialog
+
+        ScriptFolderDialog(self).exec()
+        self.reload()
 
     def _clicked(self, it, col):
         if col != COL_STARS:

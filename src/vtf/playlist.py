@@ -7,7 +7,7 @@ import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .funscript import funscript_path_for
+from .scriptdir import has_script as _has_script
 
 #: how long before the script starts the player jumps in / counts down
 LEAD_MS = 10_000
@@ -85,7 +85,8 @@ def skip_target(ms: float, cuts=(), quiet=()) -> int | None:
 
 
 def has_script(path: str | Path) -> bool:
-    return funscript_path_for(path).is_file()
+    """A script next to the video or in the script folder."""
+    return _has_script(path)
 
 
 @dataclass

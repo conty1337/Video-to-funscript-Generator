@@ -90,13 +90,15 @@ def funscript_path_for(video: str | Path, axis: str = "L0") -> Path:
 
 
 def load_axes(video: str | Path) -> dict[str, list[Action]]:
-    """All axis scripts lying next to the video (missing or broken files are left out)."""
+    """All axis scripts of the video, next to it or in the script folder (missing or broken
+    files are left out)."""
+    # imported here: scriptdir builds on this module
+    from .scriptdir import find_axes
+
     out = {}
-    for axis in AXES:
-        f = funscript_path_for(video, axis)
-        if f.is_file():
-            try:
-                out[axis] = Funscript.load(f).actions
-            except (OSError, ValueError, KeyError, TypeError):
-                pass
+    for axis, f in find_axes(video).items():
+        try:
+            out[axis] = Funscript.load(f).actions
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
     return out

@@ -59,6 +59,8 @@ from ..prep import (
 from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
+from ..scriptdir import find_script, save_paths
+from ..scriptdir import settings as script_settings
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -171,9 +173,10 @@ class MainWindow(QMainWindow):
             self.axis_box.addItem(f"{label} ({code})", code)
         self.axis_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.axis_box.setStyleSheet("QComboBox { padding-right: 28px; }")
-        self.curve_meta = QLabel(tr("Noch nicht analysiert"))
+        self.curve_meta = ElidedLabel(tr("Noch nicht analysiert"))
         self.curve_meta.setObjectName("meta")
         self.curve_meta.setFont(theme.mono_font(12))
+        self.curve_meta.setMinimumWidth(120)          # longer languages: shortened, the window stays narrow
         curve_hint = self.curve_hint = ElidedLabel(tr("Punkt ziehen verschiebt · Fläche ziehen scrollt · Doppelklick fügt hinzu · Rechtsklick löscht · Mausrad zoomt"))
         curve_hint.setObjectName("caption")
         # long hint must not widen the window: shortened with … when there is no room
@@ -416,6 +419,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
+        self._act(m, tr("Speicherort für Scripts…"), self.open_script_folder)
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
         self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
@@ -1735,7 +1739,7 @@ class MainWindow(QMainWindow):
         if lost:
             a, _b, areas = lost[0]
             lost_txt = (tr(" · Bereich {0} ab {1} verloren", ', '.join(map(str, areas)), _fmt(a))
-                        + (tr(" (+{0} weitere Stellen, rot in der Kurve)", len(lost) - 1) if len(lost) > 1 else
+                        + (plural(len(lost) - 1, " (+{0} weitere Stelle, rot in der Kurve)", " (+{0} weitere Stellen, rot in der Kurve)") if len(lost) > 1 else
                            tr(" (rot in der Kurve) – dort nachjustieren")))
         notes = motion.meta.get("notes") or []
         note_txt = "".join(f" · {n}" for n in notes)        # only the AI check writes notes
@@ -1788,7 +1792,7 @@ class MainWindow(QMainWindow):
         self.redo_stack.clear()
         self.dirty = True
         self._update_axis_labels()
-        names = ", ".join(f"{AXES[c][0]} ({len(a)} Punkte)" for c, a in axes.items())
+        names = ", ".join(tr("{0} ({1} Punkte)", AXES[c][0], len(a)) for c, a in axes.items())
         hint = "" if "R1" in axes else tr(" · Roll braucht Tracking mit 2 Bereichen")
         self._status(tr("Erzeugt: {0}{1}", names, hint))
 
@@ -1838,6 +1842,11 @@ class MainWindow(QMainWindow):
             n = len(self.actions_for(code))
             label = AXES[code][0]
             self.axis_box.setItemText(i, f"{label} ({code})" + (f" · {n}" if n else ""))
+        # the box does not grow by itself when a text gets longer (point count added)
+        self.axis_box.ensurePolished()               # the style sheet sets the real font size
+        fm = self.axis_box.fontMetrics()
+        widest = max(fm.horizontalAdvance(self.axis_box.itemText(i)) for i in range(self.axis_box.count()))
+        self.axis_box.setMinimumWidth(widest + 64)
 
     # ------------------------------------------------------------ editing
     # ------------------------------------------------------------ point editing
@@ -1852,30 +1861,30 @@ class MainWindow(QMainWindow):
 
     def select_all_points(self):
         self.curve.select_all()
-        self._status(tr("{0} Punkte ausgewählt", len(self.curve.selection)))
+        self._status(plural(len(self.curve.selection), "{0} Punkt ausgewählt", "{0} Punkte ausgewählt"))
 
     def copy_points(self):
         if self._need_selection():
-            self._status(tr("{0} Punkte kopiert", self.curve.copy_selection()))
+            self._status(plural(self.curve.copy_selection(), "{0} Punkt kopiert", "{0} Punkte kopiert"))
 
     def cut_points(self):
         if self._need_selection():
             n = self.curve.copy_selection()
             self.curve.delete_selection()
-            self._status(tr("{0} Punkte ausgeschnitten", n))
+            self._status(plural(n, "{0} Punkt ausgeschnitten", "{0} Punkte ausgeschnitten"))
 
     def paste_points(self):
         if not self.curve.editable:
             return
         n = self.curve.paste()
-        self._status(tr("{0} Punkte eingefügt bei {1}", n, _fmt(self.curve.playhead_ms)) if n else
+        self._status(plural(n, "{0} Punkt eingefügt bei {1}", "{0} Punkte eingefügt bei {1}", _fmt(self.curve.playhead_ms)) if n else
                      tr("Nichts zum Einfügen – erst Punkte kopieren (Strg+C)"))
 
     def delete_points(self):
         if self._need_selection():
             n = len(self.curve.selection)
             self.curve.delete_selection()
-            self._status(tr("{0} Punkte gelöscht", n))
+            self._status(plural(n, "{0} Punkt gelöscht", "{0} Punkte gelöscht"))
 
     def smooth_points(self):
         if self._need_selection():
@@ -1949,40 +1958,49 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ files
     def export(self):
+        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherort für Scripts)."""
         if self.video_path:
-            self._save(funscript_path_for(self.video_path))
+            self._save(save_paths(self.video_path))
 
     def export_as(self):
         if not self.video_path:
             return
-        path, _ = QFileDialog.getSaveFileName(self, tr("Funscript speichern"), str(funscript_path_for(self.video_path)),
+        path, _ = QFileDialog.getSaveFileName(self, tr("Funscript speichern"), str(save_paths(self.video_path)[-1]),
                                               tr("Funscript (*.funscript)"))
         if path:
-            self._save(Path(path))
+            self._save([Path(path)])
 
-    def _save(self, path: Path):
-        """Saves the stroke to `path` and every other axis with points next to it
+    def _save(self, bases: list[Path]):
+        """Saves the stroke to each base path and every other axis with points next to it
         (<name>.roll.funscript etc.)."""
         axes = {a: v for a, v in self.all_axes().items() if v}
         if not axes:
             QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
             return
         meta = make_metadata(self.video_path)
-        saved = []
+        saved: list[str] = []
         try:
-            for axis, acts in axes.items():
-                suffix = AXES[axis][1]
-                target = path if axis == "L0" else path.with_suffix(f".{suffix}.funscript")
-                Funscript(acts, metadata=meta).save(target)
-                saved.append(target.name)
+            for base in bases:
+                base.parent.mkdir(parents=True, exist_ok=True)
+                for axis, acts in axes.items():
+                    suffix = AXES[axis][1]
+                    target = base if axis == "L0" else base.with_suffix(f".{suffix}.funscript")
+                    Funscript(acts, metadata=meta).save(target)
+                    if target.name not in saved:
+                        saved.append(target.name)
         except OSError as e:
             QMessageBox.critical(self, tr("Fehler"), tr("Speichern fehlgeschlagen:\n{0}", e))
             return
         self.dirty = False
-        self._status(tr("Gespeichert: ") + ", ".join(saved))
+        near = funscript_path_for(self.video_path)
+        folder = script_settings().folder
+        in_folder = folder is not None and any(b.parent == folder for b in bases)
+        where = (tr(" (neben dem Video und im Script-Ordner)") if in_folder and near in bases
+                 else tr(" (im Script-Ordner)") if in_folder else "")
+        self._status(tr("Gespeichert: ") + ", ".join(saved) + where)
 
     def load_funscript_dialog(self):
-        start = str(funscript_path_for(self.video_path)) if self.video_path else ""
+        start = str(find_script(self.video_path) or save_paths(self.video_path)[-1]) if self.video_path else ""
         path, _ = QFileDialog.getOpenFileName(self, tr("Funscript laden"), start, tr("Funscript (*.funscript)"))
         if path:
             try:
@@ -1994,6 +2012,13 @@ class MainWindow(QMainWindow):
             self.curve.set_actions(fs.actions)
             self._update_axis_labels()
             self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path))
+
+    def open_script_folder(self):
+        from .scripts_ui import ScriptFolderDialog, describe
+
+        ScriptFolderDialog(self).exec()
+        self.player.refresh()                    # "with script" may change for the playlist
+        self._status(describe())
 
     def open_library(self):
         from .library_dialog import LibraryDialog

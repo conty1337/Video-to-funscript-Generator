@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import stats as S
-from ..i18n import tr
+from ..i18n import num, tr
 from . import theme
 
 PERIODS = ((tr("Heute"), 1), (tr("7 Tage"), 7), (tr("30 Tage"), 30), (tr("Gesamt"), None))
@@ -35,6 +35,7 @@ class StatsDialog(QDialog):
         foot = QHBoxLayout()
         note = QLabel(tr("Nur auf diesem Rechner gespeichert, nichts wird verschickt"))
         note.setObjectName("caption")
+        note.setWordWrap(True)
         reset = QPushButton(tr("Zurücksetzen"))
         reset.clicked.connect(self._reset)
         close = QPushButton(tr("Schließen"))
@@ -71,7 +72,7 @@ class StatsDialog(QDialog):
             grid.addWidget(h, 0, c)
         sums = [S.summary(data, d) for _l, d in PERIODS]
         rows = ((tr("Spielzeit"), lambda s: S.fmt_duration(s["seconds"])),
-                (tr("Hübe"), lambda s: f"{s['strokes']:,}".replace(",", ".")),
+                (tr("Hübe"), lambda s: num(s["strokes"])),
                 (tr("Tage"), lambda s: str(s["days"])))
         for r, (label, fn) in enumerate(rows, start=1):
             lb = QLabel(label)

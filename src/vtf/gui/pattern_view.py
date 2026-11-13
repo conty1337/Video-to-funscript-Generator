@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from .. import patterns as P
-from ..i18n import dec, tr
+from ..i18n import dec, plural, tr
 from . import theme
 
 
@@ -150,7 +150,7 @@ class PatternView(QWidget):
         draw_curve(p, r, self._pts, self.lo, self.hi, width=2.0)
         p.setPen(QColor(theme.MUTED))
         p.drawText(QRectF(r.left(), r.bottom() + 4, r.width(), 16), Qt.AlignLeft | Qt.AlignVCenter,
-                   dec(tr("{0} Durchläufe · je {1:.1f} s", self.cycles, one / 1000)))
+                   dec(plural(self.cycles, "{0} Durchlauf · {1:.1f} s", "{0} Durchläufe · je {1:.1f} s", one / 1000)))
         if self.phase is not None:
             x = r.left() + r.width() * self.phase   # phase over all runs shown
             p.setPen(QPen(QColor(theme.TEXT), 1.5))

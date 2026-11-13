@@ -1544,7 +1544,7 @@ class PatternEditor(QDialog):
         mid = QHBoxLayout()
         mid.setSpacing(16)
         col = QVBoxLayout()
-        t = QLabel(tr("Ablauf"))
+        t = QLabel(tr("Reihenfolge"))
         t.setObjectName("section")
         col.addWidget(t)
         self.blocks = QListWidget()
@@ -1589,7 +1589,7 @@ class PatternEditor(QDialog):
         self.repeat.setRange(1, 64)
         self.repeat.setSuffix(" ×")
         self.repeat_row = _hrow(self.repeat, stretch=True)
-        f.addRow(tr("Wiederholen"), self.repeat_row)
+        f.addRow(tr("Wiederholungen"), self.repeat_row)
         self.speed = _speed_spin(1.0)
         self.speed_to = _speed_spin(1.0)
         self.speed_arrow = QLabel("→")
@@ -1980,7 +1980,7 @@ class ProgramEditor(QDialog):
             sp.setRange(1, n)
         self.first.setValue(max(1, min(n, st.first)))
         self.last.setValue(n if st.last <= 0 else max(1, min(n, st.last)))
-        self.part_of.setText(f"von {n}")
+        self.part_of.setText(tr("von {0}", n))
 
     def _show_part(self, st: P.Step):
         p = self.lookup(st.pattern)

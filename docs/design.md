@@ -35,4 +35,4 @@ Icons, Texte, Schrift, Layout, Details, Visuals und Bewegung in dieser Reihenfol
 - Abstände im 4-px-Raster, Radien 4 (Tasten), 8 (Eingaben, Buttons)
 - Keine Animationen außer dem Abspielen selbst
 
-![Screenshot](screenshot.png)
+![Screenshot](images/de/editor.png)
