@@ -10,8 +10,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .batch import VIDEO_EXTS
-from .funscript import Funscript, funscript_path_for
+from .funscript import Funscript
 from .i18n import tr
+from .scriptdir import find_script
+from .scriptdir import settings as script_settings
 
 STROKE_MIN = 10          # a step of at least this many positions is a stroke
 HEAT_BUCKETS = 120       # slices of the heatmap preview
@@ -69,12 +71,13 @@ def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
         return []
     files = root.rglob("*") if recursive else root.iterdir()
     ratings = load_ratings()
+    sd = script_settings()
     out = []
     for v in files:
         if not v.is_file() or v.suffix.lower() not in VIDEO_EXTS:
             continue
-        s = funscript_path_for(v)
-        if not s.is_file():
+        s = find_script(v, "L0", sd)
+        if s is None:
             continue
         e = Entry(v, s, mtime=s.stat().st_mtime, rating=int(ratings.get(_key(v), 0)))
         _numbers(e)

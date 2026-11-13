@@ -59,6 +59,8 @@ from ..prep import (
 from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
+from ..scriptdir import find_script, save_paths
+from ..scriptdir import settings as script_settings
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -417,6 +419,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
+        self._act(m, tr("Speicherort für Scripts…"), self.open_script_folder)
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
         self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
@@ -1955,40 +1958,49 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ files
     def export(self):
+        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherort für Scripts)."""
         if self.video_path:
-            self._save(funscript_path_for(self.video_path))
+            self._save(save_paths(self.video_path))
 
     def export_as(self):
         if not self.video_path:
             return
-        path, _ = QFileDialog.getSaveFileName(self, tr("Funscript speichern"), str(funscript_path_for(self.video_path)),
+        path, _ = QFileDialog.getSaveFileName(self, tr("Funscript speichern"), str(save_paths(self.video_path)[-1]),
                                               tr("Funscript (*.funscript)"))
         if path:
-            self._save(Path(path))
+            self._save([Path(path)])
 
-    def _save(self, path: Path):
-        """Saves the stroke to `path` and every other axis with points next to it
+    def _save(self, bases: list[Path]):
+        """Saves the stroke to each base path and every other axis with points next to it
         (<name>.roll.funscript etc.)."""
         axes = {a: v for a, v in self.all_axes().items() if v}
         if not axes:
             QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
             return
         meta = make_metadata(self.video_path)
-        saved = []
+        saved: list[str] = []
         try:
-            for axis, acts in axes.items():
-                suffix = AXES[axis][1]
-                target = path if axis == "L0" else path.with_suffix(f".{suffix}.funscript")
-                Funscript(acts, metadata=meta).save(target)
-                saved.append(target.name)
+            for base in bases:
+                base.parent.mkdir(parents=True, exist_ok=True)
+                for axis, acts in axes.items():
+                    suffix = AXES[axis][1]
+                    target = base if axis == "L0" else base.with_suffix(f".{suffix}.funscript")
+                    Funscript(acts, metadata=meta).save(target)
+                    if target.name not in saved:
+                        saved.append(target.name)
         except OSError as e:
             QMessageBox.critical(self, tr("Fehler"), tr("Speichern fehlgeschlagen:\n{0}", e))
             return
         self.dirty = False
-        self._status(tr("Gespeichert: ") + ", ".join(saved))
+        near = funscript_path_for(self.video_path)
+        folder = script_settings().folder
+        in_folder = folder is not None and any(b.parent == folder for b in bases)
+        where = (tr(" (neben dem Video und im Script-Ordner)") if in_folder and near in bases
+                 else tr(" (im Script-Ordner)") if in_folder else "")
+        self._status(tr("Gespeichert: ") + ", ".join(saved) + where)
 
     def load_funscript_dialog(self):
-        start = str(funscript_path_for(self.video_path)) if self.video_path else ""
+        start = str(find_script(self.video_path) or save_paths(self.video_path)[-1]) if self.video_path else ""
         path, _ = QFileDialog.getOpenFileName(self, tr("Funscript laden"), start, tr("Funscript (*.funscript)"))
         if path:
             try:
@@ -2000,6 +2012,13 @@ class MainWindow(QMainWindow):
             self.curve.set_actions(fs.actions)
             self._update_axis_labels()
             self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path))
+
+    def open_script_folder(self):
+        from .scripts_ui import ScriptFolderDialog, describe
+
+        ScriptFolderDialog(self).exec()
+        self.player.refresh()                    # "with script" may change for the playlist
+        self._status(describe())
 
     def open_library(self):
         from .library_dialog import LibraryDialog

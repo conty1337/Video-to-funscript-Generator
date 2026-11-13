@@ -37,6 +37,7 @@ RX 5700 XT, but it runs on any Linux with Python ≥ 3.10. The interface is in
 - Batch processing of whole folders (GUI and command line)
 
 **Edit**
+- Scripts next to the video and/or in one **script folder** of your choice
 - Curve editor with multi-select, copy/paste, smooth, stronger/weaker strokes, undo
 - **Script check**: too fast, gaps, tremble, sudden small strokes, beat drops out,
   lost areas; F3 jumps to the next spot
@@ -150,7 +151,8 @@ fold the left / right panel away, Ctrl+W closes the video.
    the middle mouse button), the scroll bar below, Shift+mouse wheel or a
    sideways swipe on the touchpad. Video timeline: a click jumps right there
    and can be dragged on, the mouse wheel steps 1 s.
-6. **Ctrl+S** saves `<video>.funscript` next to the video, where players find it.
+6. **Ctrl+S** saves `<video>.funscript` next to the video, where players find it,
+   or into your **script folder** (see below).
 
 **Sound** plays along, in sync with the picture and the device. The speaker
 button or **M** mutes it, the slider sets the volume. Both are remembered.
@@ -333,6 +335,15 @@ plays, “Add to playlist” appends the selected ones, “Open in editor” to 
 The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
 
 ![Library](docs/images/en/library.png)
+
+**Script folder** (File → “Where scripts are saved…” or “Script folder…” in the
+library): choose one folder for all your scripts. Ctrl+S then saves into it and,
+if “Also save next to the video” is ticked (the default), next to the video too,
+where most players look. Library, player mode, batch processing and other players
+look next to the video first, then in the script folder and its subfolders (by
+file name, e.g. `Clip.funscript` for `Clip.mp4`). The tracking preparation
+(`<video>.vtf.json`) stays next to the video. Stored in
+`~/.config/video-to-funscript/scripts.json`.
 
 **Statistics** (Device → Statistics…): playing time, strokes and days for today,
 7 days, 30 days and in total, plus favourite videos and patterns (by playing
@@ -666,6 +677,7 @@ src/vtf/
   funscript.py   file format
   batch.py       folder processing
   library.py     library, ratings
+  scriptdir.py   where scripts are saved and found (script folder)
   stats.py       local statistics
   i18n.py        languages (locale_en.py: English texts)
   gpu.py         OpenCL helpers

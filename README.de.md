@@ -39,6 +39,7 @@ Oberfläche gibt es auf **Deutsch und Englisch**.
 - Stapelverarbeitung ganzer Ordner (Oberfläche und Kommandozeile)
 
 **Bearbeiten**
+- Scripts neben dem Video und/oder in einem frei wählbaren **Script-Ordner**
 - Kurven-Editor mit Mehrfachauswahl, Kopieren/Einfügen, Glätten,
   Hub verstärken/abschwächen, Rückgängig
 - **Script-Prüfung**: zu schnell, Lücken, Zittern, plötzlich kleine Hübe, Takt
@@ -161,7 +162,7 @@ klappt die linke bzw. rechte Leiste ein. Strg+W schließt das Video.
    Video-Zeitleiste: Klick springt direkt an die Stelle und lässt sich gleich
    weiterziehen, Mausrad = 1 s vor/zurück.
 6. **Strg+S** speichert `<Video>.funscript` neben dem Video – so finden es
-   Player automatisch.
+   Player automatisch – oder in deinen **Script-Ordner** (siehe unten).
 
 **Ton**: Beim Abspielen läuft der Ton des Videos mit, synchron zum Bild und
 zum Gerät. Lautsprecher-Knopf oder **M** schaltet ihn stumm, der Regler daneben
@@ -358,6 +359,15 @@ Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Edi
 (`~/.config/video-to-funscript/library.json`).
 
 ![Bibliothek](docs/images/de/library.png)
+
+**Script-Ordner** (Datei → „Speicherort für Scripts…“ oder „Script-Ordner…“ in
+der Bibliothek): ein Ordner für alle deine Scripts. Strg+S speichert dann dort
+hinein und, wenn „Zusätzlich neben dem Video speichern“ angehakt ist (Standard),
+auch neben das Video, wo die meisten Player suchen. Bibliothek, Player-Modus,
+Stapelverarbeitung und andere Player suchen erst neben dem Video, dann im
+Script-Ordner und seinen Unterordnern (nach Dateiname, z.B. `Clip.funscript` zu
+`Clip.mp4`). Die Tracking-Vorbereitung (`<Video>.vtf.json`) bleibt neben dem
+Video. Gespeichert in `~/.config/video-to-funscript/scripts.json`.
 
 **Statistik** (Gerät → Statistik…): Spielzeit, Hübe und Tage für heute, 7 Tage,
 30 Tage und gesamt, dazu die Lieblingsvideos und Lieblingsmuster (nach Spielzeit).
@@ -706,6 +716,7 @@ src/vtf/
   funscript.py   Dateiformat
   batch.py       Ordnerverarbeitung
   library.py     Bibliothek, Bewertungen
+  scriptdir.py   Wo Scripts gespeichert und gesucht werden (Script-Ordner)
   stats.py       Lokale Statistik
   i18n.py        Sprachen (locale_en.py: englische Texte)
   gpu.py         OpenCL-Hilfen

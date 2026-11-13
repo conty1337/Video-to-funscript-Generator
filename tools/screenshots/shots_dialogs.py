@@ -90,7 +90,9 @@ from vtf.gui.library_dialog import LibraryDialog
 ld = LibraryDialog(w.qsettings, w); ld.set_folder(str(lib)); ld.show(); ld.resize(1080, 560)
 ld.sort.setCurrentIndex(ld.sort.findData("rating"))
 ld.tree.setCurrentItem(ld.tree.topLevelItem(0))
-ld.folder_label.setText("~/Videos/Scripts")
+ld.folder_label.setText("~/Videos")
+from vtf.i18n import tr
+ld.where.setText(tr("Scripts: neben dem Video und in {0}", "~/Scripts"))
 shot("library.png", ld); ld.close()
 
 # statistics

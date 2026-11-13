@@ -72,7 +72,8 @@ Ctrl+1 folds the left panel away, Ctrl+2 the right one.
    look (too fast, gap, tremble, sudden small strokes, beat drops out, area
    lost). The **Check** button in the timeline = list, **F3** jumps to the next
    spot. If it says “Check ok”, you do not have to look through the whole script.
-9. **Save**: Ctrl+S puts `<video>.funscript` next to the video.
+9. **Save**: Ctrl+S puts `<video>.funscript` next to the video. To collect all
+   scripts in one folder instead (or as well): File → “Where scripts are saved…”.
 
 ## Options (left, under “Options”)
 

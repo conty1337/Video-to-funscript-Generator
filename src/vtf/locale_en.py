@@ -2057,4 +2057,34 @@ EN: dict[str, str] = {
         "{0} point pasted at {1}",
     "{0} Punkt gelöscht":
         "{0} point deleted",
+    "Speicherort für Scripts":
+        "Where scripts are saved",
+    "Speicherort für Scripts…":
+        "Where scripts are saved…",
+    "Ohne Script-Ordner liegt jedes Script neben seinem Video, so finden es die meisten Player. Mit Script-Ordner landen alle Scripts zusätzlich (oder nur) dort. Bibliothek, Player, Stapel und andere Player suchen erst neben dem Video, dann im Script-Ordner und seinen Unterordnern.":
+        "Without a script folder every script lies next to its video, where most players find it. With a script folder all scripts also (or only) go there. Library, player, batch and other players look next to the video first, then in the script folder and its subfolders.",
+    "Wählen…":
+        "Choose…",
+    "Kein Script-Ordner: Scripts nur neben dem Video":
+        "No script folder: scripts only next to the video",
+    "Zusätzlich neben dem Video speichern":
+        "Also save next to the video",
+    "Die meisten Player (und andere Programme) suchen das Script neben dem Video":
+        "Most players (and other programs) look for the script next to the video",
+    "keiner – Scripts liegen neben dem Video":
+        "none – scripts lie next to the video",
+    "Scripts: neben dem Video":
+        "Scripts: next to the video",
+    "Scripts: neben dem Video und in {0}":
+        "Scripts: next to the video and in {0}",
+    "Scripts: in {0}":
+        "Scripts: in {0}",
+    "Script-Ordner…":
+        "Script folder…",
+    "Wo Scripts gespeichert und gesucht werden: neben dem Video und/oder in einem Script-Ordner":
+        "Where scripts are saved and looked for: next to the video and/or in a script folder",
+    " (neben dem Video und im Script-Ordner)":
+        " (next to the video and in the script folder)",
+    " (im Script-Ordner)":
+        " (in the script folder)",
 }

@@ -74,7 +74,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    Hübe, Takt setzt aus, Bereich verloren). Knopf **Prüfung** in der Zeitleiste
    = Liste, **F3** springt zur nächsten Stelle. Steht dort „Prüfung ok“, musst du
    nicht das ganze Script ansehen.
-9. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video.
+9. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video. Alle Scripts
+   lieber (oder zusätzlich) in einem Ordner sammeln: Datei → „Speicherort für Scripts…“.
 
 ## Optionen (links unter „Optionen“)
 
