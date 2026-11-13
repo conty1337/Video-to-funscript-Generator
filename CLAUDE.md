@@ -25,7 +25,8 @@ Gilt für jede Sitzung in diesem Repository.
   dem Nutzer berichten.
 
 ## Stil
-- Ponytail-Regeln (Plugin in `.claude/settings.json`): kleinste vollständige Änderung, vorhandenen
+- Plugins stehen in `.claude/settings.json` (Ponytail, claude-mem, Headroom, task-observer, claude-code-setup).
+- Ponytail-Regeln: kleinste vollständige Änderung, vorhandenen
   Code nutzen, keine ungefragten Extras, neue Logik bekommt einen kleinen Test. Am Ende der Antwort
   ein bis zwei Zeilen: was ausgelassen wurde, welches Risiko bleibt.
 - Keine Modell-Namen in Commits oder PRs. Die E-Mail-Adresse des Nutzers nirgends eintragen.
