@@ -12,7 +12,7 @@ from pathlib import Path
 from .batch import VIDEO_EXTS
 from .funscript import Funscript
 from .i18n import tr
-from .scriptdir import find_script
+from .scriptdir import files_in, find_script, find_video, video_stem
 from .scriptdir import settings as script_settings
 
 STROKE_MIN = 10          # a step of at least this many positions is a stroke
@@ -31,6 +31,7 @@ class Entry:
     mtime: float = 0.0
     heat: list = field(default_factory=list)   # fastest speed per slice, HEAT_BUCKETS of them
     rating: int = 0               # 0..5
+    missing: bool = False         # a script in the script folder whose video was not found
 
     @property
     def name(self) -> str:
@@ -65,7 +66,8 @@ def _numbers(e: Entry) -> None:
 
 
 def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
-    """Every video in the folder (and below) that has a script next to it."""
+    """Every video in the folder (and below) that has a script (next to it or in the script
+    folder), plus the scripts in the script folder whose video is gone (moved or renamed)."""
     root = Path(folder)
     if not root.is_dir():
         return []
@@ -82,7 +84,21 @@ def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
         e = Entry(v, s, mtime=s.stat().st_mtime, rating=int(ratings.get(_key(v), 0)))
         _numbers(e)
         out.append(e)
+    out += _orphans(sd, {e.script for e in out})
     return sorted(out, key=lambda e: e.name.lower())
+
+
+def _orphans(sd, listed: set) -> list[Entry]:
+    """Scripts in the script folder whose video cannot be found anywhere."""
+    out = []
+    for s in files_in(sd.folder, "scripts") if sd.active else []:
+        stem = video_stem(s)
+        if s in listed or s.name.lower() != (stem + ".funscript").lower() or find_video(s) is not None:
+            continue                      # listed already, an extra axis, or its video is somewhere else
+        e = Entry(s.with_name(stem), s, mtime=s.stat().st_mtime, missing=True)
+        _numbers(e)
+        out.append(e)
+    return out
 
 
 SORTS = {

@@ -5,13 +5,14 @@ from __future__ import annotations
 import bisect
 import json
 import math
+import threading
 from dataclasses import replace
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QPainter
+from PySide6.QtGui import QAction, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -59,8 +60,16 @@ from ..prep import (
 from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
-from ..scriptdir import find_script, save_paths
+from ..scriptdir import (
+    find_script,
+    find_video,
+    remember_video,
+    remembered_video,
+    save_paths,
+    video_stem,
+)
 from ..scriptdir import settings as script_settings
+from ..thumbs import get_thumb, make_thumb
 from ..video import DECODER_LABELS, probe, test_decoders
 from . import pose_ui, theme
 from .audio import AudioPlayer
@@ -419,7 +428,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
-        self._act(m, tr("Speicherort für Scripts…"), self.open_script_folder)
+        self._act(m, tr("Speicherorte…"), self.open_script_folder)
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
         self._act(m, tr("Bibliothek…"), self.open_library, "Ctrl+L")
@@ -581,12 +590,87 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ video
     def open_dialog(self):
         exts = " ".join(f"*{e}" for e in sorted(VIDEO_EXTS))
-        path, _ = QFileDialog.getOpenFileName(self, tr("Video öffnen"), self.qsettings.value("last_dir", ""),
-                                              tr("Videos ({0});;Alle Dateien (*)", exts))
+        path, _ = QFileDialog.getOpenFileName(self, tr("Video oder Script öffnen"), self.qsettings.value("last_dir", ""),
+                                              tr("Videos und Scripts ({0} *.funscript);;Alle Dateien (*)", exts))
         if path:
             self.open_video(path)
 
+    # ------------------------------------------------------------ script -> video
+    def _video_search_places(self) -> tuple:
+        return tuple(Path(str(p)) for p in (self.qsettings.value("library/folder", ""),
+                                            self.qsettings.value("last_dir", "")) if p)
+
+    def locate_video(self, script: str | Path, ask: bool = True) -> Path | None:
+        """The video of a script: found by itself (next to it, where it was last, by name in
+        the library folder), else the user is asked to look for it (and that is remembered)."""
+        video = find_video(script, self._video_search_places())
+        if video is not None or not ask:
+            return video
+        box = QMessageBox(QMessageBox.Question, tr("Video nicht gefunden"),
+                          tr("Zum Script „{0}“ wurde kein Video gefunden. Verschoben oder umbenannt?",
+                             Path(script).name), parent=self)
+        pic = get_thumb(video_stem(script))      # the picture from before helps to recognise it
+        if pic is not None:
+            box.setIconPixmap(QPixmap(str(pic)).scaledToWidth(160, Qt.SmoothTransformation))
+        look = box.addButton(tr("Video suchen…"), QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        self._run_dialog(box)
+        if box.clickedButton() is not look:
+            return None
+        exts = " ".join(f"*{e}" for e in sorted(VIDEO_EXTS))
+        last = remembered_video(video_stem(script))
+        start = str(last.parent) if last is not None else str(self.qsettings.value("last_dir", ""))
+        path, _ = QFileDialog.getOpenFileName(self, tr("Video zu „{0}“ suchen", video_stem(script)), start,
+                                              tr("Videos ({0});;Alle Dateien (*)", exts))
+        if not path:
+            return None
+        remember_video(path, video_stem(script))
+        return Path(path)
+
+    def _run_dialog(self, box) -> None:
+        box.exec()
+
+    def open_script(self, script: str | Path) -> None:
+        """A funscript was opened: its video opens with it (and plays when in player mode)."""
+        script = Path(script)
+        video = self.locate_video(script)
+        if video is None:
+            return
+        if self.player_mode:
+            self._library_play(str(video))
+        else:
+            self.open_video(str(video))
+        if self.video_path and Path(self.video_path) == video and find_script(video) != script:
+            self._load_script_file(script)
+
+    def _load_script_file(self, script: Path) -> None:
+        """Load a script (with its other axes) that lies where the video's own lookup does not
+        look, e.g. a script opened from anywhere."""
+        base = video_stem(script)
+        main = script.with_name(base + ".funscript")
+        try:
+            axes = {"L0": Funscript.load(main if main.is_file() else script).actions}
+            for axis, (_label, suffix) in AXES.items():
+                f = script.with_name(f"{base}.{suffix}.funscript")
+                if suffix and f.is_file():
+                    axes[axis] = Funscript.load(f).actions
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            QMessageBox.warning(self, tr("Fehler"), str(e))
+            return
+        self.axis_actions = {k: v for k, v in axes.items() if k != "L0"}
+        self.axis = "L0"
+        self.axis_box.setCurrentIndex(0)
+        self.curve.set_actions(axes["L0"])
+        self._update_axis_labels()
+        self._update_heat()
+        self._update_issues()
+        self.dirty = False
+        self._status(tr("Script geladen: {0}", script.name))
+
     def open_video(self, path: str):
+        if str(path).lower().endswith(".funscript"):
+            self.open_script(path)
+            return
         if not self._confirm_discard():
             return
         self.cancel_analysis()
@@ -642,6 +726,8 @@ class MainWindow(QMainWindow):
         self.close_act.setVisible(True)
         self._l0_signal = None
         loaded = load_axes(path)
+        remember_video(path)                     # a script opened later finds its video again
+        threading.Thread(target=make_thumb, args=(path,), daemon=True, name="thumb").start()
         self.axis_actions = {k: v for k, v in loaded.items()}
         self.axis = "L0"
         self.axis_box.setCurrentIndex(0)
@@ -1958,7 +2044,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ files
     def export(self):
-        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherort für Scripts)."""
+        """Ctrl+S: next to the video and/or into the script folder (Datei → Speicherorte)."""
         if self.video_path:
             self._save(save_paths(self.video_path))
 
@@ -2030,6 +2116,11 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _library_play(self, path: str):
+        if path.lower().endswith(".funscript"):           # its video is missing: find it first
+            video = self.locate_video(path)
+            if video is None:
+                return
+            path = str(video)
         self.player.add_paths([path])
         items = self.player.playlist.items
         target = str(Path(path).resolve())
@@ -2042,7 +2133,7 @@ class MainWindow(QMainWindow):
 
     def _library_edit(self, path: str):
         self.set_player_mode(False)
-        self.open_video(path)
+        self.open_video(path)                    # a script (video missing) is handled there
 
     def open_batch(self):
         folder = str(Path(self.video_path).parent) if self.video_path else self.qsettings.value("last_dir", "")
@@ -2139,7 +2230,12 @@ class MainWindow(QMainWindow):
     def dropEvent(self, ev):
         urls = [u.toLocalFile() for u in ev.mimeData().urls() if u.isLocalFile()]
         if urls and self.player_mode:          # player: dropped videos go to the playlist
-            n = self.player.add_paths(urls)
+            vids = []
+            for u in urls:                     # a dropped script brings its video
+                v = self.locate_video(u) if u.lower().endswith(".funscript") else u
+                if v is not None:
+                    vids.append(str(v))
+            n = self.player.add_paths(vids)
             self._status(plural(n, "{0} Video zur Playlist hinzugefügt", "{0} Videos zur Playlist hinzugefügt"))
             return
         if urls:

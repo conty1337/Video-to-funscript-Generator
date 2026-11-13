@@ -63,3 +63,15 @@ def test_old_entry_with_theme_icon_gets_rewritten(tmp_path, monkeypatch):
     di.desktop_file().write_text(old)
     assert di.auto_integrate(app) == "Startmenü-Eintrag aktualisiert"
     assert f"Icon={di.icon_png_file()}" in di.desktop_file().read_text()
+
+
+def test_funscript_files_open_with_the_app(tmp_path, monkeypatch):
+    from vtf import desktop_integration as di
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    app = tmp_path / "App.AppImage"; app.write_bytes(b"\0")
+    di.install(app)
+    assert "application/x-funscript" in di.desktop_file().read_text()
+    assert '<glob pattern="*.funscript"/>' in di.mime_file().read_text()
+    assert not di.install(app)                                       # nothing new to write
+    di.uninstall()
+    assert not di.mime_file().exists()

@@ -37,7 +37,7 @@ RX 5700 XT, but it runs on any Linux with Python ≥ 3.10. The interface is in
 - Batch processing of whole folders (GUI and command line)
 
 **Edit**
-- Scripts next to the video and/or in one **script folder** of your choice
+- Scripts next to the video and/or in a **script folder**, video data in a folder of its own
 - Curve editor with multi-select, copy/paste, smooth, stronger/weaker strokes, undo
 - **Script check**: too fast, gaps, tremble, sudden small strokes, beat drops out,
   lost areas; F3 jumps to the next spot
@@ -264,7 +264,8 @@ pictures in the [guide](docs/guide.md#boxes-with-the-ai).
   check stays off for that box.
 
 *Preparation*: areas, sections and calibration are saved at once as
-`<video>.vtf.json` next to the video and loaded the next time it opens.
+`<video>.vtf.json` next to the video (or in the folder for video data, see
+*Storage locations*) and loaded the next time it opens.
 Ctrl+Page↓ / Ctrl+Page↑ opens the next/previous video in the folder, so many
 videos can be prepared quickly. Batch processing uses the preparation; videos
 without one run with “Image motion”.
@@ -336,14 +337,37 @@ The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
 
 ![Library](docs/images/en/library.png)
 
-**Script folder** (File → “Where scripts are saved…” or “Script folder…” in the
-library): choose one folder for all your scripts. Ctrl+S then saves into it and,
-if “Also save next to the video” is ticked (the default), next to the video too,
-where most players look. Library, player mode, batch processing and other players
-look next to the video first, then in the script folder and its subfolders (by
-file name, e.g. `Clip.funscript` for `Clip.mp4`). The tracking preparation
-(`<video>.vtf.json`) stays next to the video. Stored in
+**Storage locations** (File → “Storage locations…”, also in the library): by
+default every file lies next to its video. Two folders change that:
+
+- **Script folder**: one folder for all your scripts. Ctrl+S then saves into it
+  and, if “Also save next to the video” is ticked (the default), next to the video
+  too, where most players look. Library, player mode, batch processing and other
+  players look next to the video first, then in the script folder and its
+  subfolders (by file name, e.g. `Clip.funscript` for `Clip.mp4`).
+- **Folder for video data**: the tracking boxes, sections, calibration, cuts and
+  bookmarks (`<video>.vtf.json`) go there instead of next to the video, so the
+  video folder stays tidy. Files already lying next to a video are still found and
+  move into the folder the next time they are saved.
+
+- **Preview pictures** (on by default): one small picture per video, shown in the
+  library, the playlist, on the phone and when the app asks you to look for a
+  missing video. Kept in the folder for video data (`thumbs/`) or else in
+  `~/.local/share/video-to-funscript/thumbs`, never next to the video. Untick
+  “Keep preview pictures” to delete them all.
+
+When you change or clear a folder, the app offers to take the files along (into
+the new folder, or back next to their videos). Two videos with the same name in
+different folders share one file name in these folders. Stored in
 `~/.config/video-to-funscript/scripts.json`.
+
+**Opening a script opens its video**: open a `.funscript` (File → Open, drag and
+drop, or a double click in the file manager) and the matching video opens with it,
+in the player when you are in player mode. The app finds the video next to the
+script, where it last saw it (also in subfolders there), or by name in the library
+folder. If the video was moved or renamed, it asks you to look for it once and
+remembers the new place. Scripts in the script folder whose video cannot be found
+show up in the library as “video missing”; a double click looks for it.
 
 **Statistics** (Device → Statistics…): playing time, strokes and days for today,
 7 days, 30 days and in total, plus favourite videos and patterns (by playing
@@ -677,7 +701,8 @@ src/vtf/
   funscript.py   file format
   batch.py       folder processing
   library.py     library, ratings
-  scriptdir.py   where scripts are saved and found (script folder)
+  scriptdir.py   where scripts and video data are saved and found
+  thumbs.py      preview pictures of the videos
   stats.py       local statistics
   i18n.py        languages (locale_en.py: English texts)
   gpu.py         OpenCL helpers

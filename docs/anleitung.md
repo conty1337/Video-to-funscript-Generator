@@ -20,7 +20,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
 
 ## In 8 Schritten zum Script
 
-1. **Video öffnen**: Strg+O oder die Datei ins Fenster ziehen.
+1. **Video öffnen**: Strg+O oder die Datei ins Fenster ziehen. Öffnest du eine
+   `.funscript`, geht das passende Video mit auf.
 2. **Methode wählen** (links):
    - *Bewegung im Bild*: erkennt die stärkste Bewegung selbst. Schnell, gut
      bei ruhiger Kamera und einer klaren Bewegung.
@@ -75,7 +76,8 @@ Strg+1 klappt die linke Leiste ein, Strg+2 die rechte.
    = Liste, **F3** springt zur nächsten Stelle. Steht dort „Prüfung ok“, musst du
    nicht das ganze Script ansehen.
 9. **Speichern**: Strg+S legt `<Video>.funscript` neben das Video. Alle Scripts
-   lieber (oder zusätzlich) in einem Ordner sammeln: Datei → „Speicherort für Scripts…“.
+   lieber (oder zusätzlich) in einem Ordner sammeln: Datei → „Speicherorte…“ (dort gibt es auch einen Ordner für die Video-Daten,
+   dann liegt neben den Videos nichts mehr von der App).
 
 ## Optionen (links unter „Optionen“)
 

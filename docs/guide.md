@@ -20,7 +20,8 @@ Ctrl+1 folds the left panel away, Ctrl+2 the right one.
 
 ## To the script in 8 steps
 
-1. **Open a video**: Ctrl+O or drop the file onto the window.
+1. **Open a video**: Ctrl+O or drop the file onto the window. Opening a
+   `.funscript` opens its video with it.
 2. **Choose a method** (left):
    - *Image motion*: finds the strongest movement by itself. Fast, good with a
      calm camera and one clear movement.
@@ -73,7 +74,8 @@ Ctrl+1 folds the left panel away, Ctrl+2 the right one.
    lost). The **Check** button in the timeline = list, **F3** jumps to the next
    spot. If it says “Check ok”, you do not have to look through the whole script.
 9. **Save**: Ctrl+S puts `<video>.funscript` next to the video. To collect all
-   scripts in one folder instead (or as well): File → “Where scripts are saved…”.
+   scripts in one folder instead (or as well): File → “Storage locations…” (there is also a folder for the video data, so
+   nothing of the app lies next to your videos).
 
 ## Options (left, under “Options”)
 

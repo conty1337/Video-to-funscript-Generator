@@ -3,8 +3,10 @@ search, sorting and a rating. Double click plays it."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QCursor, QPainter
+import threading
+
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QCursor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -24,10 +26,12 @@ from PySide6.QtWidgets import (
 
 from ..i18n import tr
 from ..library import SORTS, filtered, save_rating, scan
+from ..thumbs import get_thumb, make_thumb
 from . import theme
 from .heatbar import heat_color
 
-COL_NAME, COL_LEN, COL_RATE, COL_TEMPO, COL_STARS, COL_HEAT = range(6)
+COL_THUMB, COL_NAME, COL_LEN, COL_RATE, COL_TEMPO, COL_STARS, COL_HEAT = range(7)
+THUMB_W, THUMB_H = 64, 36    # preview picture in the list
 ENTRY_ROLE = Qt.UserRole + 1
 STAR = 18                # px per star
 
@@ -49,6 +53,46 @@ class _HeatDelegate(QStyledItemDelegate):
         w = r.width() / n
         for i, v in enumerate(e.heat):
             p.fillRect(QRectF(r.x() + i * w, r.y(), w + 0.6, r.height()), heat_color(v))
+
+
+class _ThumbDelegate(QStyledItemDelegate):
+    """The video's preview picture (thumbs.py), kept as pixmaps once loaded."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cache: dict[str, QPixmap] = {}
+
+    def sizeHint(self, opt, index):
+        return QSize(THUMB_W + 8, THUMB_H + 8)
+
+    def paint(self, p: QPainter, opt, index):
+        e = index.data(ENTRY_ROLE)
+        if e is None:
+            return
+        r = QRectF(opt.rect.x() + 4, opt.rect.center().y() - THUMB_H / 2, THUMB_W, THUMB_H)
+        path = get_thumb(e.name)
+        pm = None
+        if path is not None:
+            key = f"{path}|{path.stat().st_mtime_ns}"
+            pm = self.cache.get(key)
+            if pm is None:
+                pm = QPixmap(str(path)).scaled(THUMB_W * 2, THUMB_H * 2, Qt.KeepAspectRatioByExpanding,
+                                               Qt.SmoothTransformation)
+                self.cache[key] = pm
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing)
+        clip = QPainterPath()
+        clip.addRoundedRect(r, 4, 4)
+        p.setClipPath(clip)
+        p.fillRect(r, theme.qcolor(theme.RAISED))
+        if pm is not None and not pm.isNull():
+            src = QRectF(0, 0, pm.width(), pm.height())
+            scale = max(r.width() / src.width(), r.height() / src.height())
+            w, h = r.width() / scale, r.height() / scale
+            p.drawPixmap(r, pm, QRectF((src.width() - w) / 2, (src.height() - h) / 2, w, h))
+            if e.missing:
+                p.fillRect(r, theme.qcolor(theme.BG, 0.55))
+        p.restore()
 
 
 class _StarDelegate(QStyledItemDelegate):
@@ -74,6 +118,7 @@ class LibraryDialog(QDialog):
     playRequested = Signal(str)     # video path: play it (player)
     queueRequested = Signal(list)   # video paths: add to the playlist
     editRequested = Signal(str)     # video path: open in the editor
+    thumbsMade = Signal()           # background: missing preview pictures were created
 
     def __init__(self, qsettings, parent=None):
         super().__init__(parent)
@@ -94,8 +139,8 @@ class LibraryDialog(QDialog):
         rescan = QPushButton(theme.icon("rotate-ccw"), "")
         rescan.setToolTip(tr("Ordner neu einlesen"))
         rescan.clicked.connect(self.reload)
-        scripts = QPushButton(theme.icon("save"), tr("Script-Ordner…"))
-        scripts.setToolTip(tr("Wo Scripts gespeichert und gesucht werden: neben dem Video und/oder in einem Script-Ordner"))
+        scripts = QPushButton(theme.icon("save"), tr("Speicherorte…"))
+        scripts.setToolTip(tr("Wo Scripts und Video-Daten gespeichert und gesucht werden: neben dem Video und/oder in eigenen Ordnern"))
         scripts.clicked.connect(self._scripts)
         top.addWidget(pick)
         top.addWidget(rescan)
@@ -131,7 +176,9 @@ class LibraryDialog(QDialog):
         self.tree.setAlternatingRowColors(False)
         self.tree.setRootIsDecorated(False)
         self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.tree.setHeaderLabels([tr("Video"), tr("Länge"), tr("Hübe/min"), tr("Tempo"), tr("Bewertung"), tr("Heatmap")])
+        self.tree.setHeaderLabels(["", tr("Video"), tr("Länge"), tr("Hübe/min"), tr("Tempo"), tr("Bewertung"), tr("Heatmap")])
+        self.thumb_delegate = _ThumbDelegate(self.tree)
+        self.tree.setItemDelegateForColumn(COL_THUMB, self.thumb_delegate)
         self.tree.setItemDelegateForColumn(COL_HEAT, _HeatDelegate(self.tree))
         self.tree.setItemDelegateForColumn(COL_STARS, _StarDelegate(self.tree))
         h = self.tree.header()
@@ -140,8 +187,10 @@ class LibraryDialog(QDialog):
         h.setSectionResizeMode(COL_HEAT, QHeaderView.Fixed)
         self.tree.headerItem().setToolTip(COL_TEMPO, tr("Mittleres Tempo in Positionen pro Sekunde"))
         self.tree.headerItem().setToolTip(COL_RATE, tr("Hübe pro Minute, solange sich das Script bewegt"))
-        for c, w in ((COL_LEN, 72), (COL_RATE, 84), (COL_TEMPO, 72), (COL_STARS, 104), (COL_HEAT, 240)):
+        for c, w in ((COL_THUMB, THUMB_W + 8), (COL_LEN, 72), (COL_RATE, 84), (COL_TEMPO, 72), (COL_STARS, 104),
+                     (COL_HEAT, 240)):
             self.tree.setColumnWidth(c, w)
+        self.thumbsMade.connect(self.tree.viewport().update)
         self.tree.itemDoubleClicked.connect(lambda it, _c: self._play(it))
         self.tree.itemClicked.connect(self._clicked)
         lay.addWidget(self.tree, 1)
@@ -191,18 +240,44 @@ class LibraryDialog(QDialog):
             QApplication.restoreOverrideCursor()
         self.folder_label.setText(self.folder)
         self.refresh()
+        self._make_missing_thumbs()
+
+    def _make_missing_thumbs(self) -> None:
+        """Create the preview pictures that are missing, in the background (a few at a time)."""
+        todo = [e.video for e in self.entries if not e.missing and get_thumb(e.name) is None]
+        if not todo or getattr(self, "_thumb_thread", None) is not None:
+            return
+
+        def run():
+            for i, v in enumerate(todo):
+                make_thumb(v)
+                if i % 4 == 3 or i == len(todo) - 1:
+                    try:
+                        self.thumbsMade.emit()
+                    except RuntimeError:            # the window is gone
+                        return
+            self._thumb_thread = None
+        self._thumb_thread = threading.Thread(target=run, daemon=True, name="library-thumbs")
+        self._thumb_thread.start()
 
     def refresh(self) -> None:
         shown = filtered(self.entries, self.search.text(), self.sort.currentData(), self.min_stars.currentData())
         self.tree.clear()
         for e in shown:
-            it = QTreeWidgetItem([e.name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
+            name = e.name + tr(" · Video fehlt") if e.missing else e.name
+            it = QTreeWidgetItem(["", name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
                                   f"{e.avg_speed:.0f}", "", ""])
-            it.setToolTip(COL_NAME, str(e.video))
+            if e.missing:
+                it.setForeground(COL_NAME, theme.qcolor(theme.MUTED))
+                it.setToolTip(COL_NAME, tr("Video nicht gefunden (verschoben oder umbenannt?) – Doppelklick sucht es\n{0}",
+                                           e.script))
+            else:
+                it.setToolTip(COL_NAME, str(e.video))
             it.setToolTip(COL_TEMPO, tr("mittleres Tempo {0:.0f} Pos./s, höchstes {1:.0f}", e.avg_speed, e.max_speed))
             for c in (COL_LEN, COL_RATE, COL_TEMPO):
                 it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
                 it.setFont(c, theme.mono_font(12))
+            it.setData(COL_THUMB, ENTRY_ROLE, e)
             it.setData(COL_STARS, ENTRY_ROLE, e)
             it.setData(COL_HEAT, ENTRY_ROLE, e)
             self.tree.addTopLevelItem(it)
@@ -214,7 +289,7 @@ class LibraryDialog(QDialog):
 
     def rate(self, it, stars: int) -> None:
         e = self._entry(it)
-        if e is None:
+        if e is None or e.missing:
             return
         e.rating = max(0, min(5, stars))
         save_rating(e.video, e.rating)
@@ -250,12 +325,13 @@ class LibraryDialog(QDialog):
 
     def _play(self, it):
         e = self._entry(it)
-        if e is not None:
-            self.playRequested.emit(str(e.video))
+        if e is not None:                   # video missing: the script, the window looks for its video
+            self.playRequested.emit(str(e.script if e.missing else e.video))
             self.accept()
 
     def _queue(self):
-        paths = [str(self._entry(it).video) for it in self.tree.selectedItems() if self._entry(it)]
+        paths = [str(self._entry(it).video) for it in self.tree.selectedItems()
+                 if self._entry(it) and not self._entry(it).missing]
         if paths:
             self.queueRequested.emit(paths)
             self.count.setText(tr("{0} zur Playlist hinzugefügt", len(paths)))
@@ -263,6 +339,6 @@ class LibraryDialog(QDialog):
     def _edit(self):
         e = self._entry(self.tree.currentItem())
         if e is not None:
-            self.editRequested.emit(str(e.video))
+            self.editRequested.emit(str(e.script if e.missing else e.video))
             self.accept()
 

@@ -38,6 +38,24 @@ def icon_png_file() -> Path:
     return data_home() / "icons" / "hicolor" / "256x256" / "apps" / f"{APP_ID}.png"
 
 
+def mime_file() -> Path:
+    return data_home() / "mime" / "packages" / f"{APP_ID}.xml"
+
+
+#: .funscript files as their own type, so a double click in the file manager opens the app
+#: (which then opens the matching video)
+MIME_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-funscript">
+    <comment>Funscript</comment>
+    <comment xml:lang="de">Funscript</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.funscript"/>
+  </mime-type>
+</mime-info>
+"""
+
+
 def _quote(path: str) -> str:
     # Exec key quoting (freedesktop spec): wrap in quotes, escape " ` $ \
     out = path
@@ -62,7 +80,7 @@ def entry_text(appimage: Path) -> str:
         f"Icon={icon_png_file()}\n"
         "Terminal=false\n"
         "Categories=AudioVideo;Video;\n"
-        "MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;\n"
+        "MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;application/x-funscript;\n"
         f"StartupWMClass={APP_ID}\n"
         "X-VTF-Managed=true\n"
     )
@@ -92,10 +110,19 @@ def is_installed(appimage: Path) -> bool:
         return False
 
 
+def _mime_installed() -> bool:
+    try:
+        return mime_file().read_text(encoding="utf-8") == MIME_XML
+    except OSError:
+        return False
+
+
 def install(appimage: Path) -> bool:
     """Create or update the entry. Returns True if something was written."""
-    if is_installed(appimage) and icon_png_file().is_file():
+    if is_installed(appimage) and icon_png_file().is_file() and _mime_installed():
         return False
+    mime_file().parent.mkdir(parents=True, exist_ok=True)
+    mime_file().write_text(MIME_XML, encoding="utf-8")
     df = desktop_file()
     df.parent.mkdir(parents=True, exist_ok=True)
     for src, dst in ((ICON_SRC, icon_file()), (ICON_PNG_SRC, icon_png_file())):
@@ -112,7 +139,7 @@ def install(appimage: Path) -> bool:
 
 def uninstall() -> bool:
     removed = False
-    for f in (desktop_file(), icon_file(), icon_png_file()):
+    for f in (desktop_file(), icon_file(), icon_png_file(), mime_file()):
         try:
             f.unlink()
             removed = True
@@ -126,6 +153,7 @@ def uninstall() -> bool:
 def _refresh_menus() -> None:
     """Ask desktop environments to re-read menus; all optional and best effort."""
     for cmd in (["update-desktop-database", str(data_home() / "applications")],
+                ["update-mime-database", str(data_home() / "mime")],
                 ["kbuildsycoca6", "--noincremental"], ["kbuildsycoca5", "--noincremental"]):
         if shutil.which(cmd[0]):
             try:

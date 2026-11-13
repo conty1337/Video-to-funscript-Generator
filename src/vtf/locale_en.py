@@ -2057,10 +2057,6 @@ EN: dict[str, str] = {
         "{0} point pasted at {1}",
     "{0} Punkt gelöscht":
         "{0} point deleted",
-    "Speicherort für Scripts":
-        "Where scripts are saved",
-    "Speicherort für Scripts…":
-        "Where scripts are saved…",
     "Ohne Script-Ordner liegt jedes Script neben seinem Video, so finden es die meisten Player. Mit Script-Ordner landen alle Scripts zusätzlich (oder nur) dort. Bibliothek, Player, Stapel und andere Player suchen erst neben dem Video, dann im Script-Ordner und seinen Unterordnern.":
         "Without a script folder every script lies next to its video, where most players find it. With a script folder all scripts also (or only) go there. Library, player, batch and other players look next to the video first, then in the script folder and its subfolders.",
     "Wählen…":
@@ -2079,12 +2075,74 @@ EN: dict[str, str] = {
         "Scripts: next to the video and in {0}",
     "Scripts: in {0}":
         "Scripts: in {0}",
-    "Script-Ordner…":
-        "Script folder…",
-    "Wo Scripts gespeichert und gesucht werden: neben dem Video und/oder in einem Script-Ordner":
-        "Where scripts are saved and looked for: next to the video and/or in a script folder",
     " (neben dem Video und im Script-Ordner)":
         " (next to the video and in the script folder)",
     " (im Script-Ordner)":
         " (in the script folder)",
+    "Speicherorte":
+        "Storage locations",
+    "Speicherorte…":
+        "Storage locations…",
+    "Scripts":
+        "Scripts",
+    "Video-Daten":
+        "Video data",
+    "Tracking-Kästchen, Abschnitte, Kalibrierung, Schnitte und Lesezeichen stehen in <Video>.vtf.json. Mit einem Ordner für Video-Daten liegt diese Datei dort statt neben dem Video, so bleibt der Video-Ordner aufgeräumt. Vorhandene Dateien neben dem Video werden beim nächsten Speichern in den Ordner verschoben.":
+        "Tracking boxes, sections, calibration, cuts and bookmarks are kept in <video>.vtf.json. With a folder for video data this file lies there instead of next to the video, so the video folder stays tidy. Existing files next to the video move into the folder the next time they are saved.",
+    "Ordner für Video-Daten":
+        "Folder for video data",
+    "keiner – neben dem Video":
+        "none – next to the video",
+    "Kein Ordner: Video-Daten neben dem Video":
+        "No folder: video data next to the video",
+    "Wo Scripts und Video-Daten gespeichert und gesucht werden: neben dem Video und/oder in eigenen Ordnern":
+        "Where scripts and video data are saved and looked for: next to the video and/or in folders of their own",
+    " · Video fehlt":
+        " · video missing",
+    ", {0} blieben liegen (Ziel schon vorhanden oder Video unbekannt)":
+        ", {0} stayed (target exists already or video unknown)",
+    "Dateien mitnehmen?":
+        "Take the files along?",
+    "Im bisherigen Ordner {0} liegen {1}. Sollen sie {2} verschoben werden? Sonst bleiben sie dort und werden nicht mehr gefunden.":
+        "The previous folder {0} holds {1}. Move them {2}? Otherwise they stay there and are no longer found.",
+    "Script geladen: {0}":
+        "Script loaded: {0}",
+    "Video nicht gefunden":
+        "Video not found",
+    "Video nicht gefunden (verschoben oder umbenannt?) – Doppelklick sucht es\n{0}":
+        "Video not found (moved or renamed?) – a double click looks for it\n{0}",
+    "Video oder Script öffnen":
+        "Open video or script",
+    "Video suchen…":
+        "Look for the video…",
+    "Video zu „{0}“ suchen":
+        "Look for the video of “{0}”",
+    "Videos und Scripts ({0} *.funscript);;Alle Dateien (*)":
+        "Videos and scripts ({0} *.funscript);;All files (*)",
+    "Zum Script „{0}“ wurde kein Video gefunden. Verschoben oder umbenannt?":
+        "No video was found for the script “{0}”. Moved or renamed?",
+    "in den neuen Ordner {0}":
+        "into the new folder {0}",
+    "zurück neben die Videos":
+        "back next to the videos",
+    "{0} Datei mit Video-Daten":
+        "{0} file with video data",
+    "{0} Dateien mit Video-Daten":
+        "{0} files with video data",
+    "{0} Script":
+        "{0} script",
+    "{0} Scripts":
+        "{0} scripts",
+    "{0} im alten Ordner gelassen":
+        "{0} left in the old folder",
+    "{0} von {1} verschoben":
+        "{0} of {1} moved",
+    "Vorschaubilder speichern":
+        "Keep preview pictures",
+    "Ein kleines Bild pro Video für Bibliothek, Playlist und Handy, im Ordner für Video-Daten oder im App-Ordner. Aus: vorhandene Bilder werden gelöscht":
+        "One small picture per video for the library, the playlist and the phone, in the folder for video data or the app's folder. Off: existing pictures are deleted",
+    "{0} Vorschaubild gelöscht":
+        "{0} preview picture deleted",
+    "{0} Vorschaubilder gelöscht":
+        "{0} preview pictures deleted",
 }

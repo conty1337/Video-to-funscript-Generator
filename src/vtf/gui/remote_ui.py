@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from ..funscript import position_at
 from ..i18n import tr
 from ..remote import DEFAULT_PORT, RemoteServer, new_pin
+from ..thumbs import thumb_bytes
 from . import theme
 
 
@@ -56,7 +57,8 @@ class RemoteController(QObject):
         self.qs.setValue("remote/enabled", "true" if on else "false")
         if on and not self.enabled:
             self.error = ""
-            self.server = RemoteServer(lambda: self._state, self.command.emit, self.pin, self.port)
+            self.server = RemoteServer(lambda: self._state, self.command.emit, self.pin, self.port,
+                                       get_thumb=self._thumb)
             try:
                 self.server.start()
             except OSError as e:
@@ -130,6 +132,11 @@ class RemoteController(QObject):
             "player": w.player_mode, "curve": curve,
             "now": self.VIDEO_BEFORE_MS / (self.VIDEO_BEFORE_MS + self.VIDEO_AFTER_MS),
         }
+
+    def _thumb(self, index: int) -> bytes | None:
+        """Server thread: the preview picture of playlist entry `index` (read from disk only)."""
+        items = list(self.win.player.playlist.items)
+        return thumb_bytes(items[index]) if 0 <= index < len(items) else None
 
     def _video_command(self, c: dict) -> None:
         w = self.win

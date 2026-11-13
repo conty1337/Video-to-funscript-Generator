@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QSize, Qt, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -26,6 +27,7 @@ from PySide6.QtWidgets import (
 from ..batch import VIDEO_EXTS
 from ..i18n import plural, tr
 from ..playlist import COUNTDOWN_RANGE_S, LEAD_MS, Playlist, has_script
+from ..thumbs import get_thumb
 from . import theme
 
 PATH_ROLE = Qt.UserRole
@@ -113,6 +115,7 @@ class PlayerPanel(QWidget):
         lay.addWidget(head)
 
         self.list = PlaylistView()
+        self.list.setIconSize(QSize(48, 27))          # preview pictures (thumbs.py)
         lay.addWidget(self.list, 1)
         self.empty = QLabel(tr("Videos oder Ordner hierher ziehen\noder mit + hinzufügen.\n\nAbgespielt wird das Funscript, das neben dem Video liegt."))
         self.empty.setObjectName("caption")
@@ -245,6 +248,9 @@ class PlayerPanel(QWidget):
             item = QListWidgetItem(name if script else tr("{0}   · kein Script", name))
             item.setData(PATH_ROLE, path)
             item.setToolTip(path)
+            pic = get_thumb(path)
+            if pic is not None:
+                item.setIcon(QIcon(str(pic)))
             if i == pl.current:
                 item.setIcon(theme.icon("play", theme.ACCENT, 14))
                 item.setForeground(theme.qcolor(theme.TEXT))
