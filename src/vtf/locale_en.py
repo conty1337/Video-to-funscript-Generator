@@ -2163,4 +2163,24 @@ EN: dict[str, str] = {
         "Note: the “GPU usage” display mostly shows only the 3D unit. Decoding runs in the card's own video block (NVDEC) and hardly shows up there – visible e.g. with nvidia-smi dmon or nvtop. The tracking itself is computed by the CPU.",
     "Die NVIDIA-Karte dekodiert, die CPU verkleinert (diesem ffmpeg fehlt scale_cuda). Ist „CPU (FFmpeg)“ oben schneller, ist „Dekodierung: Software“ die bessere Wahl.":
         "The NVIDIA card decodes, the CPU scales (this ffmpeg lacks scale_cuda). If “CPU (FFmpeg)” above is faster, “Decoding: Software” is the better choice.",
+    'Allgemein':
+        'General',
+    'Countdown-Länge':
+        'Countdown length',
+    'Darstellung':
+        'Appearance',
+    'Dieselben Einstellungen stehen auch unter der Playlist.':
+        'The same settings are also below the playlist.',
+    'Einstellungen':
+        'Settings',
+    'Einstellungen…':
+        'Settings…',
+    'Gilt ab der nächsten Analyse. Dieselben Einstellungen stehen auch in der linken Leiste unter „Optionen“.':
+        'Applies from the next analysis. The same settings are also in the left bar under “Options”.',
+    'Jetzt nach Updates suchen':
+        'Check for updates now',
+    'Startmenü':
+        'Start menu',
+    'Verbinden, Zeitversatz, Tempo und Hubbereich: im Fenster „Gerät“ (Strg+D).':
+        'Connecting, time offset, speed and stroke range: in the “Device” window (Ctrl+D).',
 }

@@ -1960,3 +1960,57 @@ def test_leaving_saves_settings_and_skips_the_teardown(monkeypatch):
     monkeypatch.setattr(gui_app.os, "_exit", lambda code: calls.append(("exit", code)))
     gui_app._leave(Win(), 3)
     assert calls == ["sync", ("exit", 3)]
+
+
+def test_settings_window(app, tmp_path, monkeypatch):
+    """One window for the settings: it changes the same values as the places they come from."""
+    from vtf import i18n
+    from vtf.gui import theme
+    from vtf.gui.main_window import MainWindow
+    from vtf.gui.settings_dialog import PAGES, SettingsDialog
+    from vtf.safety import SafetySettings
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, "information", lambda *a: None)
+    w = MainWindow()
+    try:
+        titles = [a.text() for m in w.menuBar().actions() for a in m.menu().actions()]
+        assert "Einstellungen…" in titles
+        assert not {"Speicherorte…", "Sprache", "Akzentfarbe", "Automatisch aktualisieren",
+                    "Im Startmenü anzeigen"} & set(titles)
+        d = SettingsDialog(w, "device")
+        assert d.stack.count() == d.nav.count() == len(PAGES) and d.stack.currentIndex() == PAGES.index("device")
+        assert d.nav.item(0).text() == "Allgemein"
+
+        d.language.setCurrentIndex(d.language.findData("en"))
+        assert i18n.chosen() == "en"
+        i18n.save_ui(language="system")
+        chosen = []                               # restyling the whole app is slow here: only the choice
+        monkeypatch.setattr(w.look, "set_accent", lambda c: (chosen.append(c), theme.set_accent(c)))
+        blue = theme.ACCENTS["blue"][1]
+        d._accent_chosen(d.accent.findData(blue))
+        assert chosen == [blue] and d.accent.currentData() == blue
+        theme.set_accent(theme.DEFAULT_ACCENT)
+        d.auto_update.setChecked(not w.updates.auto_action.isChecked())
+        assert d.auto_update.isChecked() == w.updates.auto_action.isChecked()
+
+        d.hwaccel.setCurrentIndex(d.hwaccel.findData("cuda"))
+        assert w.panel.hwaccel.currentData() == "cuda"
+        d.hwaccel.setCurrentIndex(d.hwaccel.findData("auto"))
+        d.countdown_s.setValue(7)
+        assert w.player.countdown_s.value() == 7
+        d.quiet.setChecked(not w.player.quiet_cb.isChecked())
+        assert d.quiet.isChecked() == w.player.quiet_cb.isChecked()
+        d.quiet.setChecked(not d.quiet.isChecked())
+
+        d.safety.safe_on.setChecked(True)
+        d.safety.safe_max.setValue(45)
+        assert w.devices.safety.settings.enabled and w.devices.safety.settings.max_minutes == 45
+        d.safety.reset()
+        assert w.devices.safety.settings == SafetySettings()
+        d.vibe.setCurrentIndex(d.vibe.count() - 1)
+        assert w.devices.qs.value("device/vibe") == d.vibe.currentData()
+        d.close()
+    finally:
+        w.dirty = False
+        w.close()
+        w.deleteLater()

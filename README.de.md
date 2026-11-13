@@ -75,7 +75,7 @@ Eine Datei, keine Installation, Python wird nicht benötigt:
    ```
    Oder in Dolphin: Rechtsklick → Eigenschaften → Berechtigungen → „Ausführbar“.
 3. Beim ersten Start trägt sich die App selbst ins Startmenü ein (abschaltbar
-   unter Hilfe → „Im Startmenü anzeigen“). Am besten legst du die Datei vorher
+   unter Einstellungen → Allgemein → „Im Startmenü anzeigen“). Am besten legst du die Datei vorher
    an ihren festen Platz, z. B. `~/Applications`. Wird sie verschoben, passt
    der nächste Start den Eintrag an. Wer **Gear Lever** nutzt, bekommt keinen
    doppelten Eintrag.
@@ -84,7 +84,7 @@ Eine Datei, keine Installation, Python wird nicht benötigt:
 Version, lädt sie im Hintergrund, prüft sie per SHA-256 und ersetzt die
 AppImage-Datei. Der nächste Start oder „Neu starten“ in der Statusleiste nutzt
 dann die neue Version. Manuell: Hilfe → „Nach Updates suchen“, abschaltbar
-über Hilfe → „Automatisch aktualisieren“. Dafür muss der Ordner mit dem
+unter Einstellungen → Allgemein → „Automatisch aktualisieren“. Dafür muss der Ordner mit dem
 AppImage beschreibbar sein (z. B. `~/Applications`, wie bei Gear Lever).
 
 FFmpeg und die OpenCL-Treiber kommen weiterhin vom System (siehe unten).
@@ -361,7 +361,7 @@ Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Edi
 
 ![Bibliothek](docs/images/de/library.png)
 
-**Speicherorte** (Datei → „Speicherorte…“, auch in der Bibliothek): Ohne
+**Speicherorte** (Datei → „Einstellungen…“ → Speicherorte, auch in der Bibliothek): Ohne
 Einstellung liegt jede Datei neben ihrem Video. Zwei Ordner ändern das:
 
 - **Script-Ordner**: ein Ordner für alle deine Scripts. Strg+S speichert dann
@@ -406,12 +406,12 @@ aus der Muster-Steuerung. Alles bleibt auf dem Rechner
 
 ### Sprache und Akzentfarbe
 
-Ansicht → **Sprache**: Deutsch oder Englisch, voreingestellt ist die Sprache des
+Einstellungen (Datei → „Einstellungen…“, Strg+,) → Allgemein → **Sprache**: Deutsch oder Englisch, voreingestellt ist die Sprache des
 Systems. Die Sprache wechselt nach einem Neustart, als AppImage startet die App
 auf Wunsch gleich neu. Übersetzt ist alles, auch die Muster und die
 Handy-Fernbedienung.
 
-Ansicht → **Akzentfarbe**: Bernstein, Blau, Türkis, Grün, Violett, Pink oder
+Einstellungen → Allgemein → **Akzentfarbe**: Bernstein, Blau, Türkis, Grün, Violett, Pink oder
 über „Eigene Farbe…“ jede beliebige, mit Vorschau beim Aussuchen. Der Akzent
 zeichnet die Script-Kurve, den Hauptknopf, den Fortschritt, die Hub-Leiste und
 Bereich 1 beim Tracking aus, auch auf der Handy-Fernbedienung. Ist die Farbe

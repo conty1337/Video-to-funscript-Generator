@@ -1,5 +1,5 @@
 """Tracking preparation per video: <video>.vtf.json, next to the video or in the folder for
-video data (Datei → Speicherorte). A file found next to the video moves into that folder the
+video data (Einstellungen → Speicherorte). A file found next to the video moves into that folder the
 next time it is saved.
 
 Holds the tracking sections (areas, start/end, calibration, corrections) so a

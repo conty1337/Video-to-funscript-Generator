@@ -74,7 +74,7 @@ Ctrl+1 folds the left panel away, Ctrl+2 the right one.
    lost). The **Check** button in the timeline = list, **F3** jumps to the next
    spot. If it says “Check ok”, you do not have to look through the whole script.
 9. **Save**: Ctrl+S puts `<video>.funscript` next to the video. To collect all
-   scripts in one folder instead (or as well): File → “Storage locations…” (there is also a folder for the video data, so
+   scripts in one folder instead (or as well): File → “Settings…” → Storage locations (there is also a folder for the video data, so
    nothing of the app lies next to your videos).
 
 ## Options (left, under “Options”)

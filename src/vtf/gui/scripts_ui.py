@@ -6,6 +6,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -63,16 +64,21 @@ class _FolderRow(QHBoxLayout):
 
 
 class ScriptFolderDialog(QDialog):
-    """Changes apply at once (scriptdir.save_settings)."""
+    """Changes apply at once (scriptdir.save_settings). embedded: a page of the settings
+    window (no window of its own, no close button)."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embedded: bool = False):
         super().__init__(parent)
         self.setWindowTitle(tr("Speicherorte"))
-        self.setMinimumWidth(560)
         sd = scriptdir.settings()
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 24, 24, 24)
+        if embedded:
+            self.setWindowFlags(Qt.Widget)
+            lay.setContentsMargins(0, 0, 0, 0)
+        else:
+            self.setMinimumWidth(560)
+            lay.setContentsMargins(24, 24, 24, 24)
         lay.setSpacing(12)
         lay.setSizeConstraint(QLayout.SetMinimumSize)
 
@@ -117,12 +123,13 @@ class ScriptFolderDialog(QDialog):
         self.result.setWordWrap(True)
         lay.addWidget(self.result)
 
-        foot = QHBoxLayout()
-        foot.addStretch(1)
-        close = QPushButton(tr("Schließen"))
-        close.clicked.connect(self.accept)
-        foot.addWidget(close)
-        lay.addLayout(foot)
+        if not embedded:
+            foot = QHBoxLayout()
+            foot.addStretch(1)
+            close = QPushButton(tr("Schließen"))
+            close.clicked.connect(self.accept)
+            foot.addWidget(close)
+            lay.addLayout(foot)
         self.scripts.set_folder(sd.folder, notify=False)
         self.data.set_folder(sd.data_folder, notify=False)
         self._refresh()

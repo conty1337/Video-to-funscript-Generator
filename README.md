@@ -71,15 +71,15 @@ One file, nothing to install, no Python needed:
    ```
    Or in Dolphin: right click → Properties → Permissions → “Is executable”.
 3. On its first start the app adds itself to the start menu (can be switched off
-   under Help → “Show in the start menu”). Best put the file in its permanent
+   under Settings → General → “Show in the start menu”). Best put the file in its permanent
    place first, e.g. `~/Applications`. If you move it, the next start updates
    the entry. **Gear Lever** users get no duplicate entry.
 
 **Updates come by themselves:** on start the app looks for a new version,
 downloads it in the background, checks it by SHA-256 and replaces the AppImage
 file. The next start, or “Restart” in the status bar, uses the new version.
-Manually: Help → “Check for updates”; switch off under Help → “Update
-automatically”. The folder with the AppImage must be writable (e.g.
+Manually: Help → “Check for updates”; switch off under Settings → General →
+“Update automatically”. The folder with the AppImage must be writable (e.g.
 `~/Applications`, as with Gear Lever).
 
 FFmpeg and the OpenCL drivers still come from the system (see below). Without
@@ -337,7 +337,7 @@ The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
 
 ![Library](docs/images/en/library.png)
 
-**Storage locations** (File → “Storage locations…”, also in the library): by
+**Storage locations** (File → “Settings…” → Storage locations, also in the library): by
 default every file lies next to its video. Two folders change that:
 
 - **Script folder**: one folder for all your scripts. Ctrl+S then saves into it
@@ -379,12 +379,12 @@ from the pattern control. Everything stays on your computer
 
 ### Language and accent colour
 
-View → **Language**: English or German, by default the language of the system.
+Settings (File → “Settings…”, Ctrl+,) → General → **Language**: English or German, by default the language of the system.
 The language changes after a restart; as an AppImage the app offers to restart
 right away. Everything is translated, including the patterns and the phone
 remote.
 
-View → **Accent colour**: amber, blue, teal, green, violet, pink, or any colour
+Settings → General → **Accent colour**: amber, blue, teal, green, violet, pink, or any colour
 via “Custom colour…”, with a live preview while choosing. The accent marks the
 script curve, the main button, progress, the stroke rail and tracking area 1,
 on the phone remote too. If the colour is dark, the text on it turns white.

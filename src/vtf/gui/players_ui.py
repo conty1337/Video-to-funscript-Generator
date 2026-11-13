@@ -70,7 +70,7 @@ class ExternalSync(QObject):
         return [f for f in str(self.qs.value("players/folder", "") or "").split(";") if f]
 
     def folders(self) -> list[str]:
-        """Its own script folders, then the app's script folder (Datei → Speicherorte)."""
+        """Its own script folders, then the app's script folder (Einstellungen → Speicherorte)."""
         own = self.own_folders()
         shared = script_settings().folder
         return own + ([str(shared)] if shared is not None and str(shared) not in own else [])

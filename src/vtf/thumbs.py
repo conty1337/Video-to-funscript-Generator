@@ -2,7 +2,7 @@
 
 One JPEG per video name (<name>.jpg), kept in the folder for video data (thumbs/ inside it)
 or else in ~/.local/share/video-to-funscript/thumbs, never next to the video. Taken from a
-frame with something on it, not the black start. Can be switched off (Speicherorte), then
+frame with something on it, not the black start. Can be switched off (Einstellungen → Speicherorte), then
 the pictures are deleted. No Qt.
 """
 
