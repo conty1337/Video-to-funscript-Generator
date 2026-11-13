@@ -322,7 +322,47 @@ def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
         w.axis_actions["R1"] = []                                     # the user cleared Roll
         w.export()
         assert not roll.exists()
-        assert Funscript.load(near).metadata == {"creator": "Someone", "title": "T"}
+        assert Funscript.load(near).metadata == {"creator": "Someone", "title": "T", "vtf_video": "sine.avi"}
     finally:
         w.dirty = False
         w.close()
+
+
+def test_library_lists_scripts_whose_video_lies_elsewhere(cfg):
+    """Scripts (and data) on a network folder, videos local: the library of that folder lists them."""
+    from vtf.library import scan
+    nas, local = cfg / "nas", cfg / "local"
+    local.mkdir()
+    v = local / "Clip.mp4"; v.write_bytes(b"\0")
+    scriptdir.save_settings(nas, False, data_folder=nas)
+    scriptdir.remember_video(v)
+    _script(nas / "Clip.funscript")
+    _script(nas / "Loose.funscript")
+    entries = scan(nas)
+    assert [(e.name, e.missing, e.video) for e in entries] == [
+        ("Clip", False, v), ("Loose", True, nas / "Loose")]
+    assert [e.name for e in scan(local)] == ["Clip", "Loose"]      # Clip once, not twice
+    scriptdir.save_settings(None)                                  # script folder not set: still found
+    assert [(e.name, e.missing) for e in scan(nas)] == [("Clip", False), ("Loose", True)]
+
+
+def test_script_names_its_video_for_other_computers(cfg, tmp_path, monkeypatch):
+    """Saving writes the video into the script (relative). Another computer that mounts the
+    share elsewhere and never saw the video finds it, and the library lists it."""
+    from vtf.funscript import Action, Funscript
+    from vtf.library import scan
+    share = tmp_path / "pc" / "nas"
+    v = share / "Videos" / "Clip.mp4"; v.parent.mkdir(parents=True); v.write_bytes(b"\0")
+    s = share / "Scripts" / "Clip.funscript"; s.parent.mkdir()
+    assert scriptdir.video_link(v, s) == "../Videos/Clip.mp4"
+    Funscript([Action(0, 0), Action(500, 100)],
+              metadata={scriptdir.LINK_KEY: scriptdir.video_link(v, s)}).save(s)
+    laptop = tmp_path / "laptop" / "mnt" / "nas"                   # same share, other mount point
+    laptop.parent.mkdir(parents=True)
+    share.rename(laptop)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "laptop-config"))
+    scriptdir.save_settings(laptop / "Scripts", False, data_folder=laptop / "Scripts")
+    assert scriptdir.find_video(laptop / "Scripts" / "Clip.funscript") == laptop / "Videos" / "Clip.mp4"
+    assert scriptdir.find_video(laptop / "Scripts" / "Clip.vtf.json") == laptop / "Videos" / "Clip.mp4"
+    assert [(e.name, e.missing) for e in scan(laptop / "Scripts")] == [("Clip", False)]
+    assert scriptdir.linked_video(laptop / "Scripts" / "fehlt.funscript") is None

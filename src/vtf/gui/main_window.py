@@ -61,11 +61,13 @@ from ..quality import check as check_script
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
+    LINK_KEY,
     find_script,
     find_video,
     remember_video,
     remembered_video,
     save_paths,
+    video_link,
     video_stem,
 )
 from ..scriptdir import settings as script_settings
@@ -2077,7 +2079,8 @@ class MainWindow(QMainWindow):
                         if prune and axis != "L0":
                             target.unlink(missing_ok=True)
                         continue
-                    Funscript(acts, metadata=self._metadata_for(target, meta)).save(target)
+                    Funscript(acts, metadata={**self._metadata_for(target, meta),
+                                                LINK_KEY: video_link(self.video_path, target)}).save(target)
                     if target.name not in saved:
                         saved.append(target.name)
         except OSError as e:
@@ -2209,6 +2212,8 @@ class MainWindow(QMainWindow):
             lines.append(tr("Die NVIDIA-Karte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „NVIDIA“ wird das genutzt."))
         elif "vaapi-gpu" in ok:
             lines.append(tr("Die Grafikkarte dekodiert und verkleinert – mit „Dekodierung: Automatisch“ oder „VAAPI“ wird das genutzt."))
+        elif "cuda" in ok:
+            lines.append(tr("Die NVIDIA-Karte dekodiert, die CPU verkleinert (diesem ffmpeg fehlt scale_cuda). Ist „CPU (FFmpeg)“ oben schneller, ist „Dekodierung: Software“ die bessere Wahl."))
         elif nvidia:
             lines.append(tr("Die NVIDIA-Karte kann dieses Video nicht dekodieren (Treiber, Codec oder ffmpeg ohne NVDEC). Unter Nobara hilft meist: sudo dnf install ffmpeg xorg-x11-drv-nvidia-cuda-libs"))
         else:
