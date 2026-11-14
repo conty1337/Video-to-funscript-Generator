@@ -640,6 +640,16 @@ def test_player_countdown(app):
     assert w.view._countdown == 5
     w._update_countdown(27_000)
     assert w.view._countdown == 3
+    # mid-video: strokes stop, a cut follows; its pause counts down, no countdown before it
+    w.stroke_actions = lambda: [Action(0, 0), Action(500, 90), Action(1000, 0), Action(30_000, 0),
+                                Action(30_400, 90)]
+    w.player.cut_pause_s.setValue(5)
+    w._update_countdown(22_500)
+    assert w.view._countdown is None
+    w.player.cut_pause_s.setValue(0)                                 # no pause at cuts: the countdown runs
+    w._update_countdown(22_500)
+    assert w.view._countdown == 5
+    w.player.cut_pause_s.setValue(5)
     w.cuts = []
     w.player.countdown_cb.setChecked(False)
     w._update_countdown(25_000)
