@@ -1,3 +1,3 @@
 """Video-to-Funscript Generator."""
 
-__version__ = "0.10.30"
+__version__ = "0.10.31"
