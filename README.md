@@ -302,7 +302,9 @@ player also skips every pause without strokes from 15 s (“Skip pauses without
 strokes”; after the last stroke the next video comes). As at the start, the
 countdown runs before it goes on, after every skipped cut and every pause from 10 s.
 After a skipped cut the video also stops for a moment and counts down (“Pause
-after”, 5 s by default, 0 = off), so it does not go on right away.
+after”, 5 s by default, 0 = off), so it does not go on right away. This pause
+replaces the countdown there; a cut before the first stroke only gets the usual
+countdown before the start.
 
 **Bookmarks and rhythm**: B sets a named bookmark, Alt+→/← jump to the
 next/previous one, the “Bookmarks” menu lists them all. They show in curve and

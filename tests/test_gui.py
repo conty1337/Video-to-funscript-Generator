@@ -1805,11 +1805,19 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     assert w.view._countdown == 1 and not w.timer.isActive()
     w._cut_wait_tick()
     assert w.timer.isActive() and not w._cut_wait.isActive()
+    w._update_countdown(2600.0)
+    assert w.view._countdown is None                                 # the pause was the countdown: no second one
     assert w._player_skip(1500.0) and w._cut_wait.isActive()
     w.toggle_play()                                                  # Space: on at once
     assert w.timer.isActive() and not w._cut_wait.isActive()
     w.player.cut_pause_s.setValue(0)                                 # off: plays straight on
     assert w._player_skip(1500.0) and w.timer.isActive()
+    # a cut before the script starts: no pause, only the countdown before the start
+    w.player.cut_pause_s.setValue(3)
+    w.curve.set_actions([Action(0, 0), Action(5500, 0), Action(5800, 90)])
+    assert w._player_skip(1500.0) and w.timer.isActive() and not w._cut_wait.isActive()
+    w._update_countdown(2600.0)
+    assert w.view._countdown == 3
     w.pause()
     w.player.cuts_cb.setChecked(False)
     assert not w._player_skip(1500.0)
