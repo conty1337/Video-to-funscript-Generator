@@ -47,7 +47,7 @@ from ..funscript import (
 )
 from ..generator import generate, generate_axes
 from ..i18n import plural, tr
-from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, skip_target
+from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, script_start_ms, skip_target
 from ..prep import (
     load_bookmarks,
     load_cuts,
@@ -171,6 +171,7 @@ class MainWindow(QMainWindow):
         self._cut_start: float | None = None          # X pressed once: the cut starts here
         self._quiet_cache: tuple = ((), [])
         self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
+        self._countdown_off: int | None = None        # after the pause at a cut: no second countdown before this
         self.issues: list = []                        # script check: places worth a look
         from ..stats import Recorder
         self.stats = Recorder()                       # playing time, strokes (only on this computer)
@@ -730,6 +731,7 @@ class MainWindow(QMainWindow):
         self.cuts = load_cuts(path)
         self._cut_start = None
         self._skip_resume = None
+        self._countdown_off = None
         self._show_cuts()
         self.curve.set_data(self.curve.t_ms[:0], self.curve.signal[:0], [], info.duration * 1000)
         self.setWindowTitle(tr("{0} – Video-to-Funscript Generator", Path(path).name))
@@ -979,12 +981,16 @@ class MainWindow(QMainWindow):
             self.seek_ms(to)
             self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
             self._status(tr("Übersprungen bis {0}", _fmt(to)))
-            wait = self.player.cut_pause_s.value() if any(a <= media_ms < b for a, b in cuts) else 0
+            # a cut before the script starts needs no pause: the countdown before the start runs anyway
+            started = script_start_ms(self.stroke_actions())
+            in_cut = any(a <= media_ms < b for a, b in cuts) and started is not None and started < media_ms
+            wait = self.player.cut_pause_s.value() if in_cut else 0
             if wait and self.timer.isActive():
                 self.pause()
                 self._cut_wait_left = wait
                 self.view.set_countdown(wait)
                 self._cut_wait.start()
+                self._countdown_off = self._skip_resume       # this pause was the countdown
         return True
 
     def _cut_wait_tick(self):
@@ -1190,7 +1196,9 @@ class MainWindow(QMainWindow):
         """Player: count the last seconds down before the script starts, and before it
         goes on after a pause (a skipped cut, or just a long still stretch)."""
         sec = None
-        if self.player_mode and self.player.countdown_cb.isChecked():
+        if self._countdown_off is not None and ms >= self._countdown_off:
+            self._countdown_off = None
+        if self.player_mode and self.player.countdown_cb.isChecked() and self._countdown_off is None:
             start = resume_ms(ms, self.stroke_actions())
             if start is None and self._skip_resume is not None and ms < self._skip_resume:
                 start = self._skip_resume            # just jumped over a cut: count down to it too
@@ -1204,6 +1212,7 @@ class MainWindow(QMainWindow):
         idx = max(0, min(int(idx), self.frame_count - 1))
         self._stat_ms = None                     # a jump is not played time
         self._cut_wait.stop()
+        self._countdown_off = None
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         self._read_frame()
         if self.timer.isActive():   # keep playing from the new position

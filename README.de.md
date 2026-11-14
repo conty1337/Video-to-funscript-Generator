@@ -324,6 +324,8 @@ nächste Video). Wie am Anfang zählt dann der Countdown herunter, bis es
 weitergeht – nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
 Nach einem übersprungenen Schnitt hält das Video außerdem kurz an und zählt
 herunter („Pause danach“, Standard 5 s, 0 = aus), damit es nicht sofort weitergeht.
+Diese Pause ersetzt dort den Countdown; ein Schnitt vor dem ersten Hub bekommt nur
+den normalen Countdown vor dem Start.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen
