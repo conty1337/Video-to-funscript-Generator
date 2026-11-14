@@ -139,3 +139,18 @@ def test_remember_and_resume_spot():
     for k in range(RESUME_MAX + 5):
         remember_spot(spots, str(k), 100_000, 600_000)
     assert len(spots) == RESUME_MAX and "0" not in spots and str(RESUME_MAX + 4) in spots
+
+
+def test_countdown_time_skips_cuts():
+    """The countdown counts playing time: a cut on the way does not count, and skipping the
+    quiet intro starts early enough for the whole countdown."""
+    from vtf.funscript import Action
+    from vtf.playlist import before_ms, intro_skip_ms, play_ms
+    cuts = [(20_000, 24_000)]
+    assert play_ms(18_000, 30_000, cuts) == 8_000 and play_ms(25_000, 30_000, cuts) == 5_000
+    assert play_ms(21_000, 30_000, cuts) == 6_000                     # inside the cut: from its end
+    assert before_ms(30_000, 10_000, cuts) == 16_000                  # 4 s cut -> 4 s earlier
+    assert before_ms(30_000, 5_000, cuts) == 25_000                   # cut not in the way
+    assert before_ms(30_000, 10_000, [(17_000, 18_000), (20_000, 24_000)]) == 15_000
+    acts = [Action(0, 50), Action(30_000, 50), Action(30_400, 90)]
+    assert intro_skip_ms(acts, 10_000) == 20_000 and intro_skip_ms(acts, 10_000, cuts) == 16_000
