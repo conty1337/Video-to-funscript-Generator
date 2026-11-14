@@ -1197,7 +1197,8 @@ class MainWindow(QMainWindow):
 
     def _update_countdown(self, ms: float):
         """Player: count the last seconds down before the script starts, and before it
-        goes on after a pause (a skipped cut, or just a long still stretch)."""
+        goes on after a pause (a skipped cut, or just a long still stretch). Before a cut
+        that gets its own pause (cut_pause_s) only that pause counts down."""
         sec = None
         if self._countdown_off is not None and ms >= self._countdown_off:
             self._countdown_off = None
@@ -1205,8 +1206,12 @@ class MainWindow(QMainWindow):
             start = resume_ms(ms, self.stroke_actions())
             if start is None and self._skip_resume is not None and ms < self._skip_resume:
                 start = self._skip_resume            # just jumped over a cut: count down to it too
-            left = play_ms(ms, start, self._skipped_cuts()) if start is not None else 0
-            if start is not None and 0 < start - ms and left <= self.player.lead_ms():
+            cuts = self._skipped_cuts()
+            left = play_ms(ms, start, cuts) if start is not None else 0
+            began = script_start_ms(self.stroke_actions())
+            pause_ahead = (start is not None and began is not None and self.player.cut_pause_s.value() > 0
+                           and any(ms <= a < start and began < a for a, _b in cuts))
+            if start is not None and 0 < start - ms and left <= self.player.lead_ms() and not pause_ahead:
                 sec = max(1, math.ceil(left / 1000))      # playing time: the cuts on the way are jumped over
         self.view.set_countdown(sec)
 
