@@ -1795,6 +1795,21 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     w.player.countdown_cb.setChecked(True)
     w._update_countdown(2500.0)
     assert w.view._countdown == 3
+    # while playing: the video stops after the cut and counts down, then plays on
+    w.player.cut_pause_s.setValue(3)
+    w.toggle_play()
+    assert w._player_skip(1500.0) and not w.timer.isActive() and w.view._countdown == 3
+    w._cut_wait_tick()
+    w._cut_wait_tick()
+    assert w.view._countdown == 1 and not w.timer.isActive()
+    w._cut_wait_tick()
+    assert w.timer.isActive() and not w._cut_wait.isActive()
+    assert w._player_skip(1500.0) and w._cut_wait.isActive()
+    w.toggle_play()                                                  # Space: on at once
+    assert w.timer.isActive() and not w._cut_wait.isActive()
+    w.player.cut_pause_s.setValue(0)                                 # off: plays straight on
+    assert w._player_skip(1500.0) and w.timer.isActive()
+    w.pause()
     w.player.cuts_cb.setChecked(False)
     assert not w._player_skip(1500.0)
     w.seek_ms(1000)
@@ -1998,6 +2013,9 @@ def test_settings_window(app, tmp_path, monkeypatch):
         d.hwaccel.setCurrentIndex(d.hwaccel.findData("auto"))
         d.countdown_s.setValue(7)
         assert w.player.countdown_s.value() == 7
+        d.cut_pause_s.setValue(0)
+        assert w.player.cut_pause_s.value() == 0 and d.cut_pause_s.text() == "aus"
+        d.cut_pause_s.setValue(5)
         d.quiet.setChecked(not w.player.quiet_cb.isChecked())
         assert d.quiet.isChecked() == w.player.quiet_cb.isChecked()
         d.quiet.setChecked(not d.quiet.isChecked())

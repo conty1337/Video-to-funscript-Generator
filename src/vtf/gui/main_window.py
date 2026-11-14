@@ -359,6 +359,9 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_toolbar()
         self.timer = QTimer(self)
+        self._cut_wait = QTimer(self, interval=1000)    # player: still after a skipped cut, counting down
+        self._cut_wait.timeout.connect(self._cut_wait_tick)
+        self._cut_wait_left = 0
         self.timer.setTimerType(Qt.PreciseTimer)
         self.timer.timeout.connect(self._next_frame)
         self._clock = QElapsedTimer()
@@ -968,7 +971,24 @@ class MainWindow(QMainWindow):
             self.seek_ms(to)
             self._skip_resume = resume_ms(to, self.stroke_actions(), pause_ms=0)
             self._status(tr("Übersprungen bis {0}", _fmt(to)))
+            wait = self.player.cut_pause_s.value() if any(a <= media_ms < b for a, b in cuts) else 0
+            if wait and self.timer.isActive():
+                self.pause()
+                self._cut_wait_left = wait
+                self.view.set_countdown(wait)
+                self._cut_wait.start()
         return True
+
+    def _cut_wait_tick(self):
+        """One second of the pause after a cut gone; at the end the video plays on."""
+        self._cut_wait_left -= 1
+        if self._cut_wait_left > 0:
+            self.view.set_countdown(self._cut_wait_left)
+            return
+        self._cut_wait.stop()
+        self.view.set_countdown(None)
+        if not self.timer.isActive():
+            self.toggle_play()
 
     # ------------------------------------------------------------ bookmarks
     def _show_bookmarks(self):
@@ -1175,6 +1195,7 @@ class MainWindow(QMainWindow):
             return
         idx = max(0, min(int(idx), self.frame_count - 1))
         self._stat_ms = None                     # a jump is not played time
+        self._cut_wait.stop()
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         self._read_frame()
         if self.timer.isActive():   # keep playing from the new position
@@ -1222,6 +1243,7 @@ class MainWindow(QMainWindow):
             self.rail.set_device_position(self.devices.device_position())
 
     def toggle_play(self):
+        self._cut_wait.stop()                    # Space during the pause after a cut: on at once
         if not self.cap:
             return
         if self.timer.isActive():

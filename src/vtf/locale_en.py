@@ -2183,4 +2183,10 @@ EN: dict[str, str] = {
         'Start menu',
     'Verbinden, Zeitversatz, Tempo und Hubbereich: im Fenster „Gerät“ (Strg+D).':
         'Connecting, time offset, speed and stroke range: in the “Device” window (Ctrl+D).',
+    'Pause danach':
+        'Pause after',
+    'Pause nach Schnitt':
+        'Pause after a cut',
+    'Nach einem übersprungenen Schnitt hält das Video so lange an und zählt herunter, dann geht es weiter (0 = aus)':
+        'After a skipped cut the video stops this long and counts down, then it goes on (0 = off)',
 }

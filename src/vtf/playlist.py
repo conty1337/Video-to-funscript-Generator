@@ -37,6 +37,8 @@ QUIET_MIN_MS = 15_000
 QUIET_GRACE_MS = 1_000
 #: the countdown can be set from ... to ... seconds (default LEAD_MS)
 COUNTDOWN_RANGE_S = (3, 30)
+#: after a skipped cut the player stands still this long, counting down (0 = off)
+CUT_PAUSE_S = 5
 
 
 def _moves(actions, min_change: int = 10) -> list[tuple[int, int]]:

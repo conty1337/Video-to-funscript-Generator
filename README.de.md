@@ -318,6 +318,8 @@ wieder raus. Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s
 von selbst („Pausen ohne Hübe überspringen“; nach dem letzten Hub kommt das
 nächste Video). Wie am Anfang zählt dann der Countdown herunter, bis es
 weitergeht – nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
+Nach einem übersprungenen Schnitt hält das Video außerdem kurz an und zählt
+herunter („Pause danach“, Standard 5 s, 0 = aus), damit es nicht sofort weitergeht.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen

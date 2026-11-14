@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from ..batch import VIDEO_EXTS
 from ..i18n import plural, tr
-from ..playlist import COUNTDOWN_RANGE_S, LEAD_MS, Playlist, has_script
+from ..playlist import COUNTDOWN_RANGE_S, CUT_PAUSE_S, LEAD_MS, Playlist, has_script
 from ..thumbs import get_thumb
 from . import theme
 
@@ -171,6 +171,16 @@ class PlayerPanel(QWidget):
         self.cuts_cb = QCheckBox(tr("Schnitte überspringen"))
         self.cuts_cb.setToolTip(tr("Im Editor markierte Schnitte (Taste X) werden beim Abspielen übersprungen"))
         self.cuts_cb.setChecked(str(settings.value("player/cuts", "true")).lower() == "true")
+        self.cut_pause_s = QSpinBox()
+        self.cut_pause_s.setRange(0, COUNTDOWN_RANGE_S[1])
+        self.cut_pause_s.setSuffix(" s")
+        self.cut_pause_s.setSpecialValueText(tr("aus"))
+        self.cut_pause_s.setFixedWidth(72)
+        self.cut_pause_s.setToolTip(tr("Nach einem übersprungenen Schnitt hält das Video so lange an und zählt herunter, dann geht es weiter (0 = aus)"))
+        try:
+            self.cut_pause_s.setValue(int(settings.value("player/cut_pause_s", CUT_PAUSE_S)))
+        except (TypeError, ValueError):
+            self.cut_pause_s.setValue(CUT_PAUSE_S)
         self.quiet_cb = QCheckBox(tr("Pausen ohne Hübe überspringen"))
         self.quiet_cb.setToolTip(tr("Bewegt sich das Script 15 s oder länger nicht, geht es die Countdown-Länge vor dem nächsten Hub weiter; nach dem letzten Hub zum nächsten Video"))
         self.quiet_cb.setChecked(str(settings.value("player/quiet", "false")).lower() == "true")
@@ -178,16 +188,19 @@ class PlayerPanel(QWidget):
                    self.cuts_cb, self.quiet_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
-            if cb is self.countdown_cb:          # its length right below it
+            extra = {self.countdown_cb: (tr("Länge"), self.countdown_s),        # its setting right below it
+                     self.cuts_cb: (tr("Pause danach"), self.cut_pause_s)}.get(cb)
+            if extra:
                 row = QHBoxLayout()
                 row.setContentsMargins(22, 0, 0, 0)    # under the checkbox text: box 14 + gap 8
-                cap = QLabel(tr("Länge"))
+                cap = QLabel(extra[0])
                 cap.setObjectName("caption")
                 row.addWidget(cap)
-                row.addWidget(self.countdown_s)
+                row.addWidget(extra[1])
                 row.addStretch(1)
                 fl.addLayout(row)
         self.countdown_s.valueChanged.connect(self.save)
+        self.cut_pause_s.valueChanged.connect(self.save)
         self.play_btn = theme.accent_icon(QPushButton(), "play", tr("Playlist abspielen"))
         self.play_btn.setObjectName("primary")
         fl.addSpacing(4)
@@ -234,6 +247,7 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/countdown", "true" if self.countdown_cb.isChecked() else "false")
         self.qs.setValue("player/countdown_s", int(self.countdown_s.value()))
         self.qs.setValue("player/cuts", "true" if self.cuts_cb.isChecked() else "false")
+        self.qs.setValue("player/cut_pause_s", int(self.cut_pause_s.value()))
         self.qs.setValue("player/quiet", "true" if self.quiet_cb.isChecked() else "false")
 
     def refresh(self) -> None:
