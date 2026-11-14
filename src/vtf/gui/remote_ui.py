@@ -129,7 +129,7 @@ class RemoteController(QObject):
             "title": Path(w.video_path).stem if loaded and w.video_path else "",
             "playing": playing, "pos": round(pos), "dur": round(dur), "script": bool(acts),
             "items": [Path(x).stem for x in pl.items[:self.MAX_ITEMS]], "current": pl.current,
-            "player": w.player_mode, "curve": curve,
+            "player": w.player_mode, "curve": curve, "intensity": w.player.intensity.value(),
             "now": self.VIDEO_BEFORE_MS / (self.VIDEO_BEFORE_MS + self.VIDEO_AFTER_MS),
         }
 
@@ -156,6 +156,16 @@ class RemoteController(QObject):
             w.play_next()
         elif cmd == "vprev":
             w.play_prev()
+        elif cmd == "vint":
+            try:
+                w.player.intensity.setValue(int(c.get("value", 100)))
+            except (TypeError, ValueError):
+                pass
+        elif cmd == "vintd":
+            try:
+                w.nudge_intensity(int(c.get("d", 0)))
+            except (TypeError, ValueError):
+                pass
         elif cmd in ("vseek", "vskip") and getattr(w, "cap", None):
             try:
                 ms = float(c.get("ms", 0))

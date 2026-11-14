@@ -328,6 +328,13 @@ remembers the last one. A quiet start is skipped (start shortly before the first
 stroke), and a countdown runs before the start. Both can be switched off, the
 **countdown length** is adjustable (3–30 s, default 10 s).
 
+**Go on where I stopped**: a video you left in the middle goes on shortly before
+that spot next time (can be switched off). **Gentle start**: after the start and
+after every pause the device begins with small strokes and is at full size after
+a few seconds (default 5 s, 0 = off). **Intensity**: slider below the playlist,
+keys **+** and **−** or on the phone remote – makes the strokes smaller live,
+without changing the script.
+
 ### Library and statistics
 
 **Library** (Ctrl+L or the button at the top): every video with a script in a

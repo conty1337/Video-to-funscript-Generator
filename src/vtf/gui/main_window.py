@@ -351,6 +351,10 @@ class MainWindow(QMainWindow):
         self.updates = UpdateController(self, self.qsettings)
         self.devices = DeviceController(self, self.qsettings)
         self.devices.register_source(self)
+        self.player.intensity.valueChanged.connect(self._intensity_changed)
+        self.player.ramp_s.valueChanged.connect(lambda v: setattr(self.devices.sync, "ramp_ms", v * 1000))
+        self.devices.sync.intensity = self.player.intensity.value()
+        self.devices.sync.ramp_ms = self.player.ramp_s.value() * 1000
         self.pattern_dialog = None
         from .remote_ui import RemoteController
         self.remote = RemoteController(self, self.qsettings)
@@ -472,6 +476,8 @@ class MainWindow(QMainWindow):
         self._act(m, tr("1 s zurück"), lambda: self.step_frames(-int(self.fps)), "Shift+Left")
         m.addSeparator()
         self._act(m, tr("Ton an/aus"), self.toggle_mute, "M")
+        self._act(m, tr("Intensität höher"), lambda: self.nudge_intensity(10), "+")
+        self._act(m, tr("Intensität niedriger"), lambda: self.nudge_intensity(-10), "-")
         m.addSeparator()
         self._act(m, tr("Nächstes Video"), self.play_next, "PgDown")
         self._act(m, tr("Nächstes Video im Ordner"), lambda: self.open_sibling(1), "Ctrl+PgDown")
@@ -677,6 +683,7 @@ class MainWindow(QMainWindow):
             return
         if not self._confirm_discard():
             return
+        self._remember_spot()
         self.cancel_analysis()
         self.pause()
         try:
@@ -750,6 +757,7 @@ class MainWindow(QMainWindow):
         """Take the video out (asks first if the script is not saved)."""
         if not self.cap or not self._confirm_discard():
             return
+        self._remember_spot()
         self.cancel_analysis()
         self.pause()
         self.cap.release()
@@ -1672,17 +1680,22 @@ class MainWindow(QMainWindow):
             self.set_player_mode(True)
         self.player.set_current(index)
         self.open_video(pl.items[index])
+        note = ""
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
             skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms())
                     if self.player.intro_cb.isChecked() else 0)
-            if skip:
+            spot = self.player.resume_spot(self.video_path)
+            if spot is not None:
+                self.seek_ms(spot)
+                note = tr(" · weiter bei {0}", _fmt(spot))
+            elif skip:
                 self.seek_ms(skip)
             if not self.timer.isActive():
                 self.toggle_play()
         self._status(tr("Playlist {0}/{1}: {2}", index + 1, len(pl.items), Path(pl.items[index]).name)
-                     + ("" if self.stroke_actions() else tr("  (kein Script)")))
+                     + ("" if self.stroke_actions() else tr("  (kein Script)")) + note)
 
     def open_sibling(self, direction: int):
         """Next/previous video in the same folder (quick preparing of many videos)."""
@@ -1699,6 +1712,19 @@ class MainWindow(QMainWindow):
             self._status(tr("Video {0}/{1} im Ordner: {2}{3}", i + 1, len(vids), vids[i].name, prep))
         else:
             self._status(tr("Kein weiteres Video in diesem Ordner"))
+
+    # ------------------------------------------------------------ player extras
+    def _remember_spot(self):
+        """Player: keep where this video was left (go on there next time)."""
+        if self.player_mode and self.cap and self.video_path:
+            self.player.remember_spot(self.video_path, self._cur_ms(), self.frame_count / self.fps * 1000)
+
+    def _intensity_changed(self, v: int):
+        self.devices.sync.intensity = v
+        self._status(tr("Intensität: {0} %", v))
+
+    def nudge_intensity(self, step: int):
+        self.player.intensity.setValue(self.player.intensity.value() + step)
 
     def play_next(self):
         i = self.player.playlist.next_index()
@@ -2316,6 +2342,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard():
             ev.ignore()
             return
+        self._remember_spot()
         self.cancel_analysis()
         self.updates.shutdown()
         self._stop_patterns()

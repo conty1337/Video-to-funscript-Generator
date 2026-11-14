@@ -351,6 +351,13 @@ merkt sich die App. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
 ersten Hub), und vor dem Start zählt ein Countdown herunter. Beides ist
 abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s, Standard 10 s).
 
+**Weiter, wo ich aufgehört habe**: Ein Video, das du mittendrin verlassen hast,
+geht beim nächsten Mal kurz vor dieser Stelle weiter (abschaltbar). **Sanfter
+Start**: Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben
+und ist nach ein paar Sekunden voll da (Standard 5 s, 0 = aus). **Intensität**:
+Regler unter der Playlist, Tasten **+** und **−** oder auf der
+Handy-Fernbedienung – macht die Hübe live kleiner, ohne das Script zu ändern.
+
 ### Bibliothek und Statistik
 
 **Bibliothek** (Strg+L oder Knopf oben): zeigt alle Videos mit Script aus einem

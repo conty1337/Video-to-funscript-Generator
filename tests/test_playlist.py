@@ -124,3 +124,18 @@ def test_countdown_also_after_a_pause():
     assert resume_ms(21500, acts) is None
     assert resume_ms(33000, acts) == 40000
     assert resume_ms(41000, acts) is None
+
+
+def test_remember_and_resume_spot():
+    from vtf.playlist import RESUME_BACK_MS, RESUME_MAX, remember_spot, resume_spot
+    spots = {}
+    remember_spot(spots, "a", 120_000, 600_000)
+    assert resume_spot(spots, "a") == 120_000 - RESUME_BACK_MS
+    remember_spot(spots, "a", 10_000, 600_000)                       # back at the start: forgotten
+    assert resume_spot(spots, "a") is None
+    remember_spot(spots, "a", 120_000, 600_000)
+    remember_spot(spots, "a", 590_000, 600_000)                      # watched to the end: forgotten
+    assert "a" not in spots and resume_spot({"b": "x"}, "b") is None
+    for k in range(RESUME_MAX + 5):
+        remember_spot(spots, str(k), 100_000, 600_000)
+    assert len(spots) == RESUME_MAX and "0" not in spots and str(RESUME_MAX + 4) in spots

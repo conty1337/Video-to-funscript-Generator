@@ -20,6 +20,7 @@ from ..funscript import Action, position_at
 from .base import Device
 
 APPROACH_MS = 500          # glide time after start/seek
+RAMP_START = 0.3           # gentle start: the strokes begin at this part of their size
 SEEK_JUMP_MS = 400         # media time jump that counts as a seek
 
 
@@ -49,6 +50,9 @@ class ScriptSync:
         self._resume_at: float | None = None
         self._cmd_pos: float | None = None
         self.enabled = True
+        self.intensity = 100           # % of every stroke, around the middle (player, live)
+        self.ramp_ms = 0               # gentle start: strokes grow to full size over this long
+        self._ramp_from: float | None = None
 
     # ------------------------------------------------------------ setup
     def set_device(self, device: Device | None) -> None:
@@ -99,6 +103,8 @@ class ScriptSync:
         s = self.settings
         t = media_ms + s.offset_ms
         jumped = self._last_t is not None and (t < self._last_t - 50 or t - self._last_t > SEEK_JUMP_MS)
+        if not self._playing:
+            self._ramp_from = t                  # (re)started: the gentle start begins
         if not self._playing or jumped or self._last_t is None:
             self._approach(t)
         self._playing = True
@@ -113,9 +119,16 @@ class ScriptSync:
         self._target_idx = idx
         target = self.actions[idx]
         duration = max(1, int(target.at - t))
-        self._command(s.map(target.pos), duration)
+        self._command(s.map(self._shape(target.pos, t)), duration)
 
     # ------------------------------------------------------------ helpers
+    def _shape(self, pos: float, t: float) -> float:
+        """Script position with intensity and the gentle start: the stroke shrinks around 50."""
+        f = self.intensity / 100
+        if self.ramp_ms > 0 and self._ramp_from is not None and t - self._ramp_from < self.ramp_ms:
+            f *= RAMP_START + (1 - RAMP_START) * max(0.0, (t - self._ramp_from) / self.ramp_ms)
+        return 50 + (pos - 50) * f
+
     def _approach(self, t: float) -> None:
         pos = position_at(self.actions, t)
         if pos is None:
@@ -123,8 +136,9 @@ class ScriptSync:
         self._target_idx = None
         self._resume_at = t + APPROACH_MS
         self._cmd_pos = None
-        self.device.move(self.settings.map(pos), APPROACH_MS)
-        self._cmd_pos = self.settings.map(pos)
+        target = self.settings.map(self._shape(pos, t))
+        self.device.move(target, APPROACH_MS)
+        self._cmd_pos = target
 
     def _command(self, pos: float, duration_ms: int) -> None:
         cur = self.device.current_position()

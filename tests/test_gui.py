@@ -99,6 +99,7 @@ def test_device_playback_with_simulation(app, sine_video, tmp_path, monkeypatch)
     from vtf.gui.main_window import MainWindow
 
     w = MainWindow()
+    w.player.ramp_s.setValue(0)                # full strokes at once (the gentle start has its own test)
     w.open_video(str(sine_video))
     w.curve.set_actions([Action(i * 250, 0 if i % 2 else 100) for i in range(24)])
     w.devices.connect_device("sim", "")
@@ -2031,4 +2032,44 @@ def test_settings_window(app, tmp_path, monkeypatch):
     finally:
         w.dirty = False
         w.close()
+        w.deleteLater()
+
+
+def test_player_extras_resume_intensity_gentle_start(app, sine_video, tmp_path, monkeypatch):
+    """Go on where I stopped, intensity (keys, phone) and the gentle start reach the device sync."""
+    import json
+    import shutil
+    from vtf.gui.main_window import MainWindow
+
+    path = tmp_path / "lang.avi"
+    shutil.copy(sine_video, path)
+    w = MainWindow()
+    try:
+        w.set_player_mode(True)
+        w.player.intensity.setValue(80)
+        assert w.devices.sync.intensity == 80
+        w.nudge_intensity(-10)
+        assert w.player.intensity.value() == 70 and w.devices.sync.intensity == 70
+        w.remote._video_command({"cmd": "vint", "value": 40})
+        assert w.devices.sync.intensity == 40 and w.remote._video_state()["intensity"] == 40
+        w.remote._video_command({"cmd": "vintd", "d": 500})
+        assert w.player.intensity.value() == 100
+        w.player.ramp_s.setValue(7)
+        assert w.devices.sync.ramp_ms == 7000
+        w.player.ramp_s.setValue(5)
+
+        w.player.resume_cb.setChecked(True)
+        w.player.playlist.set_items([str(path)])
+        w.open_video(str(path))
+        w.frame_count, w.fps = 30 * 600, 30.0                         # pretend: 10 minutes long
+        w._cur_ms = lambda: 200_000.0
+        w._remember_spot()
+        assert json.loads(w.player.qs.value("player/spots")) == {str(path.resolve()): 200_000}
+        assert w.player.resume_spot(str(path)) == 195_000
+        w.player.resume_cb.setChecked(False)
+        assert w.player.resume_spot(str(path)) is None
+    finally:
+        w.dirty = False
+        w.close()
+        w.player.qs.remove("player/spots")                            # closing keeps the spot again
         w.deleteLater()

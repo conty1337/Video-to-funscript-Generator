@@ -2189,4 +2189,24 @@ EN: dict[str, str] = {
         'Pause after a cut',
     'Nach einem übersprungenen Schnitt hält das Video so lange an und zählt herunter, dann geht es weiter (0 = aus)':
         'After a skipped cut the video stops this long and counts down, then it goes on (0 = off)',
+    ' · weiter bei {0}':
+        ' · going on at {0}',
+    'Ein Video, das du mittendrin verlassen hast, geht kurz vor dieser Stelle weiter':
+        'A video you left in the middle goes on shortly before that spot',
+    'Intensität':
+        'Intensity',
+    'Intensität höher':
+        'Intensity up',
+    'Intensität niedriger':
+        'Intensity down',
+    'Intensität: {0} %':
+        'Intensity: {0} %',
+    'Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben und wird in dieser Zeit voll (0 = aus)':
+        'After the start and after every pause the device begins with small strokes and reaches full size within this time (0 = off)',
+    'Sanfter Start':
+        'Gentle start',
+    'Weiter, wo ich aufgehört habe':
+        'Go on where I stopped',
+    'Wie groß die Hübe am Gerät sind, live (Tasten + und −)':
+        'How big the strokes on the device are, live (keys + and −)',
 }

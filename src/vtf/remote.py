@@ -324,6 +324,13 @@ placeholder="······">
 <button aria-label="10 Sekunden vor" onclick="cmd({cmd:'vskip',ms:10000})"><span class="lbl"><svg class="i"><use href="#i-ff"/></svg><small>10 s</small></span></button>
 <button aria-label="Nächstes Video" onclick="cmd({cmd:'vnext'})"><svg class="i"><use href="#i-next"/></svg></button>
 </div></div>
+<div class="ctl">
+<div class="head"><span>Intensität</span><span class="val mono" id="iv"></span></div>
+<div class="row">
+<button class="icon" aria-label="Weniger" onclick="cmd({cmd:'vintd',d:-10})"><svg class="i"><use href="#i-minus"/></svg></button>
+<input id="vint" type="range" min="10" max="100" step="5" aria-label="Intensität">
+<button class="icon" aria-label="Mehr" onclick="cmd({cmd:'vintd',d:10})"><svg class="i"><use href="#i-plus"/></svg></button>
+</div></div>
 <ul id="vlist"></ul>
 <p class="muted hidden" id="vempty">Keine Playlist. Videos in der App im Player-Modus (Strg+P) in die Liste ziehen.</p>
 </div>
@@ -357,7 +364,7 @@ placeholder="······">
 <script>
 (()=>{const m=location.hash.match(/pin=([0-9]+)/);if(m){localStorage.setItem('vtf-pin',m[1]);
 history.replaceState(null,'',location.pathname)}})();
-let pin=localStorage.getItem('vtf-pin')||'',st=null,drag=0,listKey='',curveKey='',vlistKey='',vdrag=0;
+let pin=localStorage.getItem('vtf-pin')||'',st=null,drag=0,listKey='',curveKey='',vlistKey='',vdrag=0,idrag=0;
 let tab=localStorage.getItem('vtf-tab');
 const $=id=>document.getElementById(id);
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -417,6 +424,7 @@ $('step').textContent=v.dur?'noch '+fmt(v.dur-v.pos):'';$('time').textContent=v.
 $('safety').textContent=st.safety||'';$('vpos').textContent=v.dur?fmt(v.pos):'–';
 $('vleft').textContent=v.dur?'-'+fmt(v.dur-v.pos):'';
 if(Date.now()-vdrag>1500)$('vseek').value=v.dur?Math.round(1000*v.pos/v.dur):0;
+if(Date.now()-idrag>1500){$('vint').value=v.intensity||100;val('iv',v.intensity||100,'%')}
 const vp=$('vplay');vp.querySelector('use').setAttribute('href',v.playing?'#i-pause':'#i-play');
 vp.setAttribute('aria-label',v.playing?'Pause':'Abspielen');
 const ck='v'+JSON.stringify(v.curve);if(ck!==curveKey){curveKey=ck;drawCurve(v.curve,v.curve.length?v.now:null)}
@@ -436,6 +444,8 @@ $('pick').onchange=e=>cmd({cmd:'select',name:e.target.value});
 let tm=null;for(const id of ['depth','bpm'])$(id).oninput=e=>{drag=Date.now();
 val(id=='depth'?'dv':'bv',e.target.value,id=='depth'?'%':'Hübe/min');clearTimeout(tm);
 tm=setTimeout(()=>cmd({cmd:'set',[id]:+e.target.value}),150)};
+$('vint').oninput=e=>{idrag=Date.now();val('iv',e.target.value,'%');clearTimeout(tm);
+tm=setTimeout(()=>cmd({cmd:'vint',value:+e.target.value}),150)};
 poll();setInterval(poll,700);
 </script></body></html>
 """
@@ -459,6 +469,8 @@ PAGE_EN = (
     ('"Nächstes Video"', '"Next video"'), ('aria-label="Abspielen"', 'aria-label="Play"'),
     ("Keine Playlist. Videos in der App im Player-Modus (Strg+P) in die Liste ziehen.",
      "No playlist. Drag videos into the list in the app's player mode (Ctrl+P)."),
+    ("<span>Intensität</span>", "<span>Intensity</span>"), ('aria-label="Intensität"', 'aria-label="Intensity"'),
+    ('aria-label="Weniger"', 'aria-label="Less"'), ('aria-label="Mehr"', 'aria-label="More"'),
     ("<span>Tiefe</span>", "<span>Depth</span>"), ('"Weniger tief"', '"Less deep"'),
     ('aria-label="Tiefe"', 'aria-label="Depth"'), ('aria-label="Tiefer"', 'aria-label="Deeper"'),
     ('"Langsamer"', '"Slower"'), ('"Schneller"', '"Faster"'),

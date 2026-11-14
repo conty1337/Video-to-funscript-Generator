@@ -6,6 +6,7 @@ on the connected device, one after another.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QSize, Qt, Signal
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -26,7 +28,16 @@ from PySide6.QtWidgets import (
 
 from ..batch import VIDEO_EXTS
 from ..i18n import plural, tr
-from ..playlist import COUNTDOWN_RANGE_S, CUT_PAUSE_S, LEAD_MS, Playlist, has_script
+from ..playlist import (
+    COUNTDOWN_RANGE_S,
+    CUT_PAUSE_S,
+    LEAD_MS,
+    RAMP_S,
+    Playlist,
+    has_script,
+    remember_spot,
+    resume_spot,
+)
 from ..thumbs import get_thumb
 from . import theme
 
@@ -43,6 +54,13 @@ def _settings_list(v) -> list[str]:
 
 def videos_in(folder: Path) -> list[Path]:
     return sorted(p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in VIDEO_EXTS)
+
+
+def _int(settings, key: str, default: int) -> int:
+    try:
+        return int(settings.value(key, default))
+    except (TypeError, ValueError):
+        return default
 
 
 class PlaylistView(QListWidget):
@@ -184,7 +202,17 @@ class PlayerPanel(QWidget):
         self.quiet_cb = QCheckBox(tr("Pausen ohne Hübe überspringen"))
         self.quiet_cb.setToolTip(tr("Bewegt sich das Script 15 s oder länger nicht, geht es die Countdown-Länge vor dem nächsten Hub weiter; nach dem letzten Hub zum nächsten Video"))
         self.quiet_cb.setChecked(str(settings.value("player/quiet", "false")).lower() == "true")
-        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.countdown_cb,
+        self.resume_cb = QCheckBox(tr("Weiter, wo ich aufgehört habe"))
+        self.resume_cb.setToolTip(tr("Ein Video, das du mittendrin verlassen hast, geht kurz vor dieser Stelle weiter"))
+        self.resume_cb.setChecked(str(settings.value("player/resume", "true")).lower() == "true")
+        self.ramp_s = QSpinBox()
+        self.ramp_s.setRange(0, COUNTDOWN_RANGE_S[1])
+        self.ramp_s.setSuffix(" s")
+        self.ramp_s.setSpecialValueText(tr("aus"))
+        self.ramp_s.setFixedWidth(72)
+        self.ramp_s.setToolTip(tr("Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben und wird in dieser Zeit voll (0 = aus)"))
+        self.ramp_s.setValue(_int(settings, "player/ramp_s", RAMP_S))
+        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.resume_cb, self.countdown_cb,
                    self.cuts_cb, self.quiet_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
@@ -199,8 +227,33 @@ class PlayerPanel(QWidget):
                 row.addWidget(extra[1])
                 row.addStretch(1)
                 fl.addLayout(row)
-        self.countdown_s.valueChanged.connect(self.save)
-        self.cut_pause_s.valueChanged.connect(self.save)
+        row = QHBoxLayout()
+        cap = QLabel(tr("Sanfter Start"))
+        cap.setObjectName("caption")
+        row.addWidget(cap)
+        row.addWidget(self.ramp_s)
+        row.addStretch(1)
+        fl.addLayout(row)
+        row = QHBoxLayout()
+        cap = QLabel(tr("Intensität"))
+        cap.setObjectName("caption")
+        self.intensity = QSlider(Qt.Horizontal)
+        self.intensity.setRange(10, 100)
+        self.intensity.setSingleStep(5)
+        self.intensity.setPageStep(10)
+        self.intensity.setToolTip(tr("Wie groß die Hübe am Gerät sind, live (Tasten + und −)"))
+        self.intensity_val = QLabel()
+        self.intensity_val.setFont(theme.mono_font(12))
+        self.intensity_val.setMinimumWidth(40)
+        self.intensity.valueChanged.connect(lambda v: self.intensity_val.setText(f"{v} %"))
+        self.intensity.setValue(_int(settings, "player/intensity", 100))
+        self.intensity_val.setText(f"{self.intensity.value()} %")
+        row.addWidget(cap)
+        row.addWidget(self.intensity, 1)
+        row.addWidget(self.intensity_val)
+        fl.addLayout(row)
+        for sp in (self.countdown_s, self.cut_pause_s, self.ramp_s, self.intensity):
+            sp.valueChanged.connect(self.save)
         self.play_btn = theme.accent_icon(QPushButton(), "play", tr("Playlist abspielen"))
         self.play_btn.setObjectName("primary")
         fl.addSpacing(4)
@@ -249,6 +302,25 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/cuts", "true" if self.cuts_cb.isChecked() else "false")
         self.qs.setValue("player/cut_pause_s", int(self.cut_pause_s.value()))
         self.qs.setValue("player/quiet", "true" if self.quiet_cb.isChecked() else "false")
+        self.qs.setValue("player/resume", "true" if self.resume_cb.isChecked() else "false")
+        self.qs.setValue("player/ramp_s", int(self.ramp_s.value()))
+        self.qs.setValue("player/intensity", int(self.intensity.value()))
+
+    # ------------------------------------------------------------ "go on where I stopped"
+    def _spots(self) -> dict:
+        try:
+            d = json.loads(str(self.qs.value("player/spots", "") or "{}"))
+        except ValueError:
+            d = {}
+        return d if isinstance(d, dict) else {}
+
+    def remember_spot(self, path: str, ms: float, duration_ms: float) -> None:
+        spots = self._spots()
+        remember_spot(spots, str(Path(path).resolve()), ms, duration_ms)
+        self.qs.setValue("player/spots", json.dumps(spots))
+
+    def resume_spot(self, path: str) -> int | None:
+        return resume_spot(self._spots(), str(Path(path).resolve())) if self.resume_cb.isChecked() else None
 
     def refresh(self) -> None:
         pl = self.playlist
