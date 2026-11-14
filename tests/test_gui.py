@@ -634,6 +634,13 @@ def test_player_countdown(app):
     assert w.view._countdown == 8
     w._update_countdown(31_000)
     assert w.view._countdown is None
+    w.cuts = [(24_000, 27_000)]                                       # a cut on the way: playing time counts
+    w.player.cuts_cb.setChecked(True)
+    w._update_countdown(22_500)
+    assert w.view._countdown == 5
+    w._update_countdown(27_000)
+    assert w.view._countdown == 3
+    w.cuts = []
     w.player.countdown_cb.setChecked(False)
     w._update_countdown(25_000)
     assert w.view._countdown is None

@@ -22,13 +22,33 @@ def script_start_ms(actions, min_change: int = 10) -> int | None:
     return None
 
 
-def intro_skip_ms(actions, lead_ms: int = LEAD_MS) -> int:
-    """Where to start playing to skip a quiet intro: `lead_ms` before the script
-    starts. 0 when the script starts early anyway (less than lead + 5 s in)."""
+def play_ms(a: float, b: float, cuts=()) -> float:
+    """Playing time from a to b (ms): the cuts in between are jumped over."""
+    d = b - a
+    for c0, c1 in cuts:
+        d -= max(0.0, min(b, c1) - max(a, c0))
+    return max(0.0, d)
+
+
+def before_ms(target: float, lead_ms: int, cuts=()) -> int:
+    """Where to start so that `lead_ms` of playing is left until `target` (cuts jumped over)."""
+    t = target - lead_ms
+    for _ in range(len(cuts) + 1):              # each round reaches back past one more cut
+        short = lead_ms - play_ms(t, target, cuts)
+        if short <= 0:
+            break
+        t -= short
+    return max(0, int(t))
+
+
+def intro_skip_ms(actions, lead_ms: int = LEAD_MS, cuts=()) -> int:
+    """Where to start playing to skip a quiet intro: `lead_ms` of playing before the
+    script starts (cuts in between do not count). 0 when the script starts early anyway
+    (less than lead + 5 s in)."""
     start = script_start_ms(actions)
     if start is None or start < lead_ms + 5000:
         return 0
-    return start - lead_ms
+    return before_ms(start, lead_ms, cuts)
 
 
 #: the player skips stretches without strokes at least this long ("Pausen überspringen")

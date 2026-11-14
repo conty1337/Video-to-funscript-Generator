@@ -47,7 +47,7 @@ from ..funscript import (
 )
 from ..generator import generate, generate_axes
 from ..i18n import plural, tr
-from ..playlist import intro_skip_ms, quiet_stretches, resume_ms, script_start_ms, skip_target
+from ..playlist import intro_skip_ms, play_ms, quiet_stretches, resume_ms, script_start_ms, skip_target
 from ..prep import (
     load_bookmarks,
     load_cuts,
@@ -961,7 +961,7 @@ class MainWindow(QMainWindow):
         """Player: jump over cuts and (if wanted) long stretches without strokes."""
         if not self.player_mode:
             return False
-        cuts = self.cuts if self.player.cuts_cb.isChecked() else ()
+        cuts = self._skipped_cuts()
         quiet = ()
         if self.player.quiet_cb.isChecked():
             acts = self.stroke_actions()
@@ -992,6 +992,9 @@ class MainWindow(QMainWindow):
                 self._cut_wait.start()
                 self._countdown_off = self._skip_resume       # this pause was the countdown
         return True
+
+    def _skipped_cuts(self):
+        return self.cuts if self.player.cuts_cb.isChecked() else ()
 
     def _cut_wait_tick(self):
         """One second of the pause after a cut gone; at the end the video plays on."""
@@ -1202,8 +1205,9 @@ class MainWindow(QMainWindow):
             start = resume_ms(ms, self.stroke_actions())
             if start is None and self._skip_resume is not None and ms < self._skip_resume:
                 start = self._skip_resume            # just jumped over a cut: count down to it too
-            if start is not None and 0 < start - ms <= self.player.lead_ms():
-                sec = math.ceil((start - ms) / 1000)
+            left = play_ms(ms, start, self._skipped_cuts()) if start is not None else 0
+            if start is not None and 0 < start - ms and left <= self.player.lead_ms():
+                sec = max(1, math.ceil(left / 1000))      # playing time: the cuts on the way are jumped over
         self.view.set_countdown(sec)
 
     def seek_frame(self, idx: int):
@@ -1693,7 +1697,7 @@ class MainWindow(QMainWindow):
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
-            skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms())
+            skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms(), self._skipped_cuts())
                     if self.player.intro_cb.isChecked() else 0)
             spot = self.player.resume_spot(self.video_path)
             if spot is not None:
