@@ -167,6 +167,10 @@ two body parts. Each area is followed by many image points.
 * 2–3 areas: area 1 (the toy, what moves) relative to the others (the
   reference, e.g. the body). The camera no longer matters, zoom and pans
   hardly disturb. A right click on a box changes its role.
+  If the toy stands still (the machine pauses) while the body moves, no strokes
+  are made: the device stops after about half a second and goes on as soon as
+  the toy moves again. Where the toy rests and the body moves (riding a fixed
+  toy), the body still counts.
 * **Find automatically** (F or the button): the app looks at a few seconds from
   the playback position. What moves far, evenly in a rhythm and together becomes
   the toy (outlined right away), a textured spot next to it that moves little

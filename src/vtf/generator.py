@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .analysis import MotionData, section_ranges
-from .funscript import Action
+from .funscript import Action, position_at
 
 
 @dataclass
@@ -358,6 +358,77 @@ def speeds(actions: list[Action]) -> list[float]:
     return [abs(b.pos - a.pos) * 1000.0 / max(1, b.at - a.at) for a, b in zip(actions, actions[1:])]
 
 
+STILL_WINDOW_MS = 1000   # area 1 is looked at over this long (around each moment: stops and goes on quickly) ...
+STILL_PART = 0.15        # ... and counts as standing still below this part of its usual stroke
+STILL_MIN = 0.003        # (but never below this part of the picture: tracking jitter)
+TOY_LEADS = 2.0          # only where area 1 usually moves at least this much more than area 2
+
+
+def still_mask(motion: MotionData, sections=()) -> np.ndarray:
+    """Samples where the toy (area 1) stands still in a section where it usually makes the
+    strokes: what moves then is the body it is measured against (shifting, breathing, a
+    pause of the machine), which must not become strokes. Sections where area 1 is the
+    calmer one (riding a fixed toy) are left alone: there the body's motion is the stroke."""
+    n = len(motion)
+    out = np.zeros(n, bool)
+    if motion.tracks is None or motion.track_section is None or motion.tracks.shape[1] < 2:
+        return out
+    k = max(3, int(round(STILL_WINDOW_MS / 1000.0 * motion.fps)))
+    tr = motion.tracks.astype(np.float64)                 # normalized: the same at any analysis width
+
+    def spread(pts: np.ndarray) -> np.ndarray:            # how far an area moves around each sample
+        filled = np.where(np.isnan(pts), np.nanmean(pts, axis=0), pts)
+        return np.max([_rolling(filled[:, c], k, np.max) - _rolling(filled[:, c], k, np.min)
+                       for c in range(2)], axis=0)
+    for i, _sec in enumerate(sections):
+        mask = motion.track_section == i
+        if mask.sum() < k or np.isnan(tr[mask, 1]).all() or np.isnan(tr[mask, 0]).all():
+            continue
+        toy, body = spread(tr[mask, 0]), spread(tr[mask, 1])
+        usual = float(np.percentile(toy, 75))
+        if usual < TOY_LEADS * float(np.percentile(body, 75)):
+            continue
+        idx = np.flatnonzero(mask)
+        out[idx[_close_gaps(toy < max(STILL_MIN, STILL_PART * usual), k // 4)]] = True
+    return out
+
+
+def _close_gaps(mask: np.ndarray, n: int) -> np.ndarray:
+    """Fill gaps of at most n samples between two True stretches (a twitch in a pause)."""
+    out = mask.copy()
+    on = np.flatnonzero(mask)
+    for a, b in zip(on, on[1:]):
+        if 1 < b - a <= n + 1:
+            out[a:b] = True
+    return out
+
+
+def _hold(sig: np.ndarray, still: np.ndarray) -> np.ndarray:
+    """Keep the value from before each still stretch: no strokes inside it."""
+    if not still.any():
+        return sig
+    last = np.maximum.accumulate(np.where(still, 0, np.arange(len(sig))))
+    return sig[last]
+
+
+def _pause_points(actions: list[Action], t_ms: np.ndarray, still: np.ndarray, gap_ms: int) -> list[Action]:
+    """A point at the start and the end of each still stretch at the same height: players
+    join points with straight lines, so the device stands still in between instead of
+    drifting to the next stroke."""
+    if not still.any() or not actions:
+        return actions
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], still.astype(np.int8), [0]))))
+    out = list(actions)
+    for i0, i1 in zip(edges[::2], edges[1::2]):
+        a, b = float(t_ms[i0]), float(t_ms[i1 - 1])
+        p = position_at(actions, a)
+        if p is None or b - a < 2 * gap_ms:
+            continue
+        out = [x for x in out if not a <= x.at <= b]       # the curve is held flat in there anyway
+        out += [Action(int(a), int(round(p))), Action(int(b), int(round(p)))]
+    return sorted(out, key=lambda x: x.at)
+
+
 def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()) -> GeneratedScript:
     """Script from the analysis. With tracking sections, points are only made
     inside them, and calibrated sections use the real depth."""
@@ -374,6 +445,8 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
             mask = motion.track_section == sec
             sig[mask] = depth[mask]
             calibrated.add(sec)
+    still = still_mask(motion, sections)
+    sig = _hold(sig, still)
     actions: list[Action] = []
     for sec, a, b in ranges:
         inside = (t_ms >= a) & (t_ms < b)
@@ -382,7 +455,7 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
             scale = 0.4 if sec in calibrated else 1.0
             actions += extract_actions(t_ms[inside], sig[inside], s, delta_scale=scale)
     actions.sort(key=lambda x: x.at)
-    actions = limit_speed(actions, s.max_speed)
+    actions = limit_speed(_pause_points(actions, t_ms, still, s.min_interval_ms), s.max_speed)
     return GeneratedScript(t_ms, sig, actions)
 
 

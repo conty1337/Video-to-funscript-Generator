@@ -178,6 +178,10 @@ z.B. um die beiden Körperteile. Jeder Bereich wird mit vielen Bildpunkten verfo
 * 2–3 Bereiche: Bereich 1 (das Toy, was sich bewegt) relativ zu den anderen
   (Bezug, z.B. der Körper). Dann spielt die Kamera keine Rolle mehr, auch Zoom
   und Schwenks stören kaum. Rechtsklick auf ein Kästchen ändert die Rolle.
+  Steht das Toy still (Maschine pausiert), während sich der Körper bewegt,
+  entstehen keine Hübe: Das Gerät hält nach etwa einer halben Sekunde an und
+  macht weiter, sobald sich das Toy wieder bewegt. Wo das Toy ruht und sich der
+  Körper bewegt (Reiten auf festem Toy), zählt weiter der Körper.
 * **Automatisch finden** (F oder Knopf): Die App schaut sich ein paar Sekunden ab
   der Abspielposition an. Was sich weit, gleichmäßig im Rhythmus und gemeinsam
   bewegt, wird das Toy (gleich umrandet), eine Stelle mit Muster daneben, die sich
