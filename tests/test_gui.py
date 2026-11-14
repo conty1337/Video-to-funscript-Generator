@@ -99,6 +99,7 @@ def test_device_playback_with_simulation(app, sine_video, tmp_path, monkeypatch)
     from vtf.gui.main_window import MainWindow
 
     w = MainWindow()
+    w.player.ramp_s.setValue(0)                # full strokes at once (the gentle start has its own test)
     w.open_video(str(sine_video))
     w.curve.set_actions([Action(i * 250, 0 if i % 2 else 100) for i in range(24)])
     w.devices.connect_device("sim", "")
@@ -1795,6 +1796,21 @@ def test_cut_tool_and_player_skips_it(app, sine_video, tmp_path):
     w.player.countdown_cb.setChecked(True)
     w._update_countdown(2500.0)
     assert w.view._countdown == 3
+    # while playing: the video stops after the cut and counts down, then plays on
+    w.player.cut_pause_s.setValue(3)
+    w.toggle_play()
+    assert w._player_skip(1500.0) and not w.timer.isActive() and w.view._countdown == 3
+    w._cut_wait_tick()
+    w._cut_wait_tick()
+    assert w.view._countdown == 1 and not w.timer.isActive()
+    w._cut_wait_tick()
+    assert w.timer.isActive() and not w._cut_wait.isActive()
+    assert w._player_skip(1500.0) and w._cut_wait.isActive()
+    w.toggle_play()                                                  # Space: on at once
+    assert w.timer.isActive() and not w._cut_wait.isActive()
+    w.player.cut_pause_s.setValue(0)                                 # off: plays straight on
+    assert w._player_skip(1500.0) and w.timer.isActive()
+    w.pause()
     w.player.cuts_cb.setChecked(False)
     assert not w._player_skip(1500.0)
     w.seek_ms(1000)
@@ -1998,6 +2014,9 @@ def test_settings_window(app, tmp_path, monkeypatch):
         d.hwaccel.setCurrentIndex(d.hwaccel.findData("auto"))
         d.countdown_s.setValue(7)
         assert w.player.countdown_s.value() == 7
+        d.cut_pause_s.setValue(0)
+        assert w.player.cut_pause_s.value() == 0 and d.cut_pause_s.text() == "aus"
+        d.cut_pause_s.setValue(5)
         d.quiet.setChecked(not w.player.quiet_cb.isChecked())
         assert d.quiet.isChecked() == w.player.quiet_cb.isChecked()
         d.quiet.setChecked(not d.quiet.isChecked())
@@ -2013,4 +2032,44 @@ def test_settings_window(app, tmp_path, monkeypatch):
     finally:
         w.dirty = False
         w.close()
+        w.deleteLater()
+
+
+def test_player_extras_resume_intensity_gentle_start(app, sine_video, tmp_path, monkeypatch):
+    """Go on where I stopped, intensity (keys, phone) and the gentle start reach the device sync."""
+    import json
+    import shutil
+    from vtf.gui.main_window import MainWindow
+
+    path = tmp_path / "lang.avi"
+    shutil.copy(sine_video, path)
+    w = MainWindow()
+    try:
+        w.set_player_mode(True)
+        w.player.intensity.setValue(80)
+        assert w.devices.sync.intensity == 80
+        w.nudge_intensity(-10)
+        assert w.player.intensity.value() == 70 and w.devices.sync.intensity == 70
+        w.remote._video_command({"cmd": "vint", "value": 40})
+        assert w.devices.sync.intensity == 40 and w.remote._video_state()["intensity"] == 40
+        w.remote._video_command({"cmd": "vintd", "d": 500})
+        assert w.player.intensity.value() == 100
+        w.player.ramp_s.setValue(7)
+        assert w.devices.sync.ramp_ms == 7000
+        w.player.ramp_s.setValue(5)
+
+        w.player.resume_cb.setChecked(True)
+        w.player.playlist.set_items([str(path)])
+        w.open_video(str(path))
+        w.frame_count, w.fps = 30 * 600, 30.0                         # pretend: 10 minutes long
+        w._cur_ms = lambda: 200_000.0
+        w._remember_spot()
+        assert json.loads(w.player.qs.value("player/spots")) == {str(path.resolve()): 200_000}
+        assert w.player.resume_spot(str(path)) == 195_000
+        w.player.resume_cb.setChecked(False)
+        assert w.player.resume_spot(str(path)) is None
+    finally:
+        w.dirty = False
+        w.close()
+        w.player.qs.remove("player/spots")                            # closing keeps the spot again
         w.deleteLater()

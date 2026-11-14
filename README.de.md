@@ -178,6 +178,10 @@ z.B. um die beiden Körperteile. Jeder Bereich wird mit vielen Bildpunkten verfo
 * 2–3 Bereiche: Bereich 1 (das Toy, was sich bewegt) relativ zu den anderen
   (Bezug, z.B. der Körper). Dann spielt die Kamera keine Rolle mehr, auch Zoom
   und Schwenks stören kaum. Rechtsklick auf ein Kästchen ändert die Rolle.
+  Steht das Toy still (Maschine pausiert), während sich der Körper bewegt,
+  entstehen keine Hübe: Das Gerät hält nach etwa einer halben Sekunde an und
+  macht weiter, sobald sich das Toy wieder bewegt. Wo das Toy ruht und sich der
+  Körper bewegt (Reiten auf festem Toy), zählt weiter der Körper.
 * **Automatisch finden** (F oder Knopf): Die App schaut sich ein paar Sekunden ab
   der Abspielposition an. Was sich weit, gleichmäßig im Rhythmus und gemeinsam
   bewegt, wird das Toy (gleich umrandet), eine Stelle mit Muster daneben, die sich
@@ -318,6 +322,8 @@ wieder raus. Optional überspringt der Player auch jede Pause ohne Hübe ab 15 s
 von selbst („Pausen ohne Hübe überspringen“; nach dem letzten Hub kommt das
 nächste Video). Wie am Anfang zählt dann der Countdown herunter, bis es
 weitergeht – nach jedem übersprungenen Schnitt und jeder Pause ab 10 s.
+Nach einem übersprungenen Schnitt hält das Video außerdem kurz an und zählt
+herunter („Pause danach“, Standard 5 s, 0 = aus), damit es nicht sofort weitergeht.
 
 **Lesezeichen und Rhythmus**: B setzt ein Lesezeichen mit Namen, Alt+→/←
 springt zum nächsten/vorigen, das Menü „Lesezeichen“ listet alle. Sie stehen
@@ -348,6 +354,13 @@ dem Not-Aus). Playlists lassen sich als `.m3u` laden und speichern, die letzte
 merkt sich die App. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
 ersten Hub), und vor dem Start zählt ein Countdown herunter. Beides ist
 abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s, Standard 10 s).
+
+**Weiter, wo ich aufgehört habe**: Ein Video, das du mittendrin verlassen hast,
+geht beim nächsten Mal kurz vor dieser Stelle weiter (abschaltbar). **Sanfter
+Start**: Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben
+und ist nach ein paar Sekunden voll da (Standard 5 s, 0 = aus). **Intensität**:
+Regler unter der Playlist, Tasten **+** und **−** oder auf der
+Handy-Fernbedienung – macht die Hübe live kleiner, ohne das Script zu ändern.
 
 ### Bibliothek und Statistik
 

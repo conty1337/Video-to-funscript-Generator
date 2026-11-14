@@ -37,6 +37,33 @@ QUIET_MIN_MS = 15_000
 QUIET_GRACE_MS = 1_000
 #: the countdown can be set from ... to ... seconds (default LEAD_MS)
 COUNTDOWN_RANGE_S = (3, 30)
+#: after a skipped cut the player stands still this long, counting down (0 = off)
+CUT_PAUSE_S = 5
+#: gentle start: the device's strokes grow to full size over this many seconds (0 = off)
+RAMP_S = 5
+#: "go on where I stopped": a spot is kept from this far into the video ...
+RESUME_MIN_MS = 30_000
+#: ... unless it is this close to the end (watched to the end)
+RESUME_END_MS = 60_000
+#: playing goes on this far before the kept spot
+RESUME_BACK_MS = 5_000
+#: at most this many videos are remembered (the oldest go first)
+RESUME_MAX = 300
+
+
+def remember_spot(spots: dict, key: str, ms: float, duration_ms: float) -> None:
+    """Keep where a video was left (or forget it: at the very start or near the end)."""
+    spots.pop(key, None)
+    if RESUME_MIN_MS <= ms <= duration_ms - RESUME_END_MS:
+        spots[key] = int(ms)
+        while len(spots) > RESUME_MAX:
+            spots.pop(next(iter(spots)))
+
+
+def resume_spot(spots: dict, key: str) -> int | None:
+    """Where to go on playing a video left before, or None."""
+    ms = spots.get(key)
+    return max(0, int(ms) - RESUME_BACK_MS) if isinstance(ms, (int, float)) else None
 
 
 def _moves(actions, min_change: int = 10) -> list[tuple[int, int]]:

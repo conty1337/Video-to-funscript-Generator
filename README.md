@@ -167,6 +167,10 @@ two body parts. Each area is followed by many image points.
 * 2–3 areas: area 1 (the toy, what moves) relative to the others (the
   reference, e.g. the body). The camera no longer matters, zoom and pans
   hardly disturb. A right click on a box changes its role.
+  If the toy stands still (the machine pauses) while the body moves, no strokes
+  are made: the device stops after about half a second and goes on as soon as
+  the toy moves again. Where the toy rests and the body moves (riding a fixed
+  toy), the body still counts.
 * **Find automatically** (F or the button): the app looks at a few seconds from
   the playback position. What moves far, evenly in a rhythm and together becomes
   the toy (outlined right away), a textured spot next to it that moves little
@@ -297,6 +301,8 @@ them (“Skip cuts”). Edit → “Remove the cut here” takes one out. Option
 player also skips every pause without strokes from 15 s (“Skip pauses without
 strokes”; after the last stroke the next video comes). As at the start, the
 countdown runs before it goes on, after every skipped cut and every pause from 10 s.
+After a skipped cut the video also stops for a moment and counts down (“Pause
+after”, 5 s by default, 0 = off), so it does not go on right away.
 
 **Bookmarks and rhythm**: B sets a named bookmark, Alt+→/← jump to the
 next/previous one, the “Bookmarks” menu lists them all. They show in curve and
@@ -325,6 +331,13 @@ the emergency stop). Playlists can be loaded and saved as `.m3u`, the app
 remembers the last one. A quiet start is skipped (start shortly before the first
 stroke), and a countdown runs before the start. Both can be switched off, the
 **countdown length** is adjustable (3–30 s, default 10 s).
+
+**Go on where I stopped**: a video you left in the middle goes on shortly before
+that spot next time (can be switched off). **Gentle start**: after the start and
+after every pause the device begins with small strokes and is at full size after
+a few seconds (default 5 s, 0 = off). **Intensity**: slider below the playlist,
+keys **+** and **−** or on the phone remote – makes the strokes smaller live,
+without changing the script.
 
 ### Library and statistics
 

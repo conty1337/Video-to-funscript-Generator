@@ -60,6 +60,7 @@ def _mirror_spin(src: QSpinBox) -> QSpinBox:
     sp = QSpinBox()
     sp.setRange(src.minimum(), src.maximum())
     sp.setSuffix(src.suffix())
+    sp.setSpecialValueText(src.specialValueText())
     sp.setValue(src.value())
     sp.setToolTip(src.toolTip())
     sp.valueChanged.connect(src.setValue)
@@ -207,14 +208,23 @@ class SettingsDialog(QDialog):
         self.countdown = _mirror_check(pp.countdown_cb)
         self.countdown_s = _mirror_spin(pp.countdown_s)
         self.cuts = _mirror_check(pp.cuts_cb)
+        self.cut_pause_s = _mirror_spin(pp.cut_pause_s)
         self.quiet = _mirror_check(pp.quiet_cb)
-        for w in (self.intro, self.countdown):
+        self.resume = _mirror_check(pp.resume_cb)
+        self.ramp_s = _mirror_spin(pp.ramp_s)
+        for w in (self.intro, self.resume, self.countdown):
             lay.addWidget(w)
         f = _form()
         f.addRow(DeviceDialog._label(tr("Countdown-Länge")), DeviceDialog._row(self.countdown_s))
         lay.addLayout(f)
-        for w in (self.cuts, self.quiet):
-            lay.addWidget(w)
+        lay.addWidget(self.cuts)
+        f = _form()
+        f.addRow(DeviceDialog._label(tr("Pause nach Schnitt")), DeviceDialog._row(self.cut_pause_s))
+        lay.addLayout(f)
+        lay.addWidget(self.quiet)
+        f = _form()
+        f.addRow(DeviceDialog._label(tr("Sanfter Start")), DeviceDialog._row(self.ramp_s))
+        lay.addLayout(f)
         lay.addWidget(_caption(tr("Dieselben Einstellungen stehen auch unter der Playlist.")))
 
     def _device(self, lay: QVBoxLayout) -> None:

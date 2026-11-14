@@ -189,3 +189,20 @@ def test_buttplug_unreachable_gives_clear_error():
 
     with pytest.raises(DeviceError, match="Intiface"):
         ButtplugDevice("ws://127.0.0.1:9").connect()
+
+
+def test_intensity_and_gentle_start_shrink_the_strokes():
+    """Intensity makes every stroke smaller around the middle; the gentle start lets them
+    grow to full size after each start (also after a pause)."""
+    long = [Action(k * 500, 100 if k % 2 else 0) for k in range(40)]
+    sync, dev, clock = make(long, max_speed=0)
+    sync.intensity = 50
+    play(sync, 0, 2000)
+    assert all(abs(abs(p - 50) - 25) < 4 for p, _d in dev.commands[1:])   # 25..75 (the simulator rounds)
+    sync.intensity = 100
+    sync.ramp_ms = 4000
+    sync.tick(2100, False)                                   # pause, then play on: gentle again
+    dev.commands.clear()
+    play(sync, 3000, 9000)
+    sizes = [abs(p - 50) for p, _d in dev.commands[1:]]
+    assert sizes[0] < 30 and sizes[-1] >= 46                 # small first, full after 4 s (rounded)

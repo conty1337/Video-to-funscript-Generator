@@ -712,3 +712,49 @@ def test_stroke_arrow_measures_along_the_stroke():
     along_sig = build_signal(m, gs, (TrackSection(0, ((0, 0, 1, 1),), stroke=arrow),))[1]
     assert np.corrcoef(along_sig, truth)[0, 1] > 0.99
     assert np.corrcoef(plain, truth)[0, 1] < 0.9
+
+
+def _two_areas(toy_amp, body_amp, seconds=9.0, fps=30.0):
+    """MotionData of a tracked section: area positions follow toy_amp(t) / body_amp(t) as
+    sine strokes (normalized), dx/dy is their difference in px like the tracker gives."""
+    from vtf.analysis import MotionData
+    t = np.arange(int(seconds * fps)) / fps
+    toy = np.stack([np.full_like(t, 0.3), 0.4 + np.array([toy_amp(x) for x in t]) * np.sin(2 * np.pi * t)], 1)
+    body = np.stack([np.full_like(t, 0.6), 0.5 + np.array([body_amp(x) for x in t]) * np.sin(2 * np.pi * 0.7 * t)], 1)
+    rel = (toy - body) * np.array([640, 360])
+    d = np.vstack([[0, 0], np.diff(rel, axis=0)])
+    return MotionData("x", fps, d[:, 0], d[:, 1], tracks=np.stack([toy, body], 1).astype(np.float32),
+                      track_sizes=np.array([[[0.2, 0.2], [0.2, 0.2]]], np.float32),
+                      track_section=np.zeros(len(t), int))
+
+
+def test_still_toy_makes_no_strokes_while_the_body_moves(monkeypatch):
+    """The machine pauses (area 1 still) while the body shifts: no strokes there. Riding a
+    fixed toy (area 1 always calm, the body strokes) keeps every stroke."""
+    from vtf.analysis import TrackSection
+    from vtf.generator import generate, still_mask
+
+    sec = (TrackSection(0, ((0.2, 0.3, 0.2, 0.2), (0.5, 0.4, 0.2, 0.2))),)
+    g = GeneratorSettings(axis="vertical", smoothing_ms=50)
+    pause = _two_areas(lambda t: 0.0 if 3 <= t < 6 else 0.08, lambda t: 0.03 if 3 <= t < 6 else 0.002)
+    st = still_mask(pause, sec)
+    assert st[int(3.9 * 30):int(5.1 * 30)].all() and not st[:int(2.5 * 30)].any()
+    acts = generate(pause, g, sec).actions
+    from vtf.funscript import position_at
+    assert len([a for a in acts if 3900 < a.at < 5000]) == 0      # no strokes in the pause ...
+    assert abs(position_at(acts, 4000) - position_at(acts, 5000)) < 1   # ... and the device stands still
+    assert len([a for a in acts if a.at < 3000]) >= 4 and len([a for a in acts if a.at > 6500]) >= 4
+    import vtf.generator as G
+    with monkeypatch.context() as mp:                                # without it the body's moves were strokes
+        mp.setattr(G, "still_mask", lambda motion, sections=(): np.zeros(len(motion), bool))
+        assert len([a for a in generate(pause, g, sec).actions if 3900 < a.at < 5800]) >= 2
+    riding = _two_areas(lambda t: 0.002, lambda t: 0.06)
+    assert not still_mask(riding, sec).any()
+    assert len(generate(riding, g, sec).actions) >= 8
+
+
+def test_close_gaps_fills_only_short_ones():
+    from vtf.generator import _close_gaps
+    m = np.array([1, 1, 0, 1, 0, 0, 0, 1], bool)
+    assert _close_gaps(m, 1).tolist() == [1, 1, 1, 1, 0, 0, 0, 1]
+    assert _close_gaps(m, 3).all()
