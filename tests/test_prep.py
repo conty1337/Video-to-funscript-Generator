@@ -88,3 +88,12 @@ def test_cuts_saved_next_to_the_video(tmp_path):
     assert load_cuts(v) == [(1000, 2000), (5000, 9000)]              # cuts alone keep the file
     save_cuts(v, [])
     assert not prep_path(v).exists()
+
+
+def test_checked_findings_are_kept_with_the_cuts(tmp_path):
+    from vtf.prep import load_checked, load_cuts, save_checked, save_cuts
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    save_cuts(video, [(0, 1000)])
+    save_checked(video, {"gap:1:2:ab"})
+    assert load_checked(video) == {"gap:1:2:ab"} and load_cuts(video) == [(0, 1000)]

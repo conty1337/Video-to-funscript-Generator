@@ -31,3 +31,14 @@ def test_heat_colours_and_buckets():
     acts = [Action(0, 0), Action(1000, 10), Action(1100, 90)]   # slow, then fast
     b = bucket_speeds(acts, 2000, 20)
     assert b[2] < 50 and b[10] > 500 and b[19] == 0
+
+
+def test_flat_stretch_halfway_up_becomes_one_stroke():
+    from vtf.generator import fold_holds
+    acts = [Action(0, 5), Action(2000, 70), Action(3000, 66), Action(4000, 62), Action(4500, 100), Action(6000, 0)]
+    assert [a.at for a in fold_holds(acts)] == [0, 4500, 6000]
+    # a flat top (not halfway) and normal strokes stay
+    keep = [Action(0, 0), Action(1000, 100), Action(1500, 96), Action(2000, 100), Action(3000, 0)]
+    assert fold_holds(keep) == keep
+    zig = [Action(k * 500, 90 if k % 2 else 10) for k in range(10)]
+    assert fold_holds(zig) == zig

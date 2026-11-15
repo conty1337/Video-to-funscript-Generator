@@ -50,14 +50,17 @@ from ..i18n import plural, tr
 from ..playlist import intro_skip_ms, play_ms, quiet_stretches, resume_ms, script_start_ms, skip_target
 from ..prep import (
     load_bookmarks,
+    load_checked,
     load_cuts,
     load_prep,
     prep_path,
     save_bookmarks,
+    save_checked,
     save_cuts,
     save_prep,
 )
 from ..quality import check as check_script
+from ..quality import issue_key
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
@@ -175,6 +178,9 @@ class MainWindow(QMainWindow):
         self._skip_resume: int | None = None          # after a skip: the stroke the countdown runs to
         self._countdown_off: int | None = None        # after the pause at a cut: no second countdown before this
         self.issues: list = []                        # script check: places worth a look
+        self._checked: set[str] = set()               # findings ticked off as fine (issue_key)
+        self._issue_last = None                       # the finding F3 showed last
+        self._issues_dlg = None
         from ..stats import Recorder
         self.stats = Recorder()                       # playing time, strokes (only on this computer)
         self._stat_ms: float | None = None            # media time of the last counted tick
@@ -471,6 +477,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self._act(m, tr("Nächste Stelle zum Prüfen"), lambda: self.jump_issue(1), "F3")
         self._act(m, tr("Vorige Stelle zum Prüfen"), lambda: self.jump_issue(-1), "Shift+F3")
+        self._act(m, tr("Alle Stellen zum Prüfen …"), self.show_issues, "Ctrl+F3")
         m = self.menuBar().addMenu(tr("&Wiedergabe"))
         self._act(m, tr("Abspielen/Pause"), self.toggle_play, "Space")
         self._act(m, tr("Frame vor"), lambda: self.step_frames(1), "Right")
@@ -751,6 +758,7 @@ class MainWindow(QMainWindow):
         self.bookmarks = load_bookmarks(path)
         self._show_bookmarks()
         self.cuts = load_cuts(path)
+        self._checked = load_checked(path)
         self._cut_start = None
         self._skip_resume = None
         self._countdown_off = None
@@ -811,6 +819,7 @@ class MainWindow(QMainWindow):
         self.bookmarks = []
         self._show_bookmarks()
         self.cuts = []
+        self._checked = set()
         self._cut_start = None
         self._show_cuts()
         self.rail.set_speed(0.0)
@@ -872,28 +881,67 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------ script check
     def _update_issues(self):
-        """Check the stroke script again (cheap): marks in the curve, count on the button."""
+        """Check the stroke script again (cheap): marks in the curve, count on the button.
+        Findings ticked off as fine stay away while the points around them are the same."""
         acts = self.stroke_actions()
         lost = [(a, b) for a, b, _ar in self._lost_stretches()]
-        self.issues = check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost) if acts else []
+        found = check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost) if acts else []
+        self.issues = [it for it in found if issue_key(it, acts) not in self._checked]
         self.curve.set_issues([(it.start_ms, it.end_ms) for it in self.issues])
         n = len(self.issues)
         self.check_btn.setText(tr("{0} prüfen", n) if n else (tr("Prüfung ok") if acts else tr("Prüfung")))
         self.check_btn.setToolTip(issue_summary(self.issues) + tr(" · F3 springt zur nächsten Stelle")
                                   if acts else tr("Noch kein Script"))
+        if self._issues_dlg is not None and self._issues_dlg.isVisible():
+            self._issues_dlg.refresh()
+
+    def tick_issues(self, items):
+        """Mark findings as fine (or fixed by eye): saved next to the cuts, shown again once
+        the script changes there."""
+        acts = self.stroke_actions()
+        found = check_script(acts, self.panel.generator_settings().max_speed, self.cuts,
+                             [(a, b) for a, b, _ar in self._lost_stretches()]) if acts else []
+        current = {issue_key(it, acts) for it in found}
+        self._checked = (self._checked & current) | {issue_key(it, acts) for it in items}
+        self._save_checked()
+        self._update_issues()
+
+    def untick_issues(self):
+        self._checked = set()
+        self._save_checked()
+        self._update_issues()
+
+    def _save_checked(self):
+        if self.video_path:
+            try:
+                save_checked(self.video_path, self._checked)
+            except OSError as e:
+                self._status(tr("Prüfung nicht gespeichert: {0}", e))
+
+    def show_issues(self):
+        from .issues_dialog import IssuesDialog
+        if self._issues_dlg is None:
+            self._issues_dlg = IssuesDialog(self)
+        self._issues_dlg.refresh()
+        self._issues_dlg.show()
+        self._issues_dlg.raise_()
 
     def jump_issue(self, direction: int):
         if not self.issues:
             self._status(tr("Prüfung: nichts aufgefallen") if self.stroke_actions() else tr("Noch kein Script"))
             return
         cur = self._cur_ms()
-        if direction > 0:
+        last = self._issue_last
+        if last in self.issues and abs(cur - max(0, last.start_ms - 1000)) < 1500:
+            it = self.issues[(self.issues.index(last) + direction) % len(self.issues)]   # the seek may lag
+        elif direction > 0:
             it = next((i for i in self.issues if i.start_ms - 1000 > cur + 50), self.issues[0])
         else:
             it = next((i for i in reversed(self.issues) if i.start_ms - 1000 < cur - 50), self.issues[-1])
         self._show_issue(it)
 
     def _show_issue(self, it):
+        self._issue_last = it
         self.seek_ms(max(0, it.start_ms - 1000))            # a second before, to see it coming
         k = self.issues.index(it) + 1 if it in self.issues else 0
         self._status(tr("Prüfung {0}/{1}: {2}", k, len(self.issues), describe_issue(it)))
@@ -902,14 +950,16 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         head = menu.addAction(issue_summary(self.issues) if self.stroke_actions() else tr("Noch kein Script"))
         head.setEnabled(False)
+        if self.stroke_actions():
+            menu.addAction(tr("Alle Stellen zum Prüfen …")).triggered.connect(self.show_issues)
         if self.issues:
             menu.addSeparator()
             for it in self.issues[:40]:
                 menu.addAction(describe_issue(it)).triggered.connect(
                     lambda _c=False, x=it: self._show_issue(x))
             if len(self.issues) > 40:
-                more = menu.addAction(tr("… und {0} weitere (F3)", len(self.issues) - 40))
-                more.setEnabled(False)
+                more = menu.addAction(tr("… und {0} weitere", len(self.issues) - 40))
+                more.triggered.connect(self.show_issues)
         self._run_menu(menu, self.check_btn.mapToGlobal(self.check_btn.rect().bottomLeft()))
 
     # ------------------------------------------------------------ cuts

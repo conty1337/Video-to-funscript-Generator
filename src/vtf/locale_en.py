@@ -369,8 +369,8 @@ EN: dict[str, str] = {
         "Up to the next stroke",
     "Blau":
         "Blue",
-    "Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. Aus, wenn dort echte kleine Doppelstöße sind":
-        "If it rests briefly all the way in or out (or trembles there), a single point goes in the middle instead of two at the edges. Off if there are real small double thrusts there",
+    "Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. Aus, wenn dort echte kleine Doppelstöße sind. Steht es auf halbem Weg und geht dann weiter zur Spitze, wird daraus ein Hub":
+        "If it rests briefly all the way in or out (or trembles there), a single point goes in the middle instead of two at the edges. Off if there are real small double thrusts there. If it stops halfway and then goes on to the top, it becomes one stroke",
     "Brandung":
         "Surf",
     "Brust":
@@ -2023,8 +2023,26 @@ EN: dict[str, str] = {
         "“Try” makes 4 full strokes at the chosen tempo. Go faster until the device no longer makes it all the way or stutters, then one step back and “Apply”. The F21S manages about 200 ms.",
     "„{0}“ löschen?":
         "Delete “{0}”?",
-    "… und {0} weitere (F3)":
-        "… and {0} more (F3)",
+    "… und {0} weitere":
+        "… and {0} more",
+    "Alle Stellen zum Prüfen …":
+        "All spots to check …",
+    "Prüfung nicht gespeichert: {0}":
+        "Check not saved: {0}",
+    "Stellen zum Prüfen":
+        "Spots to check",
+    "Doppelklick springt hin. „Passt so“ blendet eine Stelle aus, bis sich das Script dort ändert – dann taucht sie zur erneuten Prüfung wieder auf.":
+        "Double-click jumps there. “Looks fine” hides a spot until the script changes there – then it comes back to be checked again.",
+    "Hinspringen":
+        "Jump there",
+    "Passt so":
+        "Looks fine",
+    "Ausgewählte Stellen abhaken (Entf)":
+        "Tick off the selected spots (Del)",
+    "Abgehakte zurückholen":
+        "Bring back ticked spots",
+    " · {0} abgehakt":
+        " · {0} ticked off",
     "≈ {0:.0f} Schläge/min":
         "≈ {0:.0f} beats/min",
     "✓ {0}: {1:.0f} Bilder/s":

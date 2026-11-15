@@ -311,7 +311,12 @@ Bewegungen), Hübe plötzlich viel kleiner als drumherum (Kästchen verrutscht?)
 ein Hub viel langsamer als die anderen (Takt setzt aus) und Stellen, wo das
 Tracking einen Bereich verloren hat. Der Knopf „Prüfung“ in der Zeitleiste zeigt
 die Liste, **F3** / **Umschalt+F3** springen zur nächsten/vorigen Stelle (eine
-Sekunde davor). Schnitte werden nicht geprüft.
+Sekunde davor). **Strg+F3** öffnet alle Stellen in einem eigenen Fenster:
+Doppelklick springt hin, „Passt so“ (Entf) hakt eine Stelle ab. Abgehakte Stellen
+werden in `<Video>.vtf.json` gespeichert und tauchen wieder auf, sobald sich das
+Script dort ändert. Schnitte werden nicht geprüft. Ein flaches Stück auf halbem
+Weg, nach dem es weiter zur Spitze schießt, wird ein einziger Hub (mit
+„Plateaus“ an).
 
 **Schnitte**: Wo im Video nichts passiert, im Editor **X** am Anfang und noch
 einmal **X** am Ende drücken (oder **Umschalt+X**: Schnitt von hier bis zum

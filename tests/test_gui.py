@@ -2231,3 +2231,48 @@ def test_back_restarts_the_video_before_its_countdown(app, sine_video, tmp_path)
         w.dirty = False
         w.close()
         w.deleteLater()
+
+
+def test_issue_window_ticks_off_and_brings_back(app, sine_video, tmp_path):
+    """Spots ticked off as fine stay away after reopening, and come back once the script
+    changes there; the window lists all of them (not only the first 40 of the menu)."""
+    import shutil
+    from vtf.funscript import Action
+    from vtf.gui import main_window as mw
+
+    video = tmp_path / "pruef.avi"
+    shutil.copy(sine_video, video)
+    w = mw.MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(video))
+        acts = [Action(k * 500, 90 if k % 2 else 10) for k in range(30)]
+        acts += [Action(20000 + k * 500, 90 if k % 2 else 10) for k in range(30)]
+        w.curve.set_actions(acts)
+        w._update_issues()
+        n = len(w.issues)
+        assert n
+        w.show_issues()
+        d = w._issues_dlg
+        assert d.list.count() == n
+        d.list.setCurrentRow(0)
+        d.list.item(0).setSelected(True)
+        d._tick()
+        assert len(w.issues) == n - 1 and d.list.count() == n - 1
+        w.dirty = False
+        w.close_video()
+        w.open_video(str(video))
+        w.curve.set_actions(acts)
+        w._update_issues()
+        assert len(w.issues) == n - 1
+        w.curve.set_actions([Action(a.at, 50) if a.at == 14500 else a for a in acts])
+        w._update_issues()
+        assert len(w.issues) >= n
+        w.jump_issue(1)
+        first = w._issue_last
+        w.jump_issue(1)
+        assert w._issue_last is not first or len(w.issues) == 1
+    finally:
+        w.dirty = False
+        w.close()
+        w.deleteLater()

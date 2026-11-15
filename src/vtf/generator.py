@@ -333,6 +333,30 @@ def extract_actions(t_ms: np.ndarray, signal: np.ndarray, s: GeneratorSettings,
     return actions
 
 
+FOLD_FLAT = 12           # points staying within this many positions count as a flat stretch
+
+
+def fold_holds(actions: list[Action]) -> list[Action]:
+    """A flat stretch halfway up a stroke that then goes on in the same direction (it rises,
+    stands, then shoots to the top) becomes one stroke: the points in the flat part go."""
+    out: list[Action] = []
+    i, n = 0, len(actions)
+    while i < n:
+        out.append(actions[i])
+        m = i + 1
+        lo = hi = actions[m].pos if m < n else 0
+        while m < n and max(hi, actions[m].pos) - min(lo, actions[m].pos) <= FOLD_FLAT:
+            lo, hi = min(lo, actions[m].pos), max(hi, actions[m].pos)
+            m += 1
+        if m - i - 1 >= 2 and m < n:
+            a, d = actions[i].pos, actions[m].pos
+            if min(a, d) + FOLD_FLAT / 2 <= lo and hi <= max(a, d) - FOLD_FLAT / 2:
+                i = m
+                continue
+        i += 1
+    return out
+
+
 def limit_speed(actions: list[Action], max_speed: float) -> list[Action]:
     """Shorten strokes the device cannot do: no step faster than max_speed
     positions per second. Each point moves towards the previous one, so the
@@ -435,7 +459,8 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
     s = s or GeneratorSettings()
     t_ms, sig = build_signal(motion, s, sections)
     if motion.track_section is None or not sections:
-        return GeneratedScript(t_ms, sig, limit_speed(extract_actions(t_ms, sig, s), s.max_speed))
+        acts = extract_actions(t_ms, sig, s)
+        return GeneratedScript(t_ms, sig, limit_speed(fold_holds(acts) if s.plateaus else acts, s.max_speed))
     sig = sig.copy()
     ranges = section_ranges(sections, motion.duration_ms + 1000)
     calibrated: set[int] = set()
@@ -455,6 +480,8 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
             scale = 0.4 if sec in calibrated else 1.0
             actions += extract_actions(t_ms[inside], sig[inside], s, delta_scale=scale)
     actions.sort(key=lambda x: x.at)
+    if s.plateaus:                       # before the pause points: a real pause of the machine stays
+        actions = fold_holds(actions)
     actions = limit_speed(_pause_points(actions, t_ms, still, s.min_interval_ms), s.max_speed)
     return GeneratedScript(t_ms, sig, actions)
 

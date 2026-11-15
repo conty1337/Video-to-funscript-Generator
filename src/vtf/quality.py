@@ -13,6 +13,7 @@ Each finding is an Issue(kind, start ms, end ms, text). Kinds:
 
 from __future__ import annotations
 
+import zlib
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,7 +28,7 @@ JITTER_COUNT = 5             # ... this many in a row
 SMALL_FRAC = 0.35            # strokes below this part of the strokes around them
 BEAT_FACTOR = 2.5            # a stroke this many times longer than the ones around it
 AROUND = 8                   # strokes on each side that count as "around"
-LOST_MIN_MS = 300            # shorter lost stretches are bridged anyway
+LOST_MIN_MS = 1000           # shorter lost stretches are bridged anyway (BRIDGE_PLAIN_S)
 
 KIND_LABELS = {
     "fast": tr("zu schnell"),
@@ -158,3 +159,10 @@ def summary(issues: list[Issue]) -> str:
 
 def describe(it: Issue) -> str:
     return f"{_fmt(it.start_ms)}  {it.label}: {it.text}"
+
+
+def issue_key(it: Issue, actions) -> str:
+    """Names a finding together with the points around it: ticked off as fine, it stays away
+    until the script changes there (then it is shown again to look at once more)."""
+    near = [(a.at, a.pos) for a in actions if it.start_ms - 1000 <= a.at <= it.end_ms + 1000]
+    return f"{it.kind}:{it.start_ms}:{it.end_ms}:{zlib.crc32(repr(near).encode()):08x}"

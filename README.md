@@ -292,7 +292,11 @@ second look at the top of the curve: too fast for the device (tempo limit or
 smaller than around them (box slipped?), one stroke much slower than the others
 (beat drops out) and spots where tracking lost an area. The “Check” button in
 the timeline shows the list, **F3** / **Shift+F3** jump to the next/previous
-spot (one second before). Cuts are not checked.
+spot (one second before). **Ctrl+F3** opens all spots in a window of their own:
+double-click jumps there, “Looks fine” (Del) ticks a spot off. Ticked spots are
+saved in `<video>.vtf.json` and come back once the script changes there. Cuts
+are not checked. A flat stretch halfway up a stroke that then shoots on to the
+top becomes one stroke (with “Plateaus” on).
 
 **Cuts**: where nothing happens, press **X** at the start and **X** again at the
 end (or **Shift+X**: cut from here to the countdown before the next stroke).
