@@ -1,6 +1,6 @@
 # Roadmap
 
-Stand: 0.10.0. Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
+Stand: 1.0.0 (alltagstauglich; neue Funktionen zählen ab jetzt 1.x hoch, Korrekturen 1.x.y). Erledigt sind Phase 1 (Analyse, Editor, Export, Stapel),
 Phase 2 Teil 1 (Gerätesteuerung über Intiface, Simulation), Phase 3
 (Player mit Playlist, Tracking mit Abschnitten und Tiefen-Kalibrierung,
 Mehrfachauswahl im Editor, weitere Achsen) und der größte Teil von Phase 4
