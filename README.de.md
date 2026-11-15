@@ -423,7 +423,10 @@ Doppelklick sucht es.
 (Richtung, Empfindlichkeit, Glättung, …) mit in der `.funscript`. Öffnest du das Video wieder,
 kommen sie zurück, so passt ein neu erzeugter Verlauf wieder zu diesem Video. Liegt die Analyse
 noch im Zwischenspeicher, wirken geänderte Einstellungen sofort auf die Kurve (Rückgängig holt
-das geladene Script zurück); sonst erst „Analysieren“.
+das geladene Script zurück); sonst erst „Analysieren“. Mit einem Ordner für Video-Daten
+(Einstellungen → Speicherorte, z. B. auf dem NAS) liegen die fertigen Analysen auch dort
+(`analysis/`), neben Kästchen, Abschnitten und Schnitten (`<Video>.vtf.json`): Ein anderer
+Rechner kann das Video öffnen und gleich weiterarbeiten.
 
 **Videobild für Scripts im Dateimanager**: Mit dem Startmenü-Eintrag meldet sich das
 AppImage auch als Vorschau-Helfer für `.funscript` an, damit Dolphin, Nautilus & Co. das

@@ -747,10 +747,20 @@ def analyze_tracking(path: str | Path, settings: AnalysisSettings, progress: Pro
 # ---------------------------------------------------------------- cache
 
 def cache_dir() -> Path:
+    """Where finished analyses are kept: in the folder for video data (analysis/) when one is
+    set, so every computer reaching it (e.g. a NAS) reuses them; else in the local cache. If
+    that folder cannot be reached right now, the local cache stands in."""
+    from .scriptdir import settings
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(Path.home(), ".cache")
-    d = Path(base) / "video-to-funscript"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    local = Path(base) / "video-to-funscript"
+    data = settings().data_folder
+    for d in ([data / "analysis"] if data is not None else []) + [local]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+        except OSError:
+            continue
+    return local
 
 
 def _cache_file(path: str | Path, settings: AnalysisSettings) -> Path:

@@ -104,7 +104,9 @@ class ScriptFolderDialog(QDialog):
         cap2 = QLabel(tr("Tracking-Kästchen, Abschnitte, Kalibrierung, Schnitte und Lesezeichen stehen in "
                          "<Video>.vtf.json. Mit einem Ordner für Video-Daten liegt diese Datei dort statt "
                          "neben dem Video, so bleibt der Video-Ordner aufgeräumt. Vorhandene Dateien neben "
-                         "dem Video werden beim nächsten Speichern in den Ordner verschoben."))
+                         "dem Video werden beim nächsten Speichern in den Ordner verschoben. Fertige Analysen "
+                         "liegen dann auch dort (analysis/): Auf einem NAS kann jeder Rechner gleich weiterarbeiten, "
+                         "ohne neu zu analysieren."))
         cap2.setObjectName("caption")
         cap2.setWordWrap(True)
         lay.addWidget(cap2)
@@ -145,21 +147,21 @@ class ScriptFolderDialog(QDialog):
         old = scriptdir.settings()
         notes = [n for n in (self._offer_move(old.folder, self.scripts.folder, "scripts"),
                              self._offer_move(old.data_folder, self.data.folder, "data")) if n]
-        if old.thumbnails and old.data_folder != self.data.folder:
-            from ..thumbs import thumb_dir
-            src = thumb_dir()                    # pictures follow the folder for video data
-        else:
-            src = None
+        from ..analysis import cache_dir
+        from ..thumbs import thumb_dir
+        moved = old.data_folder != self.data.folder
+        # pictures and finished analyses follow the folder for video data
+        follow = ([(thumb_dir(), "*.jpg", thumb_dir)] if moved and old.thumbnails else []) + \
+                 ([(cache_dir(), "*.npz", cache_dir)] if moved else [])
         try:
             scriptdir.save_settings(self.scripts.folder, self.next_to.isChecked(), self.data.folder,
                                     self.thumbs.isChecked())
         except OSError:
             pass
-        if src is not None:
-            from ..thumbs import thumb_dir
-            dst = thumb_dir()
+        for src, pattern, where in follow:
+            dst = where()
             if src != dst and src.is_dir():
-                for f in src.glob("*.jpg"):
+                for f in src.glob(pattern):
                     target = dst / f.name
                     if not target.exists():
                         try:

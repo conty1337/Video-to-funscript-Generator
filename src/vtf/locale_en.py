@@ -2087,8 +2087,8 @@ EN: dict[str, str] = {
         "Scripts",
     "Video-Daten":
         "Video data",
-    "Tracking-Kästchen, Abschnitte, Kalibrierung, Schnitte und Lesezeichen stehen in <Video>.vtf.json. Mit einem Ordner für Video-Daten liegt diese Datei dort statt neben dem Video, so bleibt der Video-Ordner aufgeräumt. Vorhandene Dateien neben dem Video werden beim nächsten Speichern in den Ordner verschoben.":
-        "Tracking boxes, sections, calibration, cuts and bookmarks are kept in <video>.vtf.json. With a folder for video data this file lies there instead of next to the video, so the video folder stays tidy. Existing files next to the video move into the folder the next time they are saved.",
+    "Tracking-Kästchen, Abschnitte, Kalibrierung, Schnitte und Lesezeichen stehen in <Video>.vtf.json. Mit einem Ordner für Video-Daten liegt diese Datei dort statt neben dem Video, so bleibt der Video-Ordner aufgeräumt. Vorhandene Dateien neben dem Video werden beim nächsten Speichern in den Ordner verschoben. Fertige Analysen liegen dann auch dort (analysis/): Auf einem NAS kann jeder Rechner gleich weiterarbeiten, ohne neu zu analysieren.":
+        "Tracking boxes, sections, calibration, cuts and bookmarks are kept in <video>.vtf.json. With a folder for video data this file lies there instead of next to the video, so the video folder stays tidy. Existing files next to the video move into the folder the next time they are saved. Finished analyses are kept there too (analysis/): on a NAS every computer can go on right away without analysing again.",
     "Ordner für Video-Daten":
         "Folder for video data",
     "keiner – neben dem Video":
