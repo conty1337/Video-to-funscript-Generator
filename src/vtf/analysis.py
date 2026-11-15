@@ -760,6 +760,15 @@ def _cache_file(path: str | Path, settings: AnalysisSettings) -> Path:
     return cache_dir() / (hashlib.sha1(key.encode()).hexdigest() + ".npz")
 
 
+def cached_motion(path: str | Path, settings: AnalysisSettings) -> MotionData | None:
+    """The analysis from the cache, if this video was analysed with these settings before."""
+    try:
+        cf = _cache_file(path, settings)
+        return MotionData.load(cf, str(path)) if cf.is_file() else None
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def analyze_motion_cached(path: str | Path, settings: AnalysisSettings | None = None,
                           progress: ProgressCb | None = None, cancel: CancelCb | None = None,
                           use_cache: bool = True) -> MotionData:
