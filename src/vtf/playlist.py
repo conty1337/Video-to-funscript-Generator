@@ -3,6 +3,8 @@ without a script, and M3U files. No Qt, so it can be tested on its own."""
 
 from __future__ import annotations
 
+import os
+
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -240,7 +242,10 @@ class Playlist:
 
     # ------------------------------------------------------------ files
     def save_m3u(self, path: str | Path) -> None:
-        lines = ["#EXTM3U"] + [str(p) for p in self.items]
+        """Videos on the same drive as the playlist are written relative to it, so the playlist
+        still works where that drive is mounted elsewhere (another computer)."""
+        base = Path(path).resolve().parent
+        lines = ["#EXTM3U"] + [_m3u_path(p, base) for p in self.items]
         Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def load_m3u(self, path: str | Path) -> int:
@@ -256,3 +261,12 @@ class Playlist:
             p = Path(line)
             paths.append(p if p.is_absolute() else base / p)
         return self.add(paths)
+
+
+def _m3u_path(item: str, base: Path) -> str:
+    try:
+        common = Path(os.path.commonpath([item, base]))
+    except ValueError:
+        return str(item)
+    # shortcut: "same drive" = sharing at least two folders below / (e.g. /mnt/truenas, /home/me)
+    return os.path.relpath(item, base) if len(common.parts) >= 3 else str(item)

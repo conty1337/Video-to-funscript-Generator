@@ -2223,4 +2223,18 @@ EN: dict[str, str] = {
         'A video from the file manager or the library starts at once; otherwise it waits for “Play”',
     'Wie groß die Hübe am Gerät sind, live (Tasten + und −)':
         'How big the strokes on the device are, live (keys + and −)',
+    'Zuletzt gespielt':
+        'Last played',
+    'Oft gespielt':
+        'Played most',
+    'Zu prüfen':
+        'Needs a look',
+    'Prüfen':
+        'Check',
+    'Stellen, die sich die Prüfung im Editor ansehen würde':
+        'Places the check in the editor would point out',
+    '\nZuletzt gespielt: {0} · insgesamt {1}':
+        '\nLast played: {0} · {1} in total',
+    'Nichts aufgefallen':
+        'Nothing stands out',
 }

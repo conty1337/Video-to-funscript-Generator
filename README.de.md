@@ -353,7 +353,8 @@ verbundenen Gerät, eins nach dem anderen. Optionen: wiederholen, zufällige
 Reihenfolge, Videos ohne Script überspringen. Bild ↑/↓ springt zum
 vorherigen/nächsten Video, F11 schaltet Vollbild (Esc beendet es, zusammen mit
 dem Not-Aus). Playlists lassen sich als `.m3u` laden und speichern, die letzte
-merkt sich die App. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
+merkt sich die App. Videos auf demselben Laufwerk stehen relativ darin, so läuft eine
+Playlist auf dem NAS auch auf einem Rechner, der es anders einbindet. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
 ersten Hub), und vor dem Start zählt ein Countdown herunter. Beides ist
 abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s, Standard 10 s).
 
@@ -374,8 +375,9 @@ Handy-Fernbedienung – macht die Hübe live kleiner, ohne das Script zu ändern
 
 **Bibliothek** (Strg+L oder Knopf oben): zeigt alle Videos mit Script aus einem
 Ordner (mit Unterordnern) mit Länge, Hüben pro Minute, mittlerem Tempo, Bewertung
-und Heatmap. Suchen, sortieren (Name, Bewertung, Tempo, Neueste, Länge) und nach
-Sternen filtern. Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
+und Heatmap. Suchen, sortieren (Name, Bewertung, Tempo, Neueste, Länge, Zuletzt
+gespielt, Oft gespielt, Zu prüfen) und nach Sternen filtern. Die Spalte „Prüfen“ zählt
+die Stellen, die die Prüfung im Editor zeigen würde (Maus darüber: welche). Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
 Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Editor
 öffnen“ zum Bearbeiten. Die Bewertungen bleiben auf dem Rechner
 (`~/.config/video-to-funscript/library.json`).

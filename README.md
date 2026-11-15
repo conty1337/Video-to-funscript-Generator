@@ -330,7 +330,8 @@ The funscript next to each video plays on the connected device, one after the
 other. Options: repeat, random order, skip videos without a script. Page ↑/↓
 jumps to the previous/next video, F11 is full screen (Esc ends it, together with
 the emergency stop). Playlists can be loaded and saved as `.m3u`, the app
-remembers the last one. A quiet start is skipped (start shortly before the first
+remembers the last one. Videos on the same drive are written relative to it, so a playlist
+on a NAS also works on a computer that mounts it elsewhere. A quiet start is skipped (start shortly before the first
 stroke), and a countdown runs before the start. Both can be switched off, the
 **countdown length** is adjustable (3–30 s, default 10 s).
 
@@ -351,8 +352,10 @@ without changing the script.
 
 **Library** (Ctrl+L or the button at the top): every video with a script in a
 folder (with subfolders), with length, strokes per minute, average tempo,
-rating and heatmap. Search, sort (name, rating, tempo, newest, length) and
-filter by stars. Rate: click the stars or press 1–5 (0 = none). A double click
+rating and heatmap. Search, sort (name, rating, tempo, newest, length, last played, played
+most, needs a look) and
+filter by stars. The “Check” column counts the places the check in the editor would
+point out (hover to see them). Rate: click the stars or press 1–5 (0 = none). A double click
 plays, “Add to playlist” appends the selected ones, “Open in editor” to edit.
 The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
 
