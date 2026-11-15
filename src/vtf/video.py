@@ -6,11 +6,13 @@ on the RX 5700 XT) and falls back to OpenCV's VideoCapture.
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -169,6 +171,11 @@ def _iter_ffmpeg(info: VideoInfo, w: int, h: int, hwaccel: str, step: int) -> It
     cmd = ffmpeg_command(info.path, w, h, hwaccel, step)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=w * h * 8,
                             env=system_env())
+    # ffmpeg's messages are read all the time: a long video with damaged spots fills the pipe
+    # (64 KB), ffmpeg then waits for it to be read and the frames stop - a hang without load
+    err_tail: collections.deque = collections.deque(maxlen=50)
+    reader = threading.Thread(target=lambda: err_tail.extend(proc.stderr), daemon=True, name="ffmpeg-stderr")
+    reader.start()
     frame_size = w * h
     produced = 0
     try:
@@ -184,7 +191,8 @@ def _iter_ffmpeg(info: VideoInfo, w: int, h: int, hwaccel: str, step: int) -> It
         proc.kill()
         proc.wait()
     if produced == 0:
-        err = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+        reader.join(timeout=2)
+        err = b"".join(err_tail).decode(errors="replace")
         raise RuntimeError(tr("FFmpeg lieferte keine Frames: {0}", err.strip()[:500]))
 
 
