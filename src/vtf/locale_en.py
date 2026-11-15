@@ -2207,6 +2207,10 @@ EN: dict[str, str] = {
         'Gentle start',
     'Weiter, wo ich aufgehört habe':
         'Go on where I stopped',
+    'Beim Öffnen gleich abspielen':
+        'Play right away when opened',
+    'Ein Video aus dem Dateimanager oder der Bibliothek startet sofort; sonst wartet es auf „Abspielen“':
+        'A video from the file manager or the library starts at once; otherwise it waits for “Play”',
     'Wie groß die Hübe am Gerät sind, live (Tasten + und −)':
         'How big the strokes on the device are, live (keys + and −)',
 }

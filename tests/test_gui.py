@@ -2098,3 +2098,30 @@ def test_player_extras_resume_intensity_gentle_start(app, sine_video, tmp_path, 
         w.close()
         w.player.qs.remove("player/spots")                            # closing keeps the spot again
         w.deleteLater()
+
+
+def test_autoplay_option_when_opening_from_outside(app, sine_video, tmp_path):
+    """Opening from the file manager/library plays at once, or only gets ready when switched off."""
+    from pathlib import Path
+    import shutil
+    from vtf.gui.main_window import MainWindow
+
+    path = tmp_path / "auf.avi"
+    shutil.copy(sine_video, path)
+    w = MainWindow()
+    try:
+        w.set_player_mode(True)
+        w.player.resume_cb.setChecked(False)
+        w.player.autoplay_cb.setChecked(False)
+        w._library_play(str(path))
+        assert w.video_path and Path(w.video_path) == path.resolve() and not w.timer.isActive()
+        w.player.autoplay_cb.setChecked(True)
+        w._library_play(str(path))
+        assert w.timer.isActive()
+    finally:
+        w.pause()
+        w.player.autoplay_cb.setChecked(True)
+        w.dirty = False
+        w.close()
+        w.player.qs.remove("player/spots")
+        w.deleteLater()

@@ -357,6 +357,9 @@ merkt sich die App. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
 ersten Hub), und vor dem Start zählt ein Countdown herunter. Beides ist
 abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s, Standard 10 s).
 
+**Beim Öffnen gleich abspielen** (Standard an): Ein Video aus dem Dateimanager oder der
+Bibliothek startet sofort; ausgeschaltet wird es nur bereitgelegt und wartet auf „Abspielen“.
+
 **Weiter, wo ich aufgehört habe**: Ein Video, das du mittendrin verlassen hast,
 geht beim nächsten Mal kurz vor dieser Stelle weiter (abschaltbar). **Sanfter
 Start**: Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben

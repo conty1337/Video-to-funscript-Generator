@@ -211,8 +211,9 @@ class SettingsDialog(QDialog):
         self.cut_pause_s = _mirror_spin(pp.cut_pause_s)
         self.quiet = _mirror_check(pp.quiet_cb)
         self.resume = _mirror_check(pp.resume_cb)
+        self.autoplay = _mirror_check(pp.autoplay_cb)
         self.ramp_s = _mirror_spin(pp.ramp_s)
-        for w in (self.intro, self.resume, self.countdown):
+        for w in (self.autoplay, self.intro, self.resume, self.countdown):
             lay.addWidget(w)
         f = _form()
         f.addRow(DeviceDialog._label(tr("Countdown-Länge")), DeviceDialog._row(self.countdown_s))
