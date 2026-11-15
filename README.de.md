@@ -419,6 +419,10 @@ Bibliotheksordner. Wurde es verschoben oder umbenannt, fragt sie einmal mit
 Video nicht zu finden ist, stehen in der Bibliothek mit „Video fehlt“; ein
 Doppelklick sucht es.
 
+**Einstellungen reisen mit dem Script**: Beim Speichern stehen die Script-Einstellungen
+(Richtung, Empfindlichkeit, Glättung, …) mit in der `.funscript`. Öffnest du das Video wieder,
+kommen sie zurück, so passt ein neu erzeugter Verlauf wieder zu diesem Video.
+
 **Videobild für Scripts im Dateimanager**: Mit dem Startmenü-Eintrag meldet sich das
 AppImage auch als Vorschau-Helfer für `.funscript` an, damit Dolphin, Nautilus & Co. das
 Bild des Videos zeigen statt eines Text-Symbols. In Dolphin einmal unter Dolphin

@@ -236,6 +236,21 @@ def video_link(video: str | Path, script: str | Path) -> str:
     return Path(os.path.relpath(os.path.abspath(video), os.path.abspath(Path(script).parent))).as_posix()
 
 
+SETTINGS_KEY = "vtf_settings"   # funscript metadata: the script settings it was made with
+
+
+def stored_settings(script: str | Path | None) -> dict | None:
+    """The script settings (Richtung, Empfindlichkeit, …) saved in a funscript, if any."""
+    if script is None:
+        return None
+    try:
+        with open(script, encoding="utf-8") as f:
+            g = (json.load(f).get("metadata") or {}).get(SETTINGS_KEY)
+    except (OSError, ValueError, AttributeError):
+        return None
+    return g if isinstance(g, dict) and g else None
+
+
 def linked_video(script: str | Path) -> Path | None:
     """The video a funscript names in its metadata (written on saving), if it is there."""
     try:

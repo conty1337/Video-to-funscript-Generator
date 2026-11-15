@@ -6,7 +6,7 @@ import bisect
 import json
 import math
 import threading
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import cv2
@@ -62,12 +62,14 @@ from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
     LINK_KEY,
+    SETTINGS_KEY,
     find_script,
     find_video,
     remember_video,
     remembered_video,
     save_paths,
     video_link,
+    stored_settings,
     video_stem,
 )
 from ..scriptdir import settings as script_settings
@@ -676,7 +678,15 @@ class MainWindow(QMainWindow):
         self._update_heat()
         self._update_issues()
         self.dirty = False
-        self._status(tr("Script geladen: {0}", script.name))
+        self._status(tr("Script geladen: {0}", script.name) + self._take_script_settings(main if main.is_file() else script))
+
+    def _take_script_settings(self, script) -> str:
+        """A script saved with its own settings brings them back (they suit this video)."""
+        g = stored_settings(script)
+        if g is None:
+            return ""
+        self.panel.set_generator(g)
+        return tr(" · Einstellungen aus dem Script übernommen")
 
     def open_video(self, path: str):
         if str(path).lower().endswith(".funscript"):
@@ -748,7 +758,8 @@ class MainWindow(QMainWindow):
         self._update_axis_labels()
         if loaded:
             extra = [AXES[a][0] for a in loaded if a != "L0"]
-            self._status(tr("Vorhandenes Funscript geladen") + (f" (+ {', '.join(extra)})" if extra else ""))
+            self._status(tr("Vorhandenes Funscript geladen") + (f" (+ {', '.join(extra)})" if extra else "")
+                         + self._take_script_settings(find_script(path)))
         else:
             self._status(tr("Bereit zur Analyse"))
         self.seek_frame(0)
@@ -2146,7 +2157,8 @@ class MainWindow(QMainWindow):
                             target.unlink(missing_ok=True)
                         continue
                     Funscript(acts, metadata={**self._metadata_for(target, meta),
-                                                LINK_KEY: video_link(self.video_path, target)}).save(target)
+                                                LINK_KEY: video_link(self.video_path, target),
+                                                SETTINGS_KEY: asdict(self.panel.generator_settings())}).save(target)
                     written.append(target)
                     if target.name not in saved:
                         saved.append(target.name)

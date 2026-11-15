@@ -322,7 +322,18 @@ def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
         w.axis_actions["R1"] = []                                     # the user cleared Roll
         w.export()
         assert not roll.exists()
-        assert Funscript.load(near).metadata == {"creator": "Someone", "title": "T", "vtf_video": "sine.avi"}
+        meta = Funscript.load(near).metadata
+        assert {k: meta[k] for k in ("creator", "title", "vtf_video")} == {"creator": "Someone", "title": "T",
+                                                                          "vtf_video": "sine.avi"}
+        # the script keeps its own settings and brings them back when the video is opened again
+        assert meta["vtf_settings"]["sensitivity"] == w.panel.sensitivity.value()
+        g = dict(meta["vtf_settings"], sensitivity=23, invert=True)
+        Funscript(Funscript.load(near).actions, metadata={**meta, "vtf_settings": g}).save(near)
+        hwaccel = w.panel.hwaccel.currentData()
+        w.open_video(str(sine_video))
+        assert w.panel.sensitivity.value() == 23 and w.panel.invert.isChecked()
+        assert w.panel.hwaccel.currentData() == hwaccel and not w.dirty   # analysis options and curve untouched
+        w.panel.load_dict({})                                         # back to the defaults for later tests
     finally:
         w.dirty = False
         w.close()
