@@ -2161,3 +2161,21 @@ def test_load_funscript_into_the_open_video_or_with_its_video(app, sine_video, t
         w.dirty = False
         w.close()
         w.deleteLater()
+
+
+def test_curve_draws_the_line_to_a_point_far_outside(app):
+    """A long pause: the line to the next point a minute later is drawn even when that point
+    is far outside the view, and a stretch with no point in it still shows the line."""
+    from vtf.funscript import Action
+    from vtf.gui.curve_widget import CurveWidget
+
+    c = CurveWidget()
+    c.resize(640, 240)
+    acts = [Action(0, 10), Action(5_000, 90), Action(65_000, 90), Action(66_000, 10)]
+    c.set_data(c.t_ms[:0], c.signal[:0], acts, 120_000)
+    c.view_ms, c.start_ms = 20_000, 0
+    assert list(c._visible_points()) == [0, 1, 2]         # 65 s is outside but joined
+    c.start_ms = 30_000                                     # inside the pause, no point in view
+    assert list(c._visible_points()) == [1, 2]
+    c.grab()                                                # paints without error
+    c.deleteLater()

@@ -223,6 +223,14 @@ class CurveWidget(QWidget):
         return best
 
     # ------------------------------------------------------------ painting
+    def _visible_points(self) -> range:
+        """Indexes of the points in view plus the next one on each side, so a line to a point
+        far outside (a long pause) is still drawn."""
+        times = [a.at for a in self.actions]
+        lo = max(0, bisect.bisect_left(times, self.start_ms) - 1)
+        hi = min(len(times), bisect.bisect_right(times, self.start_ms + self.view_ms) + 1)
+        return range(lo, hi)
+
     def paintEvent(self, _ev):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
@@ -327,8 +335,7 @@ class CurveWidget(QWidget):
             p.setPen(QPen(theme.qcolor(theme.TEXT_2, 0.35), 1))
             p.drawPath(path)
         # actions
-        vis = [i for i, a in enumerate(self.actions)
-               if self.start_ms - 5000 <= a.at <= self.start_ms + self.view_ms + 5000]
+        vis = self._visible_points()
         if vis:
             path = QPainterPath()
             for k, i in enumerate(vis):
