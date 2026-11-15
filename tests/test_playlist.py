@@ -160,3 +160,15 @@ def test_countdown_time_skips_cuts():
     assert before_ms(30_000, 10_000, [(17_000, 18_000), (20_000, 24_000)]) == 15_000
     acts = [Action(0, 50), Action(30_000, 50), Action(30_400, 90)]
     assert intro_skip_ms(acts, 10_000) == 20_000 and intro_skip_ms(acts, 10_000, cuts) == 16_000
+
+
+def test_a_first_point_at_zero_is_no_start():
+    """Many scripts begin with one point at 0:00 and the first stroke much later: the slow glide
+    in between neither starts the script nor ends a pause, so the intro is still skipped."""
+    from vtf.funscript import Action
+    from vtf.playlist import intro_skip_ms, resume_ms, script_start_ms
+
+    acts = [Action(0, 50)] + [Action(30_000 + i * 400, 10 if i % 2 else 90) for i in range(10)]
+    assert script_start_ms(acts) == 30_000
+    assert intro_skip_ms(acts, 10_000) == 20_000
+    assert resume_ms(0, acts) == 30_000

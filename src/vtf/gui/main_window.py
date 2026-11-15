@@ -1725,8 +1725,7 @@ class MainWindow(QMainWindow):
         if self.video_path and Path(self.video_path) == Path(pl.items[index]):
             self.prev_btn.setEnabled(True)
             self.next_btn.setEnabled(True)
-            skip = (intro_skip_ms(self.stroke_actions(), self.player.lead_ms(), self._skipped_cuts())
-                    if self.player.intro_cb.isChecked() else 0)
+            skip = self._intro_skip()
             spot = self.player.resume_spot(self.video_path)
             if spot is not None:
                 self.seek_ms(spot)
@@ -1774,10 +1773,16 @@ class MainWindow(QMainWindow):
             return
         self.play_index(i)
 
+    def _intro_skip(self) -> int:
+        """Where a video starts in the player: before its countdown when the intro is skipped."""
+        if not self.player.intro_cb.isChecked():
+            return 0
+        return intro_skip_ms(self.stroke_actions(), self.player.lead_ms(), self._skipped_cuts())
+
     def play_prev(self):
-        # like music players: more than 3 s in -> restart this video
-        if self.timer.isActive() and self._media_ms() > 3000:
-            self.seek_frame(0)
+        # like music players: more than 3 s in -> restart this video (with its countdown)
+        if self.timer.isActive() and self._media_ms() > max(3000, self._intro_skip() + 3000):
+            self.seek_ms(self._intro_skip())
             return
         i = self.player.playlist.prev_index()
         if i is not None:

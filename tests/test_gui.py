@@ -2201,3 +2201,33 @@ def test_keys_work_in_full_screen(app):
         w.dirty = False
         w.close()
         w.deleteLater()
+
+
+def test_back_restarts_the_video_before_its_countdown(app, sine_video, tmp_path):
+    """Back (more than a few seconds in) starts this video again where it starts from the
+    playlist: before the countdown, not at 0:00."""
+    from vtf.funscript import Action, Funscript, funscript_path_for
+    from vtf.gui.main_window import MainWindow
+    from videogen import make_video
+
+    video = make_video(tmp_path / "zurueck.avi", seconds=12)
+    Funscript([Action(0, 50)] + [Action(9_000 + i * 300, 10 if i % 2 else 90) for i in range(3)]).save(
+        funscript_path_for(video))
+    w = MainWindow()
+    try:
+        w.set_player_mode(True)
+        w.player.resume_cb.setChecked(False)
+        w.player.countdown_s.setValue(3)                    # first stroke at 9 s: start at 6 s
+        w.player.playlist.set_items([str(video)])
+        w.play_index(0)
+        assert abs(w._cur_ms() - 6000) < 100
+        w.seek_ms(10_500)
+        w._media_ms = lambda: 10_500.0
+        w.play_prev()
+        assert abs(w._cur_ms() - 6000) < 100
+    finally:
+        w.pause()
+        w.player.countdown_s.setValue(10)
+        w.dirty = False
+        w.close()
+        w.deleteLater()
