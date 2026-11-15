@@ -42,6 +42,18 @@ def mime_file() -> Path:
     return data_home() / "mime" / "packages" / f"{APP_ID}.xml"
 
 
+def thumbnailer_file() -> Path:
+    return data_home() / "thumbnailers" / f"{APP_ID}.thumbnailer"
+
+
+def thumbnailer_text(appimage: Path) -> str:
+    # the video's picture for .funscript files in Dolphin, Nautilus & co. (freedesktop thumbnailer)
+    return ("[Thumbnailer Entry]\n"
+            f"TryExec={appimage}\n"
+            f"Exec={_quote(str(appimage))} --thumbnail %i %o %s\n"
+            "MimeType=application/x-funscript;\n")
+
+
 #: .funscript files as their own type, so a double click in the file manager opens the app
 #: (which then opens the matching video)
 MIME_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -105,7 +117,8 @@ def integrated_elsewhere(appimage: Path) -> bool:
 
 def is_installed(appimage: Path) -> bool:
     try:
-        return desktop_file().read_text(encoding="utf-8") == entry_text(appimage)
+        return (desktop_file().read_text(encoding="utf-8") == entry_text(appimage)
+                and thumbnailer_file().read_text(encoding="utf-8") == thumbnailer_text(appimage))
     except OSError:
         return False
 
@@ -123,6 +136,8 @@ def install(appimage: Path) -> bool:
         return False
     mime_file().parent.mkdir(parents=True, exist_ok=True)
     mime_file().write_text(MIME_XML, encoding="utf-8")
+    thumbnailer_file().parent.mkdir(parents=True, exist_ok=True)
+    thumbnailer_file().write_text(thumbnailer_text(appimage), encoding="utf-8")
     df = desktop_file()
     df.parent.mkdir(parents=True, exist_ok=True)
     for src, dst in ((ICON_SRC, icon_file()), (ICON_PNG_SRC, icon_png_file())):
@@ -139,7 +154,7 @@ def install(appimage: Path) -> bool:
 
 def uninstall() -> bool:
     removed = False
-    for f in (desktop_file(), icon_file(), icon_png_file(), mime_file()):
+    for f in (desktop_file(), icon_file(), icon_png_file(), mime_file(), thumbnailer_file()):
         try:
             f.unlink()
             removed = True

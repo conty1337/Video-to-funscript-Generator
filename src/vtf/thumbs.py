@@ -18,7 +18,7 @@ from urllib.parse import quote
 import cv2
 import numpy as np
 
-from .scriptdir import foreign, settings
+from .scriptdir import find_video, foreign, settings
 
 WIDTH = 320
 QUALITY = 82
@@ -134,6 +134,33 @@ def _png_with_text(png: bytes, text: dict[str, str]) -> bytes:
     return png[:end] + chunks + png[end:]
 
 
+def _png(img: np.ndarray, px: int) -> bytes | None:
+    h, w = img.shape[:2]
+    k = min(1.0, px / max(h, w))
+    ok, buf = cv2.imencode(".png", cv2.resize(img, (max(1, round(w * k)), max(1, round(h * k))),
+                                              interpolation=cv2.INTER_AREA))
+    return buf.tobytes() if ok else None
+
+
+def script_thumbnail(script: str | Path, out: str | Path, size: int) -> bool:
+    """For the file manager's thumbnailer (`--thumbnail IN OUT SIZE`): the video's picture as
+    PNG at `out`. Dolphin only looks for a script's picture when a thumbnailer is set up for
+    its type; then it also reads what publish() put into the cache."""
+    video = find_video(script)
+    if video is None:
+        return False
+    pic = get_thumb(video) or make_thumb(video)
+    img = cv2.imread(str(pic)) if pic is not None else None
+    png = _png(img, max(16, int(size))) if img is not None else None
+    if png is None:
+        return False
+    try:
+        Path(out).write_bytes(png)
+    except OSError:
+        return False
+    return True
+
+
 def publish(script: str | Path, video_or_stem: str | Path) -> bool:
     """Show the video's picture for this script file in file managers. Nothing to do when
     pictures are off, the picture is missing or the cache already has it for this version."""
@@ -157,13 +184,10 @@ def publish(script: str | Path, video_or_stem: str | Path) -> bool:
             img = cv2.imread(str(pic))
             if img is None:
                 return False
-        h, w = img.shape[:2]
-        k = min(1.0, px / max(h, w))
-        ok, buf = cv2.imencode(".png", cv2.resize(img, (max(1, round(w * k)), max(1, round(h * k))),
-                                                  interpolation=cv2.INTER_AREA))
-        if not ok:
+        png = _png(img, px)
+        if png is None:
             return False
-        data = _png_with_text(buf.tobytes(), {"Thumb::URI": _file_uri(script), "Thumb::MTime": mtime,
+        data = _png_with_text(png, {"Thumb::URI": _file_uri(script), "Thumb::MTime": mtime,
                                               "Software": "Video-to-Funscript"})
         try:
             out.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

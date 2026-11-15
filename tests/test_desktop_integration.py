@@ -75,3 +75,14 @@ def test_funscript_files_open_with_the_app(tmp_path, monkeypatch):
     assert not di.install(app)                                       # nothing new to write
     di.uninstall()
     assert not di.mime_file().exists()
+
+
+def test_thumbnailer_for_funscripts(tmp_path, monkeypatch):
+    app = setup(tmp_path, monkeypatch)
+    di.install(app)
+    text = di.thumbnailer_file().read_text()
+    assert f'Exec="{app}" --thumbnail %i %o %s' in text and "MimeType=application/x-funscript;" in text
+    di.thumbnailer_file().unlink()
+    assert di.install(app)                      # older install without it gets it on the next start
+    di.uninstall()
+    assert not di.thumbnailer_file().exists()

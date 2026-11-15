@@ -8,6 +8,9 @@ from pathlib import Path
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["--thumbnail"] and len(sys.argv) >= 5:   # for the file manager, see desktop_integration
+        from ..thumbs import script_thumbnail
+        return 0 if script_thumbnail(sys.argv[2], sys.argv[3], int(sys.argv[4])) else 1
     if sys.argv[1:2] == ["--check-update"]:   # ohne Oberfläche, z. B. zur Fehlersuche
         return _check_update_cli()
     from PySide6.QtGui import QIcon
