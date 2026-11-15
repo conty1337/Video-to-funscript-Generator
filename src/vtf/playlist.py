@@ -15,11 +15,20 @@ from .scriptdir import has_script as _has_script
 LEAD_MS = 10_000
 
 
+#: a change slower than this is a glide, not a stroke (e.g. from a first point at 0:00 to the
+#: first real stroke): it neither starts the script nor ends a pause
+STROKE_MAX_MS = 4000
+
+
+def _is_stroke(a, b, min_change: int) -> bool:
+    return abs(b.pos - a.pos) >= min_change and b.at - a.at <= STROKE_MAX_MS
+
+
 def script_start_ms(actions, min_change: int = 10) -> int | None:
     """When the script really starts moving: the action a first stroke of at least
     `min_change` positions starts from. None if it never moves."""
     for a, b in zip(actions, actions[1:]):
-        if abs(b.pos - a.pos) >= min_change:
+        if _is_stroke(a, b, min_change):
             return int(a.at)
     return None
 
@@ -90,7 +99,7 @@ def resume_spot(spots: dict, key: str) -> int | None:
 
 def _moves(actions, min_change: int = 10) -> list[tuple[int, int]]:
     """(start, end) of every stroke of at least `min_change` positions."""
-    return [(int(a.at), int(b.at)) for a, b in zip(actions, actions[1:]) if abs(b.pos - a.pos) >= min_change]
+    return [(int(a.at), int(b.at)) for a, b in zip(actions, actions[1:]) if _is_stroke(a, b, min_change)]
 
 
 def resume_ms(ms: float, actions, pause_ms: int = LEAD_MS) -> int | None:
