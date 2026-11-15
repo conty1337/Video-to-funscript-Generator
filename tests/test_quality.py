@@ -42,3 +42,13 @@ def test_device_speed_limit_is_used():
     acts = [Action(0, 0), Action(250, 100), Action(500, 0)]      # 400 positions per second
     assert not any(i.kind == "fast" for i in check(acts))        # default 500
     assert any(i.kind == "fast" for i in check(acts, max_speed=300))
+
+
+def test_ticked_finding_comes_back_when_the_script_changes_there():
+    from vtf.quality import issue_key
+    acts = _strokes(0, 30) + _strokes(20000, 30)
+    gap = next(i for i in check(acts) if i.kind == "gap")
+    key = issue_key(gap, acts)
+    assert issue_key(gap, list(acts)) == key
+    moved = [Action(a.at, 50) if a.at == 14500 else a for a in acts]
+    assert issue_key(gap, moved) != key

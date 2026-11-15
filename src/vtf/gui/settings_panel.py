@@ -153,7 +153,7 @@ class SettingsPanel(QWidget):
         self.invert = QCheckBox(tr("Richtung umkehren"))
         self.full_stroke = QCheckBox(tr("Immer voller Hub"))
         self.plateaus = QCheckBox(tr("Plateaus: ein Punkt in der Mitte"))
-        self.plateaus.setToolTip(tr("Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. Aus, wenn dort echte kleine Doppelstöße sind"))
+        self.plateaus.setToolTip(tr("Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. Aus, wenn dort echte kleine Doppelstöße sind. Steht es auf halbem Weg und geht dann weiter zur Spitze, wird daraus ein Hub"))
         self.plateaus.setChecked(True)
         lay.addWidget(self.invert)
         lay.addWidget(self.full_stroke)

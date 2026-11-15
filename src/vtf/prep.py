@@ -80,7 +80,7 @@ def _write(video: str | Path, data: dict) -> Path | None:
 
 
 def data_has(data: dict) -> bool:
-    return bool(data.get("sections") or data.get("bookmarks") or data.get("cuts"))
+    return bool(data.get("sections") or data.get("bookmarks") or data.get("cuts") or data.get("checked"))
 
 
 def save_bookmarks(video: str | Path, bookmarks) -> Path | None:
@@ -115,6 +115,19 @@ def load_cuts(video: str | Path) -> list[tuple[int, int]]:
         return []
 
 
+def save_checked(video: str | Path, keys) -> Path | None:
+    """Findings of the script check ticked off as fine (quality.issue_key)."""
+    data = _read(prep_path(video))
+    data.setdefault("version", PREP_VERSION)
+    data["checked"] = sorted(str(k) for k in keys)
+    return _write(video, data)
+
+
+def load_checked(video: str | Path) -> set[str]:
+    v = _read(prep_path(video)).get("checked", [])
+    return {str(k) for k in v} if isinstance(v, list) else set()
+
+
 def save_prep(video: str | Path, sections) -> Path | None:
     """Write the sections (bookmarks are kept); with neither the file is removed.
     Returns the path written."""
@@ -136,7 +149,7 @@ def save_prep(video: str | Path, sections) -> Path | None:
             **({"stroke": list(_box(s.stroke))} if s.stroke else {}),
         } for s in secs],
     }
-    for key in ("bookmarks", "cuts"):
+    for key in ("bookmarks", "cuts", "checked"):
         if old.get(key):
             data[key] = old[key]
     return _write(video, data)
