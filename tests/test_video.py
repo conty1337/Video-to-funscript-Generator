@@ -1,4 +1,5 @@
 """Decoder setups: GPU scaling first, falling back without a GPU."""
+import pytest
 from vtf.video import decode_attempts, ffmpeg_command, iter_gray_frames, probe
 
 
@@ -80,3 +81,32 @@ def test_opencl_hint_for_nvidia(tmp_path, monkeypatch):
     assert "nvidia-cuda-libs" in gpu.opencl_hint()
     monkeypatch.setattr(gpu, "has_nvidia", lambda: False)
     assert "AMD" in gpu.opencl_hint()
+
+
+def test_ffmpeg_messages_do_not_stall_the_frames(monkeypatch):
+    """A long video with damaged spots: ffmpeg writes many messages while it decodes. They are
+    read all the time, otherwise the full pipe stops ffmpeg and the analysis hangs without load."""
+    import sys
+    import threading
+
+    from vtf import video
+
+    w, h, n = 8, 6, 40
+    script = ("import sys\n"
+              f"for i in range({n}):\n"
+              "    sys.stderr.write('[h264] error while decoding MB %d\\n' % i * 400)\n"
+              "    sys.stderr.flush()\n"
+              f"    sys.stdout.buffer.write(bytes([i]) * {w * h}); sys.stdout.flush()\n")
+    monkeypatch.setattr(video, "ffmpeg_command", lambda *a: [sys.executable, "-c", script])
+    info = video.VideoInfo(path="x.mp4", width=w, height=h, fps=30.0, frame_count=n)
+    got = []
+    t = threading.Thread(target=lambda: got.extend(video._iter_ffmpeg(info, w, h, "none", 1)), daemon=True)
+    t.start()
+    t.join(timeout=20)
+    assert not t.is_alive(), "frames stalled behind ffmpeg's messages"
+    assert len(got) == n
+
+    monkeypatch.setattr(video, "ffmpeg_command",
+                        lambda *a: [sys.executable, "-c", "import sys; sys.stderr.write('Invalid data found')"])
+    with pytest.raises(RuntimeError, match="Invalid data found"):
+        list(video._iter_ffmpeg(info, w, h, "none", 1))
