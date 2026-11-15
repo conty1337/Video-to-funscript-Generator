@@ -128,3 +128,12 @@ def test_file_managers_get_the_picture_for_the_script(cfg, sine_video, monkeypat
     assert thumbs.publish(script, sine_video) and out.stat().st_mtime_ns == first   # still current
     os.utime(script, (time.time() + 5, time.time() + 5))           # saved again: new picture
     assert thumbs.publish(script, sine_video) and out.stat().st_mtime_ns != first
+
+
+def test_thumbnailer_gives_the_video_picture_for_a_script(cfg, sine_video):
+    script = sine_video.with_suffix(".funscript"); script.write_text('{"actions": []}')
+    out = cfg / "out.png"
+    assert thumbs.script_thumbnail(script, out, 128)                # picture made on the fly
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    lone = cfg / "lone.funscript"; lone.write_text('{"actions": []}')
+    assert not thumbs.script_thumbnail(lone, cfg / "none.png", 128)

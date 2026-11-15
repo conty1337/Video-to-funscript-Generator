@@ -384,6 +384,12 @@ folder. If the video was moved or renamed, it asks you to look for it once and
 remembers the new place. Scripts in the script folder whose video cannot be found
 show up in the library as “video missing”; a double click looks for it.
 
+**Video picture for scripts in the file manager**: with the start menu entry the AppImage
+also sets itself up as thumbnailer for `.funscript` files, so Dolphin, Nautilus & co. show the
+video’s picture instead of a text icon. In Dolphin tick “Funscript” once under Configure
+Dolphin → Previews (and allow previews for remote files when the scripts are on a network
+drive).
+
 **Statistics** (Device → Statistics…): playing time, strokes and days for today,
 7 days, 30 days and in total, plus favourite videos and patterns (by playing
 time). Counted is what plays with a script, and patterns/programs/random/music
