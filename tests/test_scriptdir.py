@@ -333,7 +333,19 @@ def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
         w.open_video(str(sine_video))
         assert w.panel.sensitivity.value() == 23 and w.panel.invert.isChecked()
         assert w.panel.hwaccel.currentData() == hwaccel and not w.dirty   # analysis options and curve untouched
+        assert w.motion is None                                       # not analysed yet: settings need "Analysieren"
+        from vtf.analysis import analyze_motion_cached
+        analyze_motion_cached(str(sine_video), w.panel.analysis_settings())
+        w.open_video(str(sine_video))
+        assert w.motion is not None                                   # from the cache: settings act at once
+        before = [(a.at, a.pos) for a in w.curve.actions]
+        w.regenerate()
+        assert [(a.at, a.pos) for a in w.curve.actions] != before
+        w.undo()
+        assert [(a.at, a.pos) for a in w.curve.actions] == before    # the loaded script is one Undo away
+        w.motion = None                                               # no regenerating on the way out
         w.panel.load_dict({})                                         # back to the defaults for later tests
+        w.regen_timer.stop()
     finally:
         w.dirty = False
         w.close()

@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, editing, gpu
-from ..analysis import MotionData
+from ..analysis import MotionData, cached_motion
 from ..batch import VIDEO_EXTS, make_metadata
 from ..editing import rhythm
 from ..funscript import (
@@ -680,6 +680,17 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self._status(tr("Script geladen: {0}", script.name) + self._take_script_settings(main if main.is_file() else script))
 
+    def _take_cached_motion(self) -> str:
+        """With the analysis in the cache, changed script settings act on the loaded script at
+        once (the loaded script stays one Undo away); without it they need an analysis first."""
+        motion = cached_motion(self.video_path, self.panel.analysis_settings())
+        if motion is None:
+            return tr(" · Einstellungen wirken nach „Analysieren“")
+        self.motion = motion
+        self._push_undo()
+        self._update_section_marks()
+        return ""
+
     def _take_script_settings(self, script) -> str:
         """A script saved with its own settings brings them back (they suit this video)."""
         g = stored_settings(script)
@@ -759,7 +770,7 @@ class MainWindow(QMainWindow):
         if loaded:
             extra = [AXES[a][0] for a in loaded if a != "L0"]
             self._status(tr("Vorhandenes Funscript geladen") + (f" (+ {', '.join(extra)})" if extra else "")
-                         + self._take_script_settings(find_script(path)))
+                         + self._take_script_settings(find_script(path)) + self._take_cached_motion())
         else:
             self._status(tr("Bereit zur Analyse"))
         self.seek_frame(0)

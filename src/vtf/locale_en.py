@@ -2239,4 +2239,6 @@ EN: dict[str, str] = {
         'Nothing stands out',
     ' · Einstellungen aus dem Script übernommen':
         ' · settings taken from the script',
+    ' · Einstellungen wirken nach „Analysieren“':
+        ' · settings take effect after “Analyse”',
 }

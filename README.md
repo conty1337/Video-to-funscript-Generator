@@ -395,7 +395,9 @@ show up in the library as “video missing”; a double click looks for it.
 
 **Settings travel with the script**: on saving, the script settings (direction,
 sensitivity, smoothing, …) are stored in the `.funscript`. Opening the video again brings them
-back, so tweaking a regenerated curve starts from what suited this video.
+back, so tweaking a regenerated curve starts from what suited this video. If the video's analysis is still in the cache, changed
+settings act on the curve at once (Undo brings the loaded script back); otherwise press Analyse
+first (from the cache it takes a moment).
 
 **Video picture for scripts in the file manager**: with the start menu entry the AppImage
 also sets itself up as thumbnailer for `.funscript` files, so Dolphin, Nautilus & co. show the

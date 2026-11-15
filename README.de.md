@@ -421,7 +421,9 @@ Doppelklick sucht es.
 
 **Einstellungen reisen mit dem Script**: Beim Speichern stehen die Script-Einstellungen
 (Richtung, Empfindlichkeit, Glättung, …) mit in der `.funscript`. Öffnest du das Video wieder,
-kommen sie zurück, so passt ein neu erzeugter Verlauf wieder zu diesem Video.
+kommen sie zurück, so passt ein neu erzeugter Verlauf wieder zu diesem Video. Liegt die Analyse
+noch im Zwischenspeicher, wirken geänderte Einstellungen sofort auf die Kurve (Rückgängig holt
+das geladene Script zurück); sonst erst „Analysieren“.
 
 **Videobild für Scripts im Dateimanager**: Mit dem Startmenü-Eintrag meldet sich das
 AppImage auch als Vorschau-Helfer für `.funscript` an, damit Dolphin, Nautilus & Co. das
