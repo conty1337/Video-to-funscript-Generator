@@ -2197,16 +2197,24 @@ class MainWindow(QMainWindow):
     def load_funscript_dialog(self):
         start = str(find_script(self.video_path) or save_paths(self.video_path)[-1]) if self.video_path else ""
         path, _ = QFileDialog.getOpenFileName(self, tr("Funscript laden"), start, tr("Funscript (*.funscript)"))
-        if path:
-            try:
-                fs = Funscript.load(path)
-            except (OSError, ValueError, KeyError) as e:
-                QMessageBox.critical(self, tr("Fehler"), str(e))
-                return
-            self._push_undo()
-            self.curve.set_actions(fs.actions)
-            self._update_axis_labels()
-            self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path))
+        if not path:
+            return
+        if not self.video_path:                   # nothing open yet: open the script with its video
+            self.open_script(path)
+            return
+        try:
+            fs = Funscript.load(path)
+        except (OSError, ValueError, KeyError) as e:
+            QMessageBox.critical(self, tr("Fehler"), str(e))
+            return
+        self._push_undo()
+        self.curve.set_actions(fs.actions)
+        self.dirty = True
+        self._update_axis_labels()
+        self._update_heat()
+        self._update_issues()
+        self._status(tr("Geladen in Achse {0}: {1}", AXES[self.axis][0], path)
+                     + (self._take_script_settings(path) if self.axis == "L0" else ""))
 
     def open_settings(self, page: str = "general"):
         from .scripts_ui import describe

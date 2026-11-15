@@ -2129,3 +2129,35 @@ def test_autoplay_option_when_opening_from_outside(app, sine_video, tmp_path):
         w.close()
         w.player.qs.remove("player/spots")
         w.deleteLater()
+
+
+def test_load_funscript_into_the_open_video_or_with_its_video(app, sine_video, tmp_path, monkeypatch):
+    """File → Funscript laden: into the open video (unsaved, numbers updated); with nothing open
+    the script brings its video along."""
+    import shutil
+    from pathlib import Path
+    from vtf.funscript import Action, Funscript
+    from vtf.gui import main_window as mw
+
+    video = tmp_path / "lade.avi"
+    shutil.copy(sine_video, video)
+    other = tmp_path / "anderes.funscript"
+    Funscript([Action(i * 400, 10 if i % 2 else 90) for i in range(12)]).save(other)
+    monkeypatch.setattr(mw.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(other), "")))
+    w = mw.MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(video))
+        w.load_funscript_dialog()
+        assert len(w.curve.actions) == 12 and w.dirty
+        w.dirty = False
+        w.close_video()
+        Funscript([Action(0, 0), Action(500, 100)]).save(video.with_suffix(".funscript"))
+        monkeypatch.setattr(mw.QFileDialog, "getOpenFileName",
+                            staticmethod(lambda *a, **k: (str(video.with_suffix(".funscript")), "")))
+        w.load_funscript_dialog()
+        assert w.video_path and Path(w.video_path) == video and len(w.curve.actions) == 2
+    finally:
+        w.dirty = False
+        w.close()
+        w.deleteLater()
