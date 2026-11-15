@@ -393,6 +393,10 @@ folder. If the video was moved or renamed, it asks you to look for it once and
 remembers the new place. Scripts in the script folder whose video cannot be found
 show up in the library as “video missing”; a double click looks for it.
 
+**Settings travel with the script**: on saving, the script settings (direction,
+sensitivity, smoothing, …) are stored in the `.funscript`. Opening the video again brings them
+back, so tweaking a regenerated curve starts from what suited this video.
+
 **Video picture for scripts in the file manager**: with the start menu entry the AppImage
 also sets itself up as thumbnailer for `.funscript` files, so Dolphin, Nautilus & co. show the
 video’s picture instead of a text icon. In Dolphin tick “Funscript” once under Configure

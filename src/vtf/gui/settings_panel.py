@@ -338,6 +338,17 @@ class SettingsPanel(QWidget):
             a.pop(k)
         return {"generator": asdict(self.generator_settings()), "analysis": a}
 
+    def set_generator(self, g: dict) -> None:
+        """Take over a script's own settings (stored in it) without touching the analysis
+        options and without regenerating the curve."""
+        d = self.to_dict()
+        d["generator"].update(g)
+        self.blockSignals(True)
+        try:
+            self.load_dict(d)
+        finally:
+            self.blockSignals(False)
+
     def load_dict(self, d: dict) -> None:
         gen = {f.name for f in fields(GeneratorSettings)}
         g = {k: v for k, v in (d.get("generator") or {}).items() if k in gen}

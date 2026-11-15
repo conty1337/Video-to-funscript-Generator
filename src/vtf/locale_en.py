@@ -2237,4 +2237,6 @@ EN: dict[str, str] = {
         '\nLast played: {0} · {1} in total',
     'Nichts aufgefallen':
         'Nothing stands out',
+    ' · Einstellungen aus dem Script übernommen':
+        ' · settings taken from the script',
 }
