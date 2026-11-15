@@ -389,3 +389,16 @@ def test_script_names_its_video_for_other_computers(cfg, tmp_path, monkeypatch):
     assert scriptdir.find_video(laptop / "Scripts" / "Clip.vtf.json") == laptop / "Videos" / "Clip.mp4"
     assert [(e.name, e.missing) for e in scan(laptop / "Scripts")] == [("Clip", False)]
     assert scriptdir.linked_video(laptop / "Scripts" / "fehlt.funscript") is None
+
+
+def test_analyses_follow_the_folder_for_video_data(cfg, tmp_path):
+    """With a folder for video data (e.g. on a NAS) finished analyses are kept there too;
+    an unreachable folder falls back to the local cache."""
+    from vtf.analysis import cache_dir
+    local = cache_dir()
+    scriptdir.save_settings(None, True, tmp_path / "nas")
+    assert cache_dir() == tmp_path / "nas" / "analysis"
+    blocker = tmp_path / "file"; blocker.write_text("x")
+    scriptdir.save_settings(None, True, blocker / "sub")             # cannot be created
+    assert cache_dir() == local
+    scriptdir.save_settings(None, True, None)
