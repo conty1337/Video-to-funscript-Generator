@@ -596,6 +596,7 @@ class MainWindow(QMainWindow):
         a = QAction(text, self)
         if shortcut:
             a.setShortcut(QKeySequence(shortcut))
+            self.addAction(a)                   # keys keep working with the menu bar hidden (full screen)
         a.triggered.connect(slot)
         menu.addAction(a)
         return a

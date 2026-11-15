@@ -2179,3 +2179,25 @@ def test_curve_draws_the_line_to_a_point_far_outside(app):
     assert list(c._visible_points()) == [1, 2]
     c.grab()                                                # paints without error
     c.deleteLater()
+
+
+def test_keys_work_in_full_screen(app):
+    """Full screen hides the menu bar; Esc (emergency stop), F11 and the other keys must still
+    work, so their actions hang on the window too."""
+    from PySide6.QtGui import QKeySequence
+    from vtf.gui.main_window import MainWindow
+
+    w = MainWindow()
+    try:
+        keys = {a.shortcut().toString() for a in w.actions()}
+        assert {"Esc", "F11", "Space"} <= keys
+        stopped = []
+        w.devices.emergency_stop = lambda: stopped.append(1)
+        w.menuBar().setVisible(False)                       # as in full screen
+        esc = next(a for a in w.actions() if a.shortcut() == QKeySequence("Esc"))
+        esc.trigger()
+        assert stopped
+    finally:
+        w.dirty = False
+        w.close()
+        w.deleteLater()
