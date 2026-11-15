@@ -334,6 +334,9 @@ remembers the last one. A quiet start is skipped (start shortly before the first
 stroke), and a countdown runs before the start. Both can be switched off, the
 **countdown length** is adjustable (3–30 s, default 10 s).
 
+**Playlist folder** (Settings → Player): “Load/save playlist” opens there; empty: the
+folder used last.
+
 **Play right away when opened** (on by default): a video opened from the file manager
 or the library starts at once; switched off, it only gets ready and waits for Play.
 

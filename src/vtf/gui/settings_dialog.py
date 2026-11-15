@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -227,6 +228,30 @@ class SettingsDialog(QDialog):
         f.addRow(DeviceDialog._label(tr("Sanfter Start")), DeviceDialog._row(self.ramp_s))
         lay.addLayout(f)
         lay.addWidget(_caption(tr("Dieselben Einstellungen stehen auch unter der Playlist.")))
+
+        lay.addSpacing(8)
+        lay.addWidget(theme.section_title(tr("Playlists")))
+        row = QHBoxLayout()
+        self.playlist_dir = QPushButton()
+        self.playlist_dir.setToolTip(tr("Hier öffnet „Playlist laden/speichern“; leer: der zuletzt benutzte Ordner"))
+        self.playlist_dir.clicked.connect(self._pick_playlist_dir)
+        clear = QPushButton(tr("Zurücksetzen"))
+        clear.clicked.connect(lambda: self._set_playlist_dir(""))
+        row.addWidget(self.playlist_dir, 1)
+        row.addWidget(clear)
+        f = _form()
+        f.addRow(DeviceDialog._label(tr("Playlist-Ordner")), row)
+        lay.addLayout(f)
+        self._set_playlist_dir(str(pp.qs.value("player/playlist_dir", "") or ""))
+
+    def _set_playlist_dir(self, folder: str) -> None:
+        self.win.player.qs.setValue("player/playlist_dir", folder)
+        self.playlist_dir.setText(folder or tr("Zuletzt benutzter Ordner"))
+
+    def _pick_playlist_dir(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, tr("Playlist-Ordner wählen"), self.win.player.playlist_dir())
+        if folder:
+            self._set_playlist_dir(folder)
 
     def _device(self, lay: QVBoxLayout) -> None:
         ctl = self.win.devices

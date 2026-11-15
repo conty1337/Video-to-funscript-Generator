@@ -2045,6 +2045,10 @@ def test_settings_window(app, tmp_path, monkeypatch):
         d.quiet.setChecked(not w.player.quiet_cb.isChecked())
         assert d.quiet.isChecked() == w.player.quiet_cb.isChecked()
         d.quiet.setChecked(not d.quiet.isChecked())
+        d._set_playlist_dir(str(tmp_path))
+        assert w.player.playlist_dir() == str(tmp_path) and d.playlist_dir.text() == str(tmp_path)
+        d._set_playlist_dir("")
+        assert d.playlist_dir.text() == "Zuletzt benutzter Ordner"
 
         d.safety.safe_on.setChecked(True)
         d.safety.safe_max.setValue(45)

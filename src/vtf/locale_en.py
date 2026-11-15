@@ -2207,6 +2207,16 @@ EN: dict[str, str] = {
         'Gentle start',
     'Weiter, wo ich aufgehört habe':
         'Go on where I stopped',
+    'Playlists':
+        'Playlists',
+    'Hier öffnet „Playlist laden/speichern“; leer: der zuletzt benutzte Ordner':
+        '“Load/save playlist” opens here; empty: the folder used last',
+    'Playlist-Ordner':
+        'Playlist folder',
+    'Zuletzt benutzter Ordner':
+        'Folder used last',
+    'Playlist-Ordner wählen':
+        'Choose playlist folder',
     'Beim Öffnen gleich abspielen':
         'Play right away when opened',
     'Ein Video aus dem Dateimanager oder der Bibliothek startet sofort; sonst wartet es auf „Abspielen“':

@@ -398,8 +398,14 @@ class PlayerPanel(QWidget):
             self.playlist.remove(r)
         self.refresh()
 
+    def playlist_dir(self) -> str:
+        """Where playlists are loaded from and saved to: the chosen folder (Einstellungen → Player),
+        else the last used one."""
+        d = str(self.qs.value("player/playlist_dir", "") or "")
+        return d if d and Path(d).is_dir() else str(self.qs.value("last_dir", "") or "")
+
     def load_dialog(self):
-        path, _ = QFileDialog.getOpenFileName(self, tr("Playlist laden"), self.qs.value("last_dir", ""),
+        path, _ = QFileDialog.getOpenFileName(self, tr("Playlist laden"), self.playlist_dir(),
                                               tr("Playlist (*.m3u *.m3u8);;Alle Dateien (*)"))
         if path:
             self.playlist.load_m3u(path)
@@ -407,7 +413,7 @@ class PlayerPanel(QWidget):
 
     def save_dialog(self):
         path, _ = QFileDialog.getSaveFileName(self, tr("Playlist speichern"),
-                                              str(Path(self.qs.value("last_dir", "") or ".") / "playlist.m3u"),
+                                              str(Path(self.playlist_dir() or ".") / "playlist.m3u"),
                                               tr("Playlist (*.m3u)"))
         if path:
             if not path.lower().endswith((".m3u", ".m3u8")):

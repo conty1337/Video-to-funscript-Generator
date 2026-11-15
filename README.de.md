@@ -357,6 +357,9 @@ merkt sich die App. Ein ruhiger Anfang wird übersprungen (Start kurz vor dem
 ersten Hub), und vor dem Start zählt ein Countdown herunter. Beides ist
 abschaltbar, die **Countdown-Länge** ist einstellbar (3–30 s, Standard 10 s).
 
+**Playlist-Ordner** (Einstellungen → Player): Dort öffnet „Playlist laden/speichern“;
+leer: der zuletzt benutzte Ordner.
+
 **Beim Öffnen gleich abspielen** (Standard an): Ein Video aus dem Dateimanager oder der
 Bibliothek startet sofort; ausgeschaltet wird es nur bereitgelegt und wartet auf „Abspielen“.
 
