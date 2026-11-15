@@ -12,6 +12,8 @@ from pathlib import Path
 from .batch import VIDEO_EXTS
 from .funscript import Funscript
 from .i18n import tr
+from .prep import load_cuts
+from .quality import check, summary
 from .scriptdir import files_in, find_script, find_video, video_stem
 from .scriptdir import settings as script_settings
 
@@ -32,6 +34,10 @@ class Entry:
     heat: list = field(default_factory=list)   # fastest speed per slice, HEAT_BUCKETS of them
     rating: int = 0               # 0..5
     missing: bool = False         # a script in the script folder whose video was not found
+    issues: int = 0               # places worth a look (the editor's check)
+    issue_text: str = ""
+    played_s: float = 0.0         # played on this computer, all days (statistics)
+    last_played: str = ""         # ISO day it was last played
 
     @property
     def name(self) -> str:
@@ -63,6 +69,21 @@ def _numbers(e: Entry) -> None:
         for i in range(min(n - 1, int(a.at / dur * n)), min(n - 1, int(b.at / dur * n)) + 1):
             heat[i] = max(heat[i], v)
     e.heat = heat
+    found = check(acts, 0, load_cuts(e.video))
+    e.issues, e.issue_text = len(found), summary(found)
+
+
+def _add_played(entries: list[Entry]) -> None:
+    """Fill in when and how long each video was played (from the statistics, by name)."""
+    from .stats import load
+    total: dict[str, float] = {}
+    last: dict[str, str] = {}
+    for day, d in load().get("days", {}).items():
+        for name, sec in (d.get("videos") or {}).items():
+            total[name] = total.get(name, 0.0) + float(sec or 0)
+            last[name] = max(last.get(name, ""), day)
+    for e in entries:
+        e.played_s, e.last_played = total.get(e.name, 0.0), last.get(e.name, "")
 
 
 def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
@@ -87,6 +108,7 @@ def scan(folder: str | Path, recursive: bool = True) -> list[Entry]:
         _numbers(e)
         out.append(e)
     out += _orphans(sd, out, loose, ratings)
+    _add_played(out)
     return sorted(out, key=lambda e: e.name.lower())
 
 
@@ -119,6 +141,9 @@ SORTS = {
     "tempo": (tr("Tempo"), lambda e: e.avg_speed, True),
     "new": (tr("Neueste"), lambda e: e.mtime, True),
     "length": (tr("Länge"), lambda e: e.duration_ms, True),
+    "recent": (tr("Zuletzt gespielt"), lambda e: (e.last_played, e.played_s), True),
+    "played": (tr("Oft gespielt"), lambda e: e.played_s, True),
+    "check": (tr("Zu prüfen"), lambda e: e.issues, True),
 }
 
 

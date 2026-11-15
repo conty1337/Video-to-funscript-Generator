@@ -2207,6 +2207,34 @@ EN: dict[str, str] = {
         'Gentle start',
     'Weiter, wo ich aufgehört habe':
         'Go on where I stopped',
+    'Playlists':
+        'Playlists',
+    'Hier öffnet „Playlist laden/speichern“; leer: der zuletzt benutzte Ordner':
+        '“Load/save playlist” opens here; empty: the folder used last',
+    'Playlist-Ordner':
+        'Playlist folder',
+    'Zuletzt benutzter Ordner':
+        'Folder used last',
+    'Playlist-Ordner wählen':
+        'Choose playlist folder',
+    'Beim Öffnen gleich abspielen':
+        'Play right away when opened',
+    'Ein Video aus dem Dateimanager oder der Bibliothek startet sofort; sonst wartet es auf „Abspielen“':
+        'A video from the file manager or the library starts at once; otherwise it waits for “Play”',
     'Wie groß die Hübe am Gerät sind, live (Tasten + und −)':
         'How big the strokes on the device are, live (keys + and −)',
+    'Zuletzt gespielt':
+        'Last played',
+    'Oft gespielt':
+        'Played most',
+    'Zu prüfen':
+        'Needs a look',
+    'Prüfen':
+        'Check',
+    'Stellen, die sich die Prüfung im Editor ansehen würde':
+        'Places the check in the editor would point out',
+    '\nZuletzt gespielt: {0} · insgesamt {1}':
+        '\nLast played: {0} · {1} in total',
+    'Nichts aufgefallen':
+        'Nothing stands out',
 }

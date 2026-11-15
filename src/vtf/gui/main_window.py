@@ -1689,8 +1689,8 @@ class MainWindow(QMainWindow):
             tr("Punkt ziehen = verschieben (alle ausgewählten zusammen)\nUmschalt/Strg+Ziehen = Auswahlrechteck, Strg+Klick = Punkt an/aus, Strg+A = alle\nFläche ziehen = scrollen, Klick = zur Stelle springen, Mausrad = Zoom\nDoppelklick = Punkt hinzufügen, Rechtsklick/Entf = löschen\nStrg+C/V = kopieren/einfügen, Strg+G = glätten, Strg+↑/↓ = Hub verstärken/abschwächen"))
         self.qsettings.setValue("mode", "player" if on else "edit")
 
-    def play_index(self, index: int):
-        """Open playlist entry `index` and start playback (player mode)."""
+    def play_index(self, index: int, start: bool = True):
+        """Open playlist entry `index` and start playback (player mode; `start` False: ready, paused)."""
         pl = self.player.playlist
         if not 0 <= index < len(pl.items):
             return
@@ -1710,7 +1710,7 @@ class MainWindow(QMainWindow):
                 note = tr(" · weiter bei {0}", _fmt(spot))
             elif skip:
                 self.seek_ms(skip)
-            if not self.timer.isActive():
+            if start and not self.timer.isActive():
                 self.toggle_play()
         self._status(tr("Playlist {0}/{1}: {2}", index + 1, len(pl.items), Path(pl.items[index]).name)
                      + ("" if self.stroke_actions() else tr("  (kein Script)")) + note)
@@ -2212,7 +2212,7 @@ class MainWindow(QMainWindow):
         items = self.player.playlist.items
         target = str(Path(path).resolve())
         if target in items:
-            self.play_index(items.index(target))
+            self.play_index(items.index(target), start=self.player.autoplay_cb.isChecked())
 
     def _library_queue(self, paths: list):
         n = self.player.add_paths(paths)

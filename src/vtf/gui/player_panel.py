@@ -205,6 +205,9 @@ class PlayerPanel(QWidget):
         self.resume_cb = QCheckBox(tr("Weiter, wo ich aufgehört habe"))
         self.resume_cb.setToolTip(tr("Ein Video, das du mittendrin verlassen hast, geht kurz vor dieser Stelle weiter"))
         self.resume_cb.setChecked(str(settings.value("player/resume", "true")).lower() == "true")
+        self.autoplay_cb = QCheckBox(tr("Beim Öffnen gleich abspielen"))
+        self.autoplay_cb.setToolTip(tr("Ein Video aus dem Dateimanager oder der Bibliothek startet sofort; sonst wartet es auf „Abspielen“"))
+        self.autoplay_cb.setChecked(str(settings.value("player/autoplay", "true")).lower() == "true")
         self.ramp_s = QSpinBox()
         self.ramp_s.setRange(0, COUNTDOWN_RANGE_S[1])
         self.ramp_s.setSuffix(" s")
@@ -212,7 +215,8 @@ class PlayerPanel(QWidget):
         self.ramp_s.setFixedWidth(72)
         self.ramp_s.setToolTip(tr("Nach dem Start und nach jeder Pause beginnt das Gerät mit kleinen Hüben und wird in dieser Zeit voll (0 = aus)"))
         self.ramp_s.setValue(_int(settings, "player/ramp_s", RAMP_S))
-        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.resume_cb, self.countdown_cb,
+        for cb in (self.repeat_cb, self.shuffle_cb, self.skip_cb, self.intro_cb, self.resume_cb, self.autoplay_cb,
+                   self.countdown_cb,
                    self.cuts_cb, self.quiet_cb):
             fl.addWidget(cb)
             cb.toggled.connect(self._options_changed)
@@ -303,6 +307,7 @@ class PlayerPanel(QWidget):
         self.qs.setValue("player/cut_pause_s", int(self.cut_pause_s.value()))
         self.qs.setValue("player/quiet", "true" if self.quiet_cb.isChecked() else "false")
         self.qs.setValue("player/resume", "true" if self.resume_cb.isChecked() else "false")
+        self.qs.setValue("player/autoplay", "true" if self.autoplay_cb.isChecked() else "false")
         self.qs.setValue("player/ramp_s", int(self.ramp_s.value()))
         self.qs.setValue("player/intensity", int(self.intensity.value()))
 
@@ -393,8 +398,14 @@ class PlayerPanel(QWidget):
             self.playlist.remove(r)
         self.refresh()
 
+    def playlist_dir(self) -> str:
+        """Where playlists are loaded from and saved to: the chosen folder (Einstellungen → Player),
+        else the last used one."""
+        d = str(self.qs.value("player/playlist_dir", "") or "")
+        return d if d and Path(d).is_dir() else str(self.qs.value("last_dir", "") or "")
+
     def load_dialog(self):
-        path, _ = QFileDialog.getOpenFileName(self, tr("Playlist laden"), self.qs.value("last_dir", ""),
+        path, _ = QFileDialog.getOpenFileName(self, tr("Playlist laden"), self.playlist_dir(),
                                               tr("Playlist (*.m3u *.m3u8);;Alle Dateien (*)"))
         if path:
             self.playlist.load_m3u(path)
@@ -402,7 +413,7 @@ class PlayerPanel(QWidget):
 
     def save_dialog(self):
         path, _ = QFileDialog.getSaveFileName(self, tr("Playlist speichern"),
-                                              str(Path(self.qs.value("last_dir", "") or ".") / "playlist.m3u"),
+                                              str(Path(self.playlist_dir() or ".") / "playlist.m3u"),
                                               tr("Playlist (*.m3u)"))
         if path:
             if not path.lower().endswith((".m3u", ".m3u8")):

@@ -78,6 +78,12 @@ def test_m3u_roundtrip(tmp_path):
     third = Playlist()
     third.load_m3u(rel)
     assert third.items == [str((tmp_path / "b.mp4").resolve())]
+    sub = tmp_path / "Playlists"; sub.mkdir()
+    pl.save_m3u(sub / "nas.m3u")                                # same drive: relative, works when mounted elsewhere
+    assert "\n../a.mp4\n" in (sub / "nas.m3u").read_text()
+    assert Playlist().load_m3u(sub / "nas.m3u") == 2
+    from vtf.playlist import _m3u_path
+    assert _m3u_path("/mnt/nas/v.mp4", Path("/home/me/Playlists")) == "/mnt/nas/v.mp4"   # other drive: as is
 
 
 def test_script_start_and_intro_skip():

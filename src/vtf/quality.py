@@ -72,6 +72,20 @@ def _merge(issues: list[Issue], join_ms: int = 1500) -> list[Issue]:
     return sorted(out, key=lambda x: x.start_ms)
 
 
+def _around_median(v: np.ndarray) -> np.ndarray:
+    """For each stroke the median of the up to AROUND strokes on each side (itself left out);
+    all at once for the middle (fast enough for the whole library), one by one at the ends."""
+    n, w = len(v), 2 * AROUND + 1
+    out = np.empty(n)
+    if n >= w:
+        win = np.lib.stride_tricks.sliding_window_view(v, w)
+        out[AROUND:n - AROUND] = np.median(np.delete(win, AROUND, axis=1), axis=1)
+    for k in [*range(min(AROUND, n)), *range(max(AROUND, n - AROUND), n)]:
+        lo, hi = max(0, k - AROUND), min(n, k + AROUND + 1)
+        out[k] = np.median(np.r_[v[lo:k], v[k + 1:hi]])
+    return out
+
+
 def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
     """Places worth a look, sorted by time. `max_speed`: positions per second (0 = the
     default), `cuts`: (from, to) the player skips, `lost`: (from, to) where tracking lost
@@ -110,18 +124,17 @@ def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
     if len(strokes) >= 2 * AROUND + 1:
         heights = np.array([abs(b.pos - a.pos) for a, b in strokes], np.float64)
         lengths = np.array([b.at - a.at for a, b in strokes], np.float64)
+        med_h, med_l = _around_median(heights), _around_median(lengths)
         for k, (a, b) in enumerate(strokes):
             if k == 0 or k == len(strokes) - 1:          # the first and last move are often half strokes
                 continue
-            lo, hi = max(0, k - AROUND), min(len(strokes), k + AROUND + 1)
-            others = np.r_[np.arange(lo, k), np.arange(k + 1, hi)]
             if _in_cut(a.at, b.at, cuts):
                 continue
-            h = float(np.median(heights[others]))
+            h = float(med_h[k])
             if heights[k] < SMALL_FRAC * h:
                 issues.append(Issue("small", a.at, b.at,
                                     tr("Hub {0:.0f} statt etwa {1:.0f} – Kästchen verrutscht?", heights[k], h)))
-            L = float(np.median(lengths[others]))
+            L = float(med_l[k])
             if lengths[k] > BEAT_FACTOR * L and lengths[k] < GAP_MS:
                 issues.append(Issue("beat", a.at, b.at,
                                     tr("ein Hub {0:.1f} s statt etwa {1:.1f} s", lengths[k] / 1000, L / 1000)))
