@@ -100,14 +100,43 @@ def stroke_dir(motion: MotionData, stroke) -> np.ndarray | None:
     return v / n if n > 1e-6 else None
 
 
+AXIS_VEC = {"vertical": (0.0, -1.0), "horizontal": (1.0, 0.0)}
+
+
+def line_dir(motion: MotionData, index: int, axis: str) -> np.ndarray | None:
+    """Without a stroke arrow, two areas lying across the chosen direction (toy and body side
+    by side while the setting says vertical): the stroke runs along the line between them,
+    pointing from area 2 to area 1 ("out"). Then it does not matter whether the machine or
+    the body moves. None when the chosen direction fits (left as it was)."""
+    a = AXIS_VEC.get(axis)
+    if a is None or motion.tracks is None or motion.tracks.shape[1] < 2 or motion.track_sizes is None:
+        return None
+    if int(np.sum(~np.isnan(motion.track_sizes[index, :, 0]))) < 2:
+        return None
+    mask = motion.track_section == index
+    w = float(motion.meta.get("width", 1) or 1)
+    h = float(motion.meta.get("height", 1) or 1)
+    rel = (motion.tracks[mask, 0].astype(np.float64) - motion.tracks[mask, 1]) * np.array([w, h])
+    if rel.size == 0 or np.isnan(rel).all():
+        return None
+    v = np.nanmedian(rel, axis=0)
+    n = float(np.hypot(*v))
+    if n < 1e-6:
+        return None
+    u = v / n
+    return None if abs(float(u @ np.array(a))) >= np.sqrt(0.5) else u
+
+
 def project_sections(motion: MotionData, axis: str, sections=()) -> np.ndarray:
     """Like project(), but tracking sections with a stroke arrow measure only along it:
-    sideways shaking and wobbling do not count."""
+    sideways shaking and wobbling do not count. Without an arrow, see line_dir()."""
     vel = project(motion, axis)
     if motion.track_section is None:
         return vel
     for i, sec in enumerate(sections):
         u = stroke_dir(motion, getattr(sec, "stroke", None))
+        if u is None:
+            u = line_dir(motion, i, axis)
         if u is None:
             continue
         mask = motion.track_section == i

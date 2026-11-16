@@ -181,7 +181,10 @@ two body parts. Each area is followed by many image points.
   Only points inside, a few pixels away from the edge, are followed, so a finger
   or foot right next to it no longer pulls the box away.
 * **Stroke direction** (H): an arrow along the thrust, tip = out. The script
-  measures only along the arrow, sideways wobbling does not count.
+  measures only along the arrow, sideways wobbling does not count. Without an
+  arrow, when toy and reference lie across the chosen direction (a sideways
+  stroke with direction “Vertical”), it measures along the line between them:
+  the machine pushing and the body moving give the same direction.
 
 [![Tracking close-up: outline with its inset band, reference, stroke arrow, options](docs/images/en/tracking.png)](docs/images/en/tracking.png)
 

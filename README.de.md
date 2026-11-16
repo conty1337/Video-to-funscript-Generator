@@ -192,7 +192,11 @@ z.B. um die beiden Körperteile. Jeder Bereich wird mit vielen Bildpunkten verfo
   Punkte innen, mit ein paar Pixeln Abstand zum Rand, werden verfolgt – Finger
   oder Fuß direkt daneben ziehen das Kästchen nicht mehr weg.
 * **Hub-Richtung** (H): Pfeil entlang der Stoßrichtung, Spitze = raus. Das
-  Script misst nur entlang des Pfeils, seitliches Wackeln zählt nicht.
+  Script misst nur entlang des Pfeils, seitliches Wackeln zählt nicht. Ohne
+  Pfeil, wenn Toy und Bezug quer zur eingestellten Richtung nebeneinander liegen
+  (Hub seitlich, Richtung „Vertikal“), wird entlang der Linie zwischen den beiden
+  gemessen: Ob die Maschine stößt oder der Körper sich bewegt, ergibt dieselbe
+  Richtung.
 
 [![Tracking in Nahaufnahme: Umrandung mit Abstandsband, Bezug, Hub-Pfeil, Optionen](docs/images/de/tracking.png)](docs/images/de/tracking.png)
 
