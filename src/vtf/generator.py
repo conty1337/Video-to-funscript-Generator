@@ -386,6 +386,7 @@ STILL_WINDOW_MS = 1000   # area 1 is looked at over this long (around each momen
 STILL_PART = 0.15        # ... and counts as standing still below this part of its usual stroke
 STILL_MIN = 0.003        # (but never below this part of the picture: tracking jitter)
 TOY_LEADS = 2.0          # only where area 1 usually moves at least this much more than area 2
+GLIDE_PART = 0.3         # a "still" stretch over which area 1 got this part of its usual stroke further: slow glide
 
 
 def still_mask(motion: MotionData, sections=()) -> np.ndarray:
@@ -413,7 +414,15 @@ def still_mask(motion: MotionData, sections=()) -> np.ndarray:
         if usual < TOY_LEADS * float(np.percentile(body, 75)):
             continue
         idx = np.flatnonzero(mask)
-        out[idx[_close_gaps(toy < max(STILL_MIN, STILL_PART * usual), k // 4)]] = True
+        still = _close_gaps(toy < max(STILL_MIN, STILL_PART * usual), k // 4)
+        # slowly sliding in or out is no pause: holding it would end in a sudden jump
+        pos = tr[mask, 0]
+        edges = np.flatnonzero(np.diff(np.concatenate(([0], still.astype(np.int8), [0]))))
+        for i0, i1 in zip(edges[::2], edges[1::2]):
+            ends = pos[[i0, i1 - 1]]
+            if not np.isnan(ends).any() and float(np.hypot(*(ends[1] - ends[0]))) > GLIDE_PART * usual:
+                still[i0:i1] = False
+        out[idx[still]] = True
     return out
 
 
