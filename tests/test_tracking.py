@@ -760,3 +760,18 @@ def test_close_gaps_fills_only_short_ones():
     m = np.array([1, 1, 0, 1, 0, 0, 0, 1], bool)
     assert _close_gaps(m, 1).tolist() == [1, 1, 1, 1, 0, 0, 0, 1]
     assert _close_gaps(m, 3).all()
+
+
+def test_slow_glide_is_no_pause():
+    """Area 1 slides slowly in for 6 s (too slow to count as moving in a 1 s window): no
+    pause is held there, so the script does not jump up at its end."""
+    from vtf.analysis import TrackSection
+    from vtf.generator import still_mask
+
+    sec = (TrackSection(0, ((0.2, 0.3, 0.2, 0.2), (0.5, 0.4, 0.2, 0.2))),)
+    m = _two_areas(lambda t: 0.0 if 3 <= t < 9 else 0.08, lambda t: 0.002, seconds=12.0)
+    t = np.arange(len(m)) / m.fps
+    m.tracks[:, 0, 1] += np.clip((t - 3) / 6, 0, 1).astype(np.float32) * 0.12   # 0.12 deeper over 6 s
+    assert not still_mask(m, sec)[int(4 * 30):int(8 * 30)].any()
+    m.tracks[:, 0, 1] -= np.clip((t - 3) / 6, 0, 1).astype(np.float32) * 0.12   # standing: a pause
+    assert still_mask(m, sec)[int(4 * 30):int(8 * 30)].all()
