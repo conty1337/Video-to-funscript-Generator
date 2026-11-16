@@ -322,6 +322,11 @@ yellow, red = fast). With **Tempo limit** (script settings) strokes that are too
 fast are shortened right when created. For the F21S about 500 /s fits (a full
 stroke in about 200 ms).
 
+**Glide from** (script settings, default 30 %): if the toy seems to stand still
+but gets this percentage of its usual stroke further, it is sliding slowly in or
+out. The curve then glides along instead of staying flat and jumping up at the
+end. Smaller = glides more often, larger = pauses more often.
+
 **Batch processing**: File → Batch processing (Ctrl+B) or drop a folder onto the
 window. The current settings are used. Videos that already have a `.funscript`
 are skipped (can be switched off).

@@ -748,7 +748,7 @@ def test_still_toy_makes_no_strokes_while_the_body_moves(monkeypatch):
     assert len([a for a in acts if a.at < 3000]) >= 4 and len([a for a in acts if a.at > 6500]) >= 4
     import vtf.generator as G
     with monkeypatch.context() as mp:                                # without it the body's moves were strokes
-        mp.setattr(G, "still_mask", lambda motion, sections=(): np.zeros(len(motion), bool))
+        mp.setattr(G, "still_mask", lambda motion, sections=(), glide=0.3: np.zeros(len(motion), bool))
         assert len([a for a in generate(pause, g, sec).actions if 3900 < a.at < 5800]) >= 2
     riding = _two_areas(lambda t: 0.002, lambda t: 0.06)
     assert not still_mask(riding, sec).any()
@@ -775,3 +775,5 @@ def test_slow_glide_is_no_pause():
     assert not still_mask(m, sec)[int(4 * 30):int(8 * 30)].any()
     m.tracks[:, 0, 1] -= np.clip((t - 3) / 6, 0, 1).astype(np.float32) * 0.12   # standing: a pause
     assert still_mask(m, sec)[int(4 * 30):int(8 * 30)].all()
+    m.tracks[:, 0, 1] += np.clip((t - 3) / 6, 0, 1).astype(np.float32) * 0.12
+    assert still_mask(m, sec, glide=1.0)[int(4 * 30):int(8 * 30)].all()      # set higher: a pause again
