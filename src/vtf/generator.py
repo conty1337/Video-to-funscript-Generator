@@ -23,6 +23,7 @@ class GeneratorSettings:
     pos_max: int = 100
     full_stroke: bool = False       # peaks -> pos_max, valleys -> pos_min
     max_speed: int = 0              # positions per second the device can do; 0 = no limit
+    glide_pct: int = 30             # a "pause" over which the toy got this % of its stroke further: slow glide
     plateaus: bool = True           # a top or bottom with a flat stretch or a small dip: one point in its middle
 
 
@@ -386,14 +387,15 @@ STILL_WINDOW_MS = 1000   # area 1 is looked at over this long (around each momen
 STILL_PART = 0.15        # ... and counts as standing still below this part of its usual stroke
 STILL_MIN = 0.003        # (but never below this part of the picture: tracking jitter)
 TOY_LEADS = 2.0          # only where area 1 usually moves at least this much more than area 2
-GLIDE_PART = 0.3         # a "still" stretch over which area 1 got this part of its usual stroke further: slow glide
 
 
-def still_mask(motion: MotionData, sections=()) -> np.ndarray:
+def still_mask(motion: MotionData, sections=(), glide: float = 0.3) -> np.ndarray:
     """Samples where the toy (area 1) stands still in a section where it usually makes the
     strokes: what moves then is the body it is measured against (shifting, breathing, a
     pause of the machine), which must not become strokes. Sections where area 1 is the
-    calmer one (riding a fixed toy) are left alone: there the body's motion is the stroke."""
+    calmer one (riding a fixed toy) are left alone: there the body's motion is the stroke.
+    `glide`: a still stretch over which area 1 got this part of its usual stroke further is
+    slow sliding, no pause."""
     n = len(motion)
     out = np.zeros(n, bool)
     if motion.tracks is None or motion.track_section is None or motion.tracks.shape[1] < 2:
@@ -420,7 +422,7 @@ def still_mask(motion: MotionData, sections=()) -> np.ndarray:
         edges = np.flatnonzero(np.diff(np.concatenate(([0], still.astype(np.int8), [0]))))
         for i0, i1 in zip(edges[::2], edges[1::2]):
             ends = pos[[i0, i1 - 1]]
-            if not np.isnan(ends).any() and float(np.hypot(*(ends[1] - ends[0]))) > GLIDE_PART * usual:
+            if not np.isnan(ends).any() and float(np.hypot(*(ends[1] - ends[0]))) > glide * usual:
                 still[i0:i1] = False
         out[idx[still]] = True
     return out
@@ -479,7 +481,7 @@ def generate(motion: MotionData, s: GeneratorSettings | None = None, sections=()
             mask = motion.track_section == sec
             sig[mask] = depth[mask]
             calibrated.add(sec)
-    still = still_mask(motion, sections)
+    still = still_mask(motion, sections, s.glide_pct / 100.0)
     sig = _hold(sig, still)
     actions: list[Action] = []
     for sec, a, b in ranges:

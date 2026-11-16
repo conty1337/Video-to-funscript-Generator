@@ -345,6 +345,11 @@ gelb, rot = schnell). Mit **Tempo-Grenze** (Script-Einstellungen) werden zu
 schnelle Hübe schon beim Erzeugen gekürzt. Für den F21S passt etwa 500 /s (voller
 Hub in ca. 200 ms).
 
+**Gleiten ab** (Script-Einstellungen, Standard 30 %): Steht das Spielzeug
+scheinbar still, kommt dabei aber um so viel Prozent seines üblichen Hubs weiter,
+fährt es langsam rein oder raus. Dann gleitet die Kurve mit, statt flach zu
+bleiben und am Ende hochzuspringen. Kleiner = öfter gleiten, größer = öfter Pause.
+
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
 die schon ein `.funscript` existiert, werden übersprungen (abschaltbar).

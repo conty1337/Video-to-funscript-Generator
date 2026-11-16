@@ -2033,6 +2033,10 @@ EN: dict[str, str] = {
         "Spots to check",
     "Doppelklick springt hin. „Passt so“ blendet eine Stelle aus, bis sich das Script dort ändert – dann taucht sie zur erneuten Prüfung wieder auf.":
         "Double-click jumps there. “Looks fine” hides a spot until the script changes there – then it comes back to be checked again.",
+    "Gleiten ab":
+        "Glide from",
+    "Steht das Spielzeug scheinbar still, kommt dabei aber um so viel Prozent seines üblichen Hubs weiter, fährt es langsam rein oder raus statt Pause zu machen: dann gleitet die Kurve mit, statt flach zu bleiben und am Ende hochzuspringen. Kleiner = öfter gleiten, größer = öfter Pause":
+        "If the toy seems to stand still but gets this percentage of its usual stroke further, it is sliding slowly in or out instead of pausing: the curve then glides along instead of staying flat and jumping up at the end. Smaller = glides more often, larger = pauses more often",
     "Hinspringen":
         "Jump there",
     "Passt so":
