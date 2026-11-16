@@ -777,3 +777,32 @@ def test_slow_glide_is_no_pause():
     assert still_mask(m, sec)[int(4 * 30):int(8 * 30)].all()
     m.tracks[:, 0, 1] += np.clip((t - 3) / 6, 0, 1).astype(np.float32) * 0.12
     assert still_mask(m, sec, glide=1.0)[int(4 * 30):int(8 * 30)].all()      # set higher: a pause again
+
+
+def test_machine_and_body_moving_give_the_same_direction():
+    """Toy left, body right, the stroke runs sideways while the setting says vertical. First
+    the machine pushes (toy moves, dips a little when in), then the body rocks onto the toy
+    (body moves, sinks a little when on it): fully in is at the same height of the curve."""
+    from vtf.analysis import MotionData, TrackSection
+    from vtf.generator import build_signal
+
+    fps, n = 30.0, 360
+    t = np.arange(n) / fps
+    depth = 0.5 + 0.5 * np.sin(2 * np.pi * 0.5 * t)                 # 1 = fully out
+    toy = np.stack([0.30 + 0.0 * t, 0.50 + 0.0 * t], 1)
+    body = np.stack([0.60 + 0.0 * t, 0.45 + 0.0 * t], 1)
+    first = t < 6
+    toy[first, 0] += 0.1 * (1 - depth[first])                        # machine: toy goes right = in
+    toy[first, 1] += 0.02 * (1 - depth[first])                       # ... and a little down
+    body[~first, 0] -= 0.1 * (1 - depth[~first])                     # body comes left = in
+    body[~first, 1] += 0.03 * (1 - depth[~first])                    # ... and a little down
+    rel = (toy - body) * np.array([640, 360])
+    d = np.vstack([[0, 0], np.diff(rel, axis=0)])
+    m = MotionData("x", fps, d[:, 0], d[:, 1], meta={"width": 640, "height": 360},
+                   tracks=np.stack([toy, body], 1).astype(np.float32),
+                   track_sizes=np.array([[[0.2, 0.2], [0.2, 0.2]]], np.float32),
+                   track_section=np.zeros(n, int))
+    sec = (TrackSection(0, ((0.2, 0.4, 0.2, 0.2), (0.5, 0.35, 0.2, 0.2))),)
+    _t, sig = build_signal(m, GeneratorSettings(axis="vertical", drift_window_ms=6000), sec)
+    assert np.corrcoef(sig[30:150], depth[30:150])[0, 1] > 0.9
+    assert np.corrcoef(sig[210:330], depth[210:330])[0, 1] > 0.9
