@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, fields
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -107,6 +107,7 @@ class SettingsPanel(QWidget):
 
         _section(lay, tr("Script"), tr("Wirkt sofort auf die Kurve"), self.reset_script)
         f = _form()
+        f_hub, f_vid, f_dev = _form(), _form(), _form()     # what the suggestion changes / the video / taste and device
         prof = QWidget()
         pl = QHBoxLayout(prof)
         pl.setContentsMargins(0, 0, 0, 0)
@@ -129,19 +130,19 @@ class SettingsPanel(QWidget):
         self.axis = QComboBox()
         for label, val in AXES:
             self.axis.addItem(label, val)
-        _row(f, tr("Richtung"), self.axis)
+        _row(f_vid, tr("Richtung"), self.axis)
         box, self.sensitivity = _slider(0, 100, 60, " %")
-        _row(f, tr("Empfindlichkeit"), box)
+        _row(f_hub, tr("Empfindlichkeit"), box)
         box, self.smoothing = _slider(0, 500, 100, " ms")
-        _row(f, tr("Glättung"), box)
+        _row(f_hub, tr("Glättung"), box)
         box, self.min_interval = _slider(0, 1000, 120, " ms")
-        _row(f, tr("Mindestabstand"), box)
+        _row(f_hub, tr("Mindestabstand"), box)
         box, self.drift = _slider(500, 10000, 2500, " ms")
         self.drift.setToolTip(tr("Entfernt langsames Wegdriften der Position"))
-        _row(f, tr("Drift-Filter"), box)
+        _row(f_vid, tr("Drift-Filter"), box)
         box, self.norm = _slider(0, 20000, 5000, " ms")
         self.norm.setToolTip(tr("Fenster für die lokale Amplituden-Normalisierung, 0 = ganzes Video"))
-        _row(f, tr("Normalisierung"), box)
+        _row(f_vid, tr("Normalisierung"), box)
         box, self.max_speed = _slider(0, 1000, 0, " /s")
         lbl = box.findChild(QLabel)
 
@@ -153,10 +154,10 @@ class SettingsPanel(QWidget):
         self.max_speed.setSingleStep(10)
         self.max_speed.setPageStep(50)
         self.max_speed.setToolTip(tr("Höchstes Tempo in Positionen pro Sekunde: schnellere Hübe werden beim Erzeugen gekürzt. F21S: voller Hub frühestens in ca. 200 ms = 500 /s. 0 = aus"))
-        _row(f, tr("Tempo-Grenze"), box)
+        _row(f_dev, tr("Tempo-Grenze"), box)
         box, self.glide = _slider(0, 100, 30, " %")
         self.glide.setToolTip(tr("Steht das Spielzeug scheinbar still, kommt dabei aber um so viel Prozent seines üblichen Hubs weiter, fährt es langsam rein oder raus statt Pause zu machen: dann gleitet die Kurve mit, statt flach zu bleiben und am Ende hochzuspringen. Kleiner = öfter gleiten, größer = öfter Pause"))
-        _row(f, tr("Gleiten ab"), box)
+        _row(f_vid, tr("Gleiten ab"), box)
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -174,22 +175,36 @@ class SettingsPanel(QWidget):
         rl.addWidget(self.pos_min, 1)
         rl.addWidget(dash)
         rl.addWidget(self.pos_max, 1)
-        _row(f, tr("Hubbereich"), rng)
-        lay.addLayout(f)
-        lay.addSpacing(4)
+        _row(f_dev, tr("Hubbereich"), rng)
         self.invert = QCheckBox(tr("Richtung umkehren"))
         self.full_stroke = QCheckBox(tr("Immer voller Hub"))
         self.plateaus = QCheckBox(tr("Plateaus: ein Punkt in der Mitte"))
         self.plateaus.setToolTip(tr("Bleibt es ganz drin oder ganz draußen kurz stehen (oder zittert dort), kommt ein einziger Punkt in die Mitte statt zwei an den Rändern. Aus, wenn dort echte kleine Doppelstöße sind. Steht es auf halbem Weg und geht dann weiter zur Spitze, wird daraus ein Hub"))
         self.plateaus.setChecked(True)
+        self.suggest_btn = QPushButton(tr("Einstellungen vorschlagen …"))
+        self.suggest_btn.setToolTip(tr("Tastet sich selbst an die besten Werte für Empfindlichkeit, Glättung und Mindestabstand heran (die anderen Regler bleiben): Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
+        self.suggest_btn.clicked.connect(self.suggestRequested)
+
+        def group(title: str, tip: str) -> None:
+            lay.addSpacing(10)
+            g = QLabel(title)
+            g.setObjectName("caption")
+            g.setToolTip(tip)
+            lay.addWidget(g)
+            lay.addSpacing(2)
+        lay.addLayout(f)
+        group(tr("Hub-Erkennung"), tr("Diese drei stellt „Einstellungen vorschlagen“ ein"))
+        lay.addLayout(f_hub)
+        lay.addSpacing(4)
+        lay.addWidget(self.suggest_btn)
+        group(tr("Video"), tr("Hängt vom Video ab: das kann der Vorschlag nicht beurteilen"))
+        lay.addLayout(f_vid)
+        group(tr("Gerät"), tr("Geschmack und Gerät: dafür gibt es kein „besser“"))
+        lay.addLayout(f_dev)
+        lay.addSpacing(4)
         lay.addWidget(self.invert)
         lay.addWidget(self.full_stroke)
         lay.addWidget(self.plateaus)
-        lay.addSpacing(8)
-        self.suggest_btn = QPushButton(tr("Einstellungen vorschlagen …"))
-        self.suggest_btn.setToolTip(tr("Erzeugt das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und Mindestabständen und schlägt die besten vor: Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
-        self.suggest_btn.clicked.connect(self.suggestRequested)
-        lay.addWidget(self.suggest_btn)
         lay.addStretch(1)
 
         lay = QVBoxLayout(self.analysis_page)
@@ -290,6 +305,14 @@ class SettingsPanel(QWidget):
         self.turn.toggled.connect(self.analysisChanged)
         self.anchor.toggled.connect(self.analysisChanged)
         self.method.currentIndexChanged.connect(self._method_changed)
+
+    def flash(self, sliders) -> None:
+        """Show for a moment which sliders were just changed (taken over suggestion)."""
+        for sl in sliders:
+            lbl = sl.parentWidget().findChild(QLabel)
+            if lbl is not None:
+                lbl.setStyleSheet(f"color: {theme.ACCENT}; font-weight: bold;")
+                QTimer.singleShot(2500, lambda lb=lbl: lb.setStyleSheet(""))
 
     # ------------------------------------------------------------ profiles
     def _fill_profiles(self) -> None:

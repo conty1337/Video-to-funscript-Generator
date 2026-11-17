@@ -59,6 +59,7 @@ class SuggestDialog(QDialog):
         lay.addLayout(row)
         p = win.panel
         self.worker = SuggestWorker(win.motion, p.generator_settings(), p.sections, win.cuts)
+        self.worker.setParent(self)            # Qt owns it with the dialog (not Python at exit)
         self.worker.progress.connect(lambda f: self.bar.setValue(int(f * 100)))
         self.worker.done.connect(self._show)
         self.worker.failed.connect(lambda e: self.head.setText(tr("Fehler: {0}", e)))
@@ -82,9 +83,11 @@ class SuggestDialog(QDialog):
             return
         g = item.data(Qt.ItemDataRole.UserRole)
         p = self.win.panel
+        old = (p.sensitivity.value(), p.smoothing.value(), p.min_interval.value())
         d = p.to_dict()
         d["generator"].update(sensitivity=g.sensitivity, smoothing_ms=g.smoothing_ms, min_interval_ms=g.min_interval_ms)
         p.load_dict(d)
+        p.flash([sl for sl, v in zip((p.sensitivity, p.smoothing, p.min_interval), old) if sl.value() != v])
         p.generatorChanged.emit()
         self.accept()
 

@@ -30,6 +30,10 @@ def test_suggestion_finds_the_strokes_through_the_noise():
     m = MotionData("x", 30.0, np.zeros(n, np.float32), dy.astype(np.float32))
     twitchy = GeneratorSettings(sensitivity=100, smoothing_ms=0, min_interval_ms=0)
     best, current = suggest(m, twitchy)
-    assert len(best) == 3 and best[0][0] >= best[1][0] >= best[2][0]
+    assert len(best) == 3                       # best first (equal to 4 places: the closer one first)
+    assert round(best[0][0], 4) >= round(best[1][0], 4) >= round(best[2][0], 4)
     assert abs(best[0][3] - 72) < 6
     assert best[0][0] > current[0] and best[0][2] <= current[2]
+    # started from good settings the suggestion is never worse than them
+    good_best, good_now = suggest(m, best[0][1])
+    assert good_best[0][0] >= good_now[0]

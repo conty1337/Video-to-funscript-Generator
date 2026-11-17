@@ -2279,8 +2279,8 @@ EN: dict[str, str] = {
         "Suggest settings …",
     "Empfindlichkeit {0} %, Glättung {1} ms, Mindestabstand {2} ms\n{3} Stellen zum Prüfen · {4} Hübe/min · Wertung {5}":
         "Sensitivity {0} %, smoothing {1} ms, minimum gap {2} ms\n{3} spots to check · {4} strokes/min · rating {5}",
-    "Erzeugt das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und Mindestabständen und schlägt die besten vor: Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren":
-        "Makes the script from the finished analysis with many sensitivities, smoothings and minimum gaps and suggests the best: strokes follow the movement, few spots to check. No new analysis",
+    "Tastet sich selbst an die besten Werte für Empfindlichkeit, Glättung und Mindestabstand heran (die anderen Regler bleiben): Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren":
+        "Narrows in on the best values for sensitivity, smoothing and minimum gap by itself (the other sliders stay): strokes follow the movement, few spots to check. No new analysis",
     "GPU {0} %":
         "GPU {0} %",
     "Gespeicherte Script-Einstellungen mit einem Klick laden (im Datenordner, wenn einer gesetzt ist)":
@@ -2307,4 +2307,12 @@ EN: dict[str, str] = {
         "Delete profile “{0}”?",
     "– eigene Einstellungen –":
         "– own settings –",
+    "Hub-Erkennung":
+        "Stroke detection",
+    "Diese drei stellt „Einstellungen vorschlagen“ ein":
+        "“Suggest settings” sets these three",
+    "Hängt vom Video ab: das kann der Vorschlag nicht beurteilen":
+        "Depends on the video: the suggestion cannot judge that",
+    "Geschmack und Gerät: dafür gibt es kein „besser“":
+        "Taste and device: there is no “better” here",
 }
