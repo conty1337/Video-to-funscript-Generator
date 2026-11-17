@@ -2335,3 +2335,20 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         w.dirty = False
         w.close()
         w.deleteLater()
+
+
+def test_curve_keeps_its_span_after_an_empty_timeline(app):
+    """Without a video the timeline is 1 s long; a long video opened after that shows the
+    usual span again (or the one zoomed to), not 1 s."""
+    from vtf.gui.curve_widget import CurveWidget
+
+    c = CurveWidget()
+    c.resize(640, 240)
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 0)                 # nothing open
+    assert c.view_ms == 1000
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 600_000)           # a 10 min video
+    assert c.view_ms == 20_000
+    c.want_ms = 60_000                                          # zoomed out before
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 5_000)
+    c.set_data(c.t_ms[:0], c.signal[:0], [], 600_000)
+    assert c.view_ms == 60_000
