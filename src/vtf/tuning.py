@@ -18,9 +18,9 @@ from .analysis import MotionData
 from .generator import GeneratorSettings, generate
 from .quality import check
 
-SENSITIVITIES = (40, 50, 60, 70, 80)
-SMOOTHINGS = (50, 100, 150, 200)
-MIN_GAPS = (80, 120, 180)
+SENSITIVITIES = tuple(range(30, 95, 5))      # 13
+SMOOTHINGS = tuple(range(50, 250, 25))       # 8
+MIN_GAPS = (60, 90, 120, 150, 180)           # 5: 520 tries, about a minute for 45 min of video
 ISSUE_WEIGHT = 0.02          # rating lost per finding per minute
 REF_SMOOTHING_MS = 40
 

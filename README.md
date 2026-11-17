@@ -336,10 +336,11 @@ under a name (e.g. “machine sideways”, “riding”), the list loads them wi
 so the laptop finds them too.
 
 **Suggest settings**: button below the script settings. The app makes the script
-from the finished analysis with many sensitivities, smoothings and minimum gaps (a
-few seconds, no new analysis) and shows the best three next to the current ones:
-how well the strokes follow the movement and how little the check finds. A
-suggestion, not a verdict – there is no right curve to compare with.
+from the finished analysis with many sensitivities, smoothings and minimum gaps
+(520 tries, about a minute for 45 minutes of video, no new analysis) and shows the
+best three next to the current ones: how well the strokes follow the movement and
+how little the check finds. A suggestion, not a verdict – there is no right curve
+to compare with.
 
 **Load**: bottom right in the status bar: CPU, graphics card (AMD) and its video
 decoder for this app (once decoding runs on the graphics card).
