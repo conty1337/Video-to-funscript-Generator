@@ -354,6 +354,21 @@ scheinbar still, kommt dabei aber um so viel Prozent seines üblichen Hubs weite
 fährt es langsam rein oder raus. Dann gleitet die Kurve mit, statt flach zu
 bleiben und am Ende hochzuspringen. Kleiner = öfter gleiten, größer = öfter Pause.
 
+**Profile**: Oben in den Script-Einstellungen. „+“ speichert die aktuellen
+Einstellungen unter einem Namen (z. B. „Maschine seitlich“, „Reiten“), die Liste lädt
+sie mit einem Klick, „−“ löscht. Gespeichert in `profiles.json` im Datenordner (sonst
+im Konfigurationsordner), der Laptop findet sie also auch.
+
+**Einstellungen vorschlagen**: Knopf unter den Script-Einstellungen. Die App erzeugt
+das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und
+Mindestabständen (ein paar Sekunden, kein neues Analysieren) und zeigt die besten
+drei neben den aktuellen: wie gut die Hübe der Bewegung folgen und wie wenig die
+Prüfung findet. Ein Vorschlag, kein Urteil – eine richtige Kurve zum Vergleichen
+gibt es nicht.
+
+**Auslastung**: Unten rechts in der Statusleiste stehen CPU, Grafikkarte (AMD) und
+ihr Video-Decoder für diese App (sobald mit der Grafikkarte dekodiert wird).
+
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
 die schon ein `.funscript` existiert, werden übersprungen (abschaltbar).

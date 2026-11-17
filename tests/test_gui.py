@@ -2276,3 +2276,54 @@ def test_issue_window_ticks_off_and_brings_back(app, sine_video, tmp_path):
         w.dirty = False
         w.close()
         w.deleteLater()
+
+
+def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
+    """A profile saves the script settings and loads them again with one pick (the list
+    shows it while the settings match); the suggestion takes over the best settings; the
+    status bar shows the CPU load."""
+    import numpy as np
+    from vtf import profiles
+    from vtf.analysis import MotionData
+    from vtf.gui import main_window as mw
+    from vtf.gui import settings_panel as sp
+    from vtf.gui.suggest_dialog import SuggestDialog
+
+    monkeypatch.setattr(profiles, "profiles_file", lambda: tmp_path / "profiles.json")
+    w = mw.MainWindow()
+    try:
+        p = w.panel
+        p.sensitivity.setValue(77)
+        monkeypatch.setattr(sp.QInputDialog, "getText", staticmethod(lambda *a, **k: ("Maschine seitlich", True)))
+        p._save_profile()
+        assert profiles.load()["Maschine seitlich"]["sensitivity"] == 77
+        assert p.profile.currentData() == "Maschine seitlich"
+        p.sensitivity.setValue(40)
+        assert p.profile.currentIndex() == 0                     # no longer matches
+        p.profile.setCurrentIndex(p.profile.findData("Maschine seitlich"))
+        p._load_profile()
+        assert p.sensitivity.value() == 77
+
+        n = 60 * 30
+        t = np.arange(n) / 30
+        dy = -np.diff(np.sin(2 * np.pi * 1.2 * t) * 20, prepend=0) + np.random.default_rng(2).normal(0, 3, n)
+        w.motion = MotionData("x", 30.0, np.zeros(n, np.float32), dy.astype(np.float32))
+        p.sensitivity.setValue(100)
+        p.smoothing.setValue(0)
+        d = SuggestDialog(w)
+        assert d.worker.wait(30000)
+        app.processEvents()
+        assert d.list.count() == 3 and d.take_btn.isEnabled()
+        d._take()
+        assert (p.sensitivity.value(), p.smoothing.value()) != (100, 0)
+
+        w._load.sample()
+        w.show()
+        w._show_load()
+        assert "CPU" in w.load_label.text()
+    finally:
+        w.motion = None
+        w.regen_timer.stop()
+        w.dirty = False
+        w.close()
+        w.deleteLater()
