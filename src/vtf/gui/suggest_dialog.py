@@ -59,6 +59,7 @@ class SuggestDialog(QDialog):
         lay.addLayout(row)
         p = win.panel
         self.worker = SuggestWorker(win.motion, p.generator_settings(), p.sections, win.cuts)
+        self.worker.setParent(self)            # Qt owns it with the dialog (not Python at exit)
         self.worker.progress.connect(lambda f: self.bar.setValue(int(f * 100)))
         self.worker.done.connect(self._show)
         self.worker.failed.connect(lambda e: self.head.setText(tr("Fehler: {0}", e)))

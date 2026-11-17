@@ -2316,6 +2316,7 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         assert d.list.count() == 3 and d.take_btn.isEnabled()
         d._take()
         assert (p.sensitivity.value(), p.smoothing.value()) != (100, 0)
+        d.deleteLater()
 
         w._load.sample()
         w.show()
