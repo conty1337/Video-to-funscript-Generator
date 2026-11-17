@@ -187,7 +187,7 @@ class SettingsPanel(QWidget):
         lay.addWidget(self.plateaus)
         lay.addSpacing(8)
         self.suggest_btn = QPushButton(tr("Einstellungen vorschlagen …"))
-        self.suggest_btn.setToolTip(tr("Erzeugt das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und Mindestabständen und schlägt die besten vor: Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
+        self.suggest_btn.setToolTip(tr("Tastet sich selbst an die besten Werte für Empfindlichkeit, Glättung und Mindestabstand heran (die anderen Regler bleiben): Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
         self.suggest_btn.clicked.connect(self.suggestRequested)
         lay.addWidget(self.suggest_btn)
         lay.addStretch(1)
