@@ -2307,4 +2307,12 @@ EN: dict[str, str] = {
         "Delete profile “{0}”?",
     "– eigene Einstellungen –":
         "– own settings –",
+    "Hub-Erkennung":
+        "Stroke detection",
+    "Diese drei stellt „Einstellungen vorschlagen“ ein":
+        "“Suggest settings” sets these three",
+    "Hängt vom Video ab: das kann der Vorschlag nicht beurteilen":
+        "Depends on the video: the suggestion cannot judge that",
+    "Geschmack und Gerät: dafür gibt es kein „besser“":
+        "Taste and device: there is no “better” here",
 }

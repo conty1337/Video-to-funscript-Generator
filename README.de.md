@@ -368,7 +368,9 @@ hintereinander nichts Erkennbares mehr bringen. Bei 45 Minuten Video etwa eine
 halbe Minute, kein neues Analysieren. Bewertet wird, wie gut die Hübe der Bewegung
 folgen und wie wenig die Prüfung findet; die besten drei stehen neben den
 aktuellen. Ein Vorschlag, kein Urteil – eine richtige Kurve zum Vergleichen gibt
-es nicht.
+es nicht. Die Script-Einstellungen sind dafür in drei Gruppen geteilt:
+**Hub-Erkennung** (die drei, die der Vorschlag einstellt; nach dem Übernehmen
+leuchten die geänderten kurz auf), **Video** und **Gerät**.
 
 **Auslastung**: Unten rechts in der Statusleiste stehen CPU, Grafikkarte (AMD) und
 ihr Video-Decoder für diese App (sobald mit der Grafikkarte dekodiert wird).

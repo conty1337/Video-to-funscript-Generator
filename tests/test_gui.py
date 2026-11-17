@@ -2316,6 +2316,9 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         assert d.list.count() == 3 and d.take_btn.isEnabled()
         d._take()
         assert (p.sensitivity.value(), p.smoothing.value()) != (100, 0)
+        lit = [sl for sl in (p.sensitivity, p.smoothing, p.min_interval)
+               if "font-weight" in sl.parentWidget().findChild(sp.QLabel).styleSheet()]
+        assert lit                                               # the changed sliders light up
         d.deleteLater()
 
         w._load.sample()

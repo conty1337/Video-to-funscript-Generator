@@ -343,7 +343,9 @@ and finer steps, until two rounds in a row bring nothing noticeably better. Abou
 half a minute for 45 minutes of video, no new analysis. Rated by how well the
 strokes follow the movement and how little the check finds; the best three are
 shown next to the current ones. A suggestion, not a verdict – there is no right
-curve to compare with.
+curve to compare with. The script settings are split into three groups for this:
+**Stroke detection** (the three the suggestion sets; after taking it over the
+changed ones light up briefly), **Video** and **Device**.
 
 **Load**: bottom right in the status bar: CPU, graphics card (AMD) and its video
 decoder for this app (once decoding runs on the graphics card).
