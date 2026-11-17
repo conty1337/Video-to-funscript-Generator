@@ -2325,6 +2325,10 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         w.show()
         w._show_load()
         assert "CPU" in w.load_label.text()
+        profiles.save("Ein sehr langer Profilname für die Maschine seitlich", {"sensitivity": 50})
+        p._fill_profiles()
+        app.processEvents()
+        assert p.script_page.minimumSizeHint().width() <= w.script_side.viewport().width()   # nothing cut off
     finally:
         w.motion = None
         w.regen_timer.stop()

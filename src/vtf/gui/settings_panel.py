@@ -106,7 +106,6 @@ class SettingsPanel(QWidget):
         lay.setSpacing(4)
 
         _section(lay, tr("Script"), tr("Wirkt sofort auf die Kurve"), self.reset_script)
-        f = _form()
         f_hub, f_vid, f_dev = _form(), _form(), _form()     # what the suggestion changes / the video / taste and device
         prof = QWidget()
         pl = QHBoxLayout(prof)
@@ -115,6 +114,8 @@ class SettingsPanel(QWidget):
         self.profile = QComboBox()
         self.profile.setToolTip(tr("Gespeicherte Script-Einstellungen mit einem Klick laden (im Datenordner, wenn einer gesetzt ist)"))
         self.profile.activated.connect(self._load_profile)
+        self.profile.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.profile.setMinimumContentsLength(6)       # long names are cut, the sidebar keeps its width
         self.profile_save = QToolButton()
         self.profile_save.setText("+")
         self.profile_save.setToolTip(tr("Aktuelle Script-Einstellungen als Profil speichern"))
@@ -126,7 +127,6 @@ class SettingsPanel(QWidget):
         pl.addWidget(self.profile, 1)
         pl.addWidget(self.profile_save)
         pl.addWidget(self.profile_del)
-        _row(f, tr("Profil"), prof)
         self.axis = QComboBox()
         for label, val in AXES:
             self.axis.addItem(label, val)
@@ -192,7 +192,7 @@ class SettingsPanel(QWidget):
             g.setToolTip(tip)
             lay.addWidget(g)
             lay.addSpacing(2)
-        lay.addLayout(f)
+        lay.addWidget(prof)                             # full width: with a label it does not fit
         group(tr("Hub-Erkennung"), tr("Diese drei stellt „Einstellungen vorschlagen“ ein"))
         lay.addLayout(f_hub)
         lay.addSpacing(4)
