@@ -54,6 +54,7 @@ class CurveWidget(QWidget):
         self.actions: list[Action] = []
         self.duration_ms = 10_000.0
         self.view_ms = 20_000.0        # visible time span
+        self.want_ms = 20_000.0        # the span asked for by zooming (a short video only narrows view_ms)
         self.start_ms = 0.0
         self.playhead_ms = 0.0
         self.follow = True
@@ -89,7 +90,7 @@ class CurveWidget(QWidget):
         self.actions = actions
         self.follow = True
         self.duration_ms = max(duration_ms, 1000.0)
-        self.view_ms = min(self.view_ms, self.duration_ms)
+        self.view_ms = min(self.want_ms, self.duration_ms)
         self._sel = set()
         self._clamp_view()
         self.update()
@@ -560,6 +561,7 @@ class CurveWidget(QWidget):
             factor = 0.8 ** (d / 120)        # proportional: smooth on touchpads too
             self.view_ms *= factor
             self._clamp_view()
+            self.want_ms = self.view_ms
             self.start_ms = anchor - (anchor - self.start_ms) * factor
             self._clamp_view()
             self.update()
