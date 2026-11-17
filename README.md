@@ -330,6 +330,20 @@ but gets this percentage of its usual stroke further, it is sliding slowly in or
 out. The curve then glides along instead of staying flat and jumping up at the
 end. Smaller = glides more often, larger = pauses more often.
 
+**Profiles**: at the top of the script settings. “+” saves the current settings
+under a name (e.g. “machine sideways”, “riding”), the list loads them with one click,
+“−” deletes. Saved in `profiles.json` in the data folder (else the config folder),
+so the laptop finds them too.
+
+**Suggest settings**: button below the script settings. The app makes the script
+from the finished analysis with many sensitivities, smoothings and minimum gaps (a
+few seconds, no new analysis) and shows the best three next to the current ones:
+how well the strokes follow the movement and how little the check finds. A
+suggestion, not a verdict – there is no right curve to compare with.
+
+**Load**: bottom right in the status bar: CPU, graphics card (AMD) and its video
+decoder for this app (once decoding runs on the graphics card).
+
 **Batch processing**: File → Batch processing (Ctrl+B) or drop a folder onto the
 window. The current settings are used. Videos that already have a `.funscript`
 are skipped (can be switched off).

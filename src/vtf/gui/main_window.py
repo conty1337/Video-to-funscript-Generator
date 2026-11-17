@@ -61,6 +61,7 @@ from ..prep import (
 )
 from ..quality import check as check_script
 from ..quality import issue_key
+from ..sysload import Load
 from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
@@ -347,6 +348,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(body)
         self.statusBar().addWidget(self.status_label, 1)
         self.statusBar().setSizeGripEnabled(False)
+        self.load_label = QLabel()
+        self.load_label.setFont(theme.mono_font(11))
+        self.load_label.setContentsMargins(0, 0, 12, 0)
+        self.load_label.setToolTip(tr("Auslastung: CPU gesamt, Grafikkarte gesamt und ihr Video-Decoder für diese App"))
+        self.statusBar().addPermanentWidget(self.load_label)
+        self._load = Load()
+        self._load_timer = QTimer(self)
+        self._load_timer.setInterval(1500)
+        self._load_timer.timeout.connect(self._show_load)
+        self._load_timer.start()
         ocl = gpu.opencl_device_name()
         if ocl:
             ocl_label = QLabel(tr("OpenCL · {0}", ocl))
@@ -421,6 +432,7 @@ class MainWindow(QMainWindow):
         self.panel.tracking.generatorChanged.connect(self._sections_changed)
         self.panel.methodChanged.connect(self._method_changed)
         self.panel.generatorChanged.connect(self.regen_timer.start)
+        self.panel.suggestRequested.connect(self.suggest_settings)
         self.panel.analysisChanged.connect(self._analysis_outdated)
         self.curve.seekRequested.connect(self.seek_ms)
         self.curve.sectionEdgeMoved.connect(self._section_edge_moved)
@@ -2002,6 +2014,26 @@ class MainWindow(QMainWindow):
         self.dirty = True
         self._refresh_position()
         self._status(tr("{0} Punkte erzeugt", len(script.actions)))
+
+    def _show_load(self):
+        if not self.isVisible() or self.isMinimized():
+            return
+        cpu, gpu_pct, dec = self._load.sample()
+        parts = []
+        if cpu is not None:
+            parts.append(tr("CPU {0} %", round(cpu)))
+        if gpu_pct is not None:
+            parts.append(tr("GPU {0} %", gpu_pct))
+        if dec is not None:
+            parts.append(tr("Dekodieren {0} %", round(dec)))
+        self.load_label.setText("  ·  ".join(parts))
+
+    def suggest_settings(self):
+        if self.motion is None:
+            self._status(tr("Erst analysieren"))
+            return
+        from .suggest_dialog import SuggestDialog
+        SuggestDialog(self).exec()
 
     def regenerate_manual(self):
         if self.motion is not None:

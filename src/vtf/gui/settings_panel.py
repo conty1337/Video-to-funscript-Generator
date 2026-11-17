@@ -10,7 +10,10 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QSlider,
     QSpinBox,
     QToolButton,
@@ -18,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import profiles
 from ..analysis import AnalysisSettings
 from ..generator import GeneratorSettings
 from ..i18n import tr
@@ -87,6 +91,7 @@ class SettingsPanel(QWidget):
     generatorChanged = Signal()   # cheap: regenerate script
     analysisChanged = Signal()    # requires a new analysis
     methodChanged = Signal(str)   # "flow" or "track"
+    suggestRequested = Signal()   # "Einstellungen vorschlagen" (needs the analysis: main window)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -102,6 +107,25 @@ class SettingsPanel(QWidget):
 
         _section(lay, tr("Script"), tr("Wirkt sofort auf die Kurve"), self.reset_script)
         f = _form()
+        prof = QWidget()
+        pl = QHBoxLayout(prof)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(4)
+        self.profile = QComboBox()
+        self.profile.setToolTip(tr("Gespeicherte Script-Einstellungen mit einem Klick laden (im Datenordner, wenn einer gesetzt ist)"))
+        self.profile.activated.connect(self._load_profile)
+        self.profile_save = QToolButton()
+        self.profile_save.setText("+")
+        self.profile_save.setToolTip(tr("Aktuelle Script-Einstellungen als Profil speichern"))
+        self.profile_save.clicked.connect(self._save_profile)
+        self.profile_del = QToolButton()
+        self.profile_del.setText("−")
+        self.profile_del.setToolTip(tr("Gewähltes Profil löschen"))
+        self.profile_del.clicked.connect(self._delete_profile)
+        pl.addWidget(self.profile, 1)
+        pl.addWidget(self.profile_save)
+        pl.addWidget(self.profile_del)
+        _row(f, tr("Profil"), prof)
         self.axis = QComboBox()
         for label, val in AXES:
             self.axis.addItem(label, val)
@@ -161,6 +185,11 @@ class SettingsPanel(QWidget):
         lay.addWidget(self.invert)
         lay.addWidget(self.full_stroke)
         lay.addWidget(self.plateaus)
+        lay.addSpacing(8)
+        self.suggest_btn = QPushButton(tr("Einstellungen vorschlagen …"))
+        self.suggest_btn.setToolTip(tr("Erzeugt das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und Mindestabständen und schlägt die besten vor: Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
+        self.suggest_btn.clicked.connect(self.suggestRequested)
+        lay.addWidget(self.suggest_btn)
         lay.addStretch(1)
 
         lay = QVBoxLayout(self.analysis_page)
@@ -253,12 +282,68 @@ class SettingsPanel(QWidget):
         self.invert.toggled.connect(self.generatorChanged)
         self.full_stroke.toggled.connect(self.generatorChanged)
         self.plateaus.toggled.connect(self.generatorChanged)
+        self.generatorChanged.connect(self._sync_profile)
+        self._fill_profiles()
         self.width.currentIndexChanged.connect(self.analysisChanged)
         self.step.valueChanged.connect(self.analysisChanged)
         self.cam.toggled.connect(self.analysisChanged)
         self.turn.toggled.connect(self.analysisChanged)
         self.anchor.toggled.connect(self.analysisChanged)
         self.method.currentIndexChanged.connect(self._method_changed)
+
+    # ------------------------------------------------------------ profiles
+    def _fill_profiles(self) -> None:
+        """The list from the file; the profile that matches the current settings is shown."""
+        self.profile.blockSignals(True)
+        self.profile.clear()
+        self.profile.addItem(tr("– eigene Einstellungen –"), None)
+        for name in sorted(profiles.load(), key=str.lower):
+            self.profile.addItem(name, name)
+        self.profile.blockSignals(False)
+        self._sync_profile()
+
+    def _sync_profile(self) -> None:
+        cur = asdict(self.generator_settings())
+        match = next((n for n, g in profiles.load().items() if {**cur, **g} == cur), None)
+        self.profile.blockSignals(True)
+        self.profile.setCurrentIndex(max(0, self.profile.findData(match)) if match else 0)
+        self.profile.blockSignals(False)
+        self.profile_del.setEnabled(match is not None)
+
+    def _load_profile(self, _index: int = 0) -> None:
+        name = self.profile.currentData()
+        g = profiles.load().get(name) if name else None
+        if g is None:
+            self._sync_profile()
+            return
+        d = self.to_dict()
+        d["generator"].update(g)
+        self.load_dict(d)
+        self.generatorChanged.emit()
+
+    def _save_profile(self) -> None:
+        name, ok = QInputDialog.getText(self, tr("Profil speichern"), tr("Name für die aktuellen Script-Einstellungen:"),
+                                        text=self.profile.currentData() or "")
+        name = name.strip()
+        if not ok or not name:
+            return
+        try:
+            profiles.save(name, asdict(self.generator_settings()))
+        except OSError as e:
+            QMessageBox.warning(self, tr("Profil speichern"), tr("Nicht gespeichert: {0}", e))
+            return
+        self._fill_profiles()
+
+    def _delete_profile(self) -> None:
+        name = self.profile.currentData()
+        if not name or QMessageBox.question(self, tr("Profil löschen"), tr("Profil „{0}“ löschen?", name)) \
+                != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            profiles.delete(name)
+        except OSError as e:
+            QMessageBox.warning(self, tr("Profil löschen"), tr("Nicht gelöscht: {0}", e))
+        self._fill_profiles()
 
     def _slider_defaults(self):
         d = GeneratorSettings()
@@ -392,6 +477,8 @@ class SettingsPanel(QWidget):
         for s in (self.sensitivity, self.smoothing, self.min_interval, self.drift, self.norm, self.max_speed,
                   self.glide):
             s.valueChanged.emit(s.value())
+        if hasattr(self, "profile"):
+            self._sync_profile()
 
 
 def _set_combo(combo: QComboBox, value) -> None:

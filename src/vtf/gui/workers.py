@@ -38,6 +38,32 @@ class AnalysisWorker(QThread):
             self.failed.emit(str(e))
 
 
+class SuggestWorker(QThread):
+    """Tries script settings on the finished analysis (tuning.suggest)."""
+    progress = Signal(float)
+    done = Signal(object)          # (best list, current)
+    failed = Signal(str)
+
+    def __init__(self, motion, base: GeneratorSettings, sections, cuts):
+        super().__init__()
+        self.args = (motion, base, tuple(sections), tuple(cuts))
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        from ..tuning import suggest
+        try:
+            motion, base, sections, cuts = self.args
+            res = suggest(motion, base, sections, cuts, stop=lambda: self._stop, progress=self.progress.emit)
+            if not self._stop:
+                self.done.emit(res)
+        except Exception as e:
+            traceback.print_exc()
+            self.failed.emit(str(e))
+
+
 class BatchWorker(QThread):
     fileStarted = Signal(int, int, str)
     progress = Signal(float)

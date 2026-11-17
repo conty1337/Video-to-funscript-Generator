@@ -2263,4 +2263,48 @@ EN: dict[str, str] = {
         ' · settings taken from the script',
     ' · Einstellungen wirken nach „Analysieren“':
         ' · settings take effect after “Analyse”',
+    "Aktuelle Script-Einstellungen als Profil speichern":
+        "Save the current script settings as a profile",
+    "Auslastung: CPU gesamt, Grafikkarte gesamt und ihr Video-Decoder für diese App":
+        "Load: whole CPU, whole graphics card and its video decoder for this app",
+    "Bewertet wird, wie gut die Hübe der Bewegung folgen und wie wenig die Prüfung findet. Eine richtige Kurve zum Vergleichen gibt es nicht: ein Vorschlag, kein Urteil. Übernommen wirkt er wie die Regler.":
+        "Rated by how well the strokes follow the movement and how little the check finds. There is no right curve to compare with: a suggestion, not a verdict. Taken over, it works like the sliders.",
+    "CPU {0} %":
+        "CPU {0} %",
+    "Dekodieren {0} %":
+        "Decoding {0} %",
+    "Einstellungen vorschlagen":
+        "Suggest settings",
+    "Einstellungen vorschlagen …":
+        "Suggest settings …",
+    "Empfindlichkeit {0} %, Glättung {1} ms, Mindestabstand {2} ms\n{3} Stellen zum Prüfen · {4} Hübe/min · Wertung {5}":
+        "Sensitivity {0} %, smoothing {1} ms, minimum gap {2} ms\n{3} spots to check · {4} strokes/min · rating {5}",
+    "Erzeugt das Script aus der fertigen Analyse mit vielen Empfindlichkeiten, Glättungen und Mindestabständen und schlägt die besten vor: Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren":
+        "Makes the script from the finished analysis with many sensitivities, smoothings and minimum gaps and suggests the best: strokes follow the movement, few spots to check. No new analysis",
+    "GPU {0} %":
+        "GPU {0} %",
+    "Gespeicherte Script-Einstellungen mit einem Klick laden (im Datenordner, wenn einer gesetzt ist)":
+        "Load saved script settings with one click (in the data folder if one is set)",
+    "Gewähltes Profil löschen":
+        "Delete the chosen profile",
+    "Jetzt: {0}":
+        "Now: {0}",
+    "Name für die aktuellen Script-Einstellungen:":
+        "Name for the current script settings:",
+    "Nicht gelöscht: {0}":
+        "Not deleted: {0}",
+    "Nicht gespeichert: {0}":
+        "Not saved: {0}",
+    "Probiere Einstellungen an der fertigen Analyse aus …":
+        "Trying settings on the finished analysis …",
+    "Profil":
+        "Profile",
+    "Profil löschen":
+        "Delete profile",
+    "Profil speichern":
+        "Save profile",
+    "Profil „{0}“ löschen?":
+        "Delete profile “{0}”?",
+    "– eigene Einstellungen –":
+        "– own settings –",
 }
