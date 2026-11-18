@@ -48,10 +48,8 @@ def _fit(t_ms: np.ndarray, ref: np.ndarray, actions) -> float:
 Rated = tuple[float, GeneratorSettings, int, float]      # rating, settings, findings, strokes per minute
 
 
-def suggest(motion: MotionData, base: GeneratorSettings, sections=(), cuts=(), top: int = 3,
-            stop=lambda: False, progress=None) -> tuple[list[Rated], Rated]:
-    """The best few, best first, and how the current settings do. Only sensitivity,
-    smoothing and minimum gap change; direction, range etc. stay as they are."""
+def _rater(motion: MotionData, base: GeneratorSettings, sections=(), cuts=()):
+    """rate(settings, points) -> Rated, measured against the movement made with `base`."""
     ref = generate(motion, replace(base, smoothing_ms=REF_SMOOTHING_MS), sections)
     t_ms, sig = ref.t_ms, ref.signal        # already turned round with "invert", like the points
     minutes = max(1e-6, motion.duration_ms / 60000)
@@ -60,7 +58,21 @@ def suggest(motion: MotionData, base: GeneratorSettings, sections=(), cuts=(), t
         issues = check(acts, base.max_speed, cuts)
         return (_fit(t_ms, sig, acts) - ISSUE_WEIGHT * len(issues) / minutes, cand, len(issues),
                 len(acts) / 2 / minutes)
+    return rate
 
+
+def score(motion: MotionData, gen: GeneratorSettings, sections=(), cuts=(), actions=None) -> int:
+    """The rating of a script as 0..100 (as "Einstellungen vorschlagen" shows it); `actions`:
+    the points as they are (edited by hand too), else made with `gen`."""
+    acts = generate(motion, gen, sections).actions if actions is None else actions
+    return int(round(max(0.0, _rater(motion, gen, sections, cuts)(gen, acts)[0]) * 100))
+
+
+def suggest(motion: MotionData, base: GeneratorSettings, sections=(), cuts=(), top: int = 3,
+            stop=lambda: False, progress=None) -> tuple[list[Rated], Rated]:
+    """The best few, best first, and how the current settings do. Only sensitivity,
+    smoothing and minimum gap change; direction, range etc. stay as they are."""
+    rate = _rater(motion, base, sections, cuts)
     tried: dict[tuple, tuple[Rated, int]] = {}      # (sens, smooth, gap) -> (rating, script hash)
 
     def tryit(k: tuple) -> None:

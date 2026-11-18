@@ -11,8 +11,9 @@ from .analysis import AnalysisCancelled, AnalysisSettings, analyze_motion_cached
 from .funscript import Funscript
 from .generator import GeneratorSettings, generate
 from .i18n import tr
-from .prep import is_prepared, load_prep
-from .scriptdir import LINK_KEY, SETTINGS_KEY, has_script, save_paths, video_link
+from .prep import is_prepared, load_cuts, load_prep
+from .scriptdir import LINK_KEY, RATING_KEY, SETTINGS_KEY, has_script, save_paths, video_link
+from .tuning import score, suggest
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".flv", ".ts"}
 
@@ -38,19 +39,35 @@ def is_analyzed(video: str | Path) -> bool:
 def process_video(video: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
                   progress: Callable[[float], None] | None = None,
                   cancel: Callable[[], bool] | None = None,
-                  output: str | Path | None = None) -> Path:
+                  output: str | Path | None = None, tune: bool = False,
+                  log: Callable[[str], None] | None = None) -> Path:
+    """Analyse, make the script and save it. `tune`: find the settings for this video first
+    (like "Einstellungen vorschlagen", only sensitivity, smoothing and minimum gap)."""
     sections = load_prep(video)
     if sections:            # prepared in the editor: track the marked areas
         an = replace(an, mode="track", track_sections=tuple(sections), track_boxes=())
     else:
         an = replace(an, mode="flow", track_sections=(), track_boxes=())
     motion = analyze_motion_cached(video, an, progress, cancel)
+    cuts = load_cuts(video)
+    if tune:
+        best, _now = suggest(motion, gen, sections, cuts, top=1, stop=cancel or (lambda: False))
+        if cancel and cancel():
+            raise AnalysisCancelled()
+        if best:
+            gen = best[0][1]
+            if log:
+                log(tr("  Einstellungen: Empfindlichkeit {0} %, Glättung {1} ms, Mindestabstand {2} ms",
+                       gen.sensitivity, gen.smoothing_ms, gen.min_interval_ms))
     script = generate(motion, gen, sections)
+    rating = score(motion, gen, sections, cuts, script.actions)
     targets = [Path(output)] if output else save_paths(video)
     for t in targets:
         t.parent.mkdir(parents=True, exist_ok=True)
         Funscript(script.actions, metadata={**make_metadata(video), LINK_KEY: video_link(video, t),
-                                            SETTINGS_KEY: asdict(gen)}).save(t)
+                                            SETTINGS_KEY: asdict(gen), RATING_KEY: rating}).save(t)
+    if log:
+        log(tr("  Wertung {0}", rating))
     return targets[0]
 
 
@@ -68,7 +85,7 @@ def run_batch(folder: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
               on_file: Callable[[int, int, Path], None] | None = None,
               on_progress: Callable[[float], None] | None = None,
               log: Callable[[str], None] | None = None,
-              cancel: Callable[[], bool] | None = None) -> BatchResult:
+              cancel: Callable[[], bool] | None = None, tune: bool = False) -> BatchResult:
     log = log or (lambda _m: None)
     videos = find_videos(folder, recursive)
     res = BatchResult()
@@ -85,7 +102,7 @@ def run_batch(folder: str | Path, an: AnalysisSettings, gen: GeneratorSettings,
             continue
         try:
             prepared = is_prepared(v)
-            out = process_video(v, an, gen, on_progress, cancel)
+            out = process_video(v, an, gen, on_progress, cancel, tune=tune, log=log)
             res.done.append(v)
             log(tr("Fertig: {0} -> {1}", v.name, out.name) + (tr("  (Tracking, vorbereitet)") if prepared else ""))
         except AnalysisCancelled:

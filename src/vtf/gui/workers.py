@@ -71,9 +71,10 @@ class BatchWorker(QThread):
     done = Signal(object)          # BatchResult
 
     def __init__(self, folder: str, an: AnalysisSettings, gen: GeneratorSettings,
-                 recursive: bool, overwrite: bool):
+                 recursive: bool, overwrite: bool, tune: bool = False):
         super().__init__()
         self.args = (folder, an, gen, recursive, overwrite)
+        self.tune = tune
         self._stop = False
 
     def stop(self):
@@ -85,7 +86,7 @@ class BatchWorker(QThread):
             res = run_batch(folder, an, gen, recursive, overwrite,
                             on_file=lambda i, n, p: self.fileStarted.emit(i, n, str(p)),
                             on_progress=self.progress.emit, log=self.log.emit,
-                            cancel=lambda: self._stop)
+                            cancel=lambda: self._stop, tune=self.tune)
         except Exception as e:
             self.log.emit(tr("Fehler: {0}", e))
             res = None

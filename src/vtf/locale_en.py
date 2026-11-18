@@ -2315,4 +2315,16 @@ EN: dict[str, str] = {
         "Depends on the video: the suggestion cannot judge that",
     "Geschmack und Gerät: dafür gibt es kein „besser“":
         "Taste and device: there is no “better” here",
+    "  Einstellungen: Empfindlichkeit {0} %, Glättung {1} ms, Mindestabstand {2} ms":
+        "  Settings: sensitivity {0} %, smoothing {1} ms, minimum gap {2} ms",
+    "  Wertung {0}":
+        "  Rating {0}",
+    "Einstellungen pro Video vorschlagen lassen":
+        "Suggest settings for each video",
+    "Sucht für jedes Video selbst Empfindlichkeit, Glättung und Mindestabstand wie „Einstellungen vorschlagen“ (dauert pro Video etwas länger). Die anderen Einstellungen kommen von hier":
+        "Finds sensitivity, smoothing and minimum gap for each video itself, like “Suggest settings” (takes a little longer per video). The other settings come from here",
+    "Wertung":
+        "Rating",
+    "Wertung beim Speichern (wie bei „Einstellungen vorschlagen“): wie gut die Hübe der Bewegung folgen, weniger Stellen zum Prüfen. – = noch keine":
+        "Rating when saved (as in “Suggest settings”): how well the strokes follow the movement, fewer spots to check. – = none yet",
 }

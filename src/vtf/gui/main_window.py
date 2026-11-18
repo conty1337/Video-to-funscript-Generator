@@ -66,6 +66,7 @@ from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
     LINK_KEY,
+    RATING_KEY,
     SETTINGS_KEY,
     find_script,
     find_video,
@@ -2243,6 +2244,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
             return
         meta = make_metadata(self.video_path)
+        rated = {}
+        if self.motion is not None and axes.get("L0"):          # its rating for the library
+            from ..tuning import score
+            try:
+                rated = {RATING_KEY: score(self.motion, self.panel.generator_settings(), self.panel.sections,
+                                           self.cuts, axes["L0"])}
+            except Exception:                                    # a rating is never worth a lost save
+                rated = {}
         saved: list[str] = []
         written: list[Path] = []
         try:
@@ -2257,7 +2266,8 @@ class MainWindow(QMainWindow):
                         continue
                     Funscript(acts, metadata={**self._metadata_for(target, meta),
                                                 LINK_KEY: video_link(self.video_path, target),
-                                                SETTINGS_KEY: asdict(self.panel.generator_settings())}).save(target)
+                                                SETTINGS_KEY: asdict(self.panel.generator_settings()),
+                                                **(rated if axis == "L0" else {})}).save(target)
                     written.append(target)
                     if target.name not in saved:
                         saved.append(target.name)

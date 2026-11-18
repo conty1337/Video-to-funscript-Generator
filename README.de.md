@@ -377,7 +377,10 @@ ihr Video-Decoder für diese App (sobald mit der Grafikkarte dekodiert wird).
 
 **Stapelverarbeitung**: Datei → Stapelverarbeitung (Strg+B) oder einen Ordner
 ins Fenster ziehen. Es werden die aktuellen Einstellungen verwendet. Videos, für
-die schon ein `.funscript` existiert, werden übersprungen (abschaltbar).
+die schon ein `.funscript` existiert, werden übersprungen (abschaltbar). Mit
+**„Einstellungen pro Video vorschlagen lassen“** sucht der Stapel für jedes Video selbst
+Empfindlichkeit, Glättung und Mindestabstand (wie „Einstellungen vorschlagen“, dauert
+pro Video etwas länger); das Protokoll zeigt die gefundenen Werte und die Wertung.
 
 ### Player
 
@@ -411,8 +414,10 @@ Handy-Fernbedienung – macht die Hübe live kleiner, ohne das Script zu ändern
 **Bibliothek** (Strg+L oder Knopf oben): zeigt alle Videos mit Script aus einem
 Ordner (mit Unterordnern) mit Länge, Hüben pro Minute, mittlerem Tempo, Bewertung
 und Heatmap. Suchen, sortieren (Name, Bewertung, Tempo, Neueste, Länge, Zuletzt
-gespielt, Oft gespielt, Zu prüfen) und nach Sternen filtern. Die Spalte „Prüfen“ zählt
-die Stellen, die die Prüfung im Editor zeigen würde (Maus darüber: welche). Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
+gespielt, Oft gespielt, Zu prüfen, Wertung) und nach Sternen filtern. Die Spalte „Prüfen“ zählt
+die Stellen, die die Prüfung im Editor zeigen würde (Maus darüber: welche). Die
+Spalte „Wertung“ zeigt die Wertung beim Speichern (0–100, wie bei „Einstellungen
+vorschlagen“; – = ohne Analyse gespeichert) und lässt sich auch sortieren. Bewerten: auf die Sterne klicken oder Taste 1–5 (0 = keine).
 Doppelklick spielt ab, „Zur Playlist“ hängt die ausgewählten an, „Im Editor
 öffnen“ zum Bearbeiten. Die Bewertungen bleiben auf dem Rechner
 (`~/.config/video-to-funscript/library.json`).

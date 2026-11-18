@@ -63,8 +63,11 @@ class BatchDialog(QDialog):
         self.recursive.setChecked(True)
         self.recursive.toggled.connect(self._count)
         self.overwrite = QCheckBox(tr("Bereits analysierte Videos neu erstellen"))
+        self.tune = QCheckBox(tr("Einstellungen pro Video vorschlagen lassen"))
+        self.tune.setToolTip(tr("Sucht für jedes Video selbst Empfindlichkeit, Glättung und Mindestabstand wie „Einstellungen vorschlagen“ (dauert pro Video etwas länger). Die anderen Einstellungen kommen von hier"))
         lay.addWidget(self.recursive)
         lay.addWidget(self.overwrite)
+        lay.addWidget(self.tune)
         lay.addSpacing(16)
         self.file_label = QLabel(tr("Gesamt"))
         self.file_label.setObjectName("formLabel")
@@ -126,7 +129,7 @@ class BatchDialog(QDialog):
         a = dataclasses.replace(self.panel.analysis_settings(), mode="flow", track_boxes=(),
                                 track_sections=())
         self.worker = BatchWorker(f, a, self.panel.generator_settings(),
-                                  self.recursive.isChecked(), self.overwrite.isChecked())
+                                  self.recursive.isChecked(), self.overwrite.isChecked(), self.tune.isChecked())
         self.worker.fileStarted.connect(self._file)
         self.worker.progress.connect(lambda p: self.current.setValue(int(p * 100)))
         self.worker.log.connect(self.log.appendPlainText)

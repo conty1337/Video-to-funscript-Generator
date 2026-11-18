@@ -85,5 +85,10 @@ def test_played_and_check_columns(tmp_path):
     assert [e.name for e in filtered(es.values(), sort="played")][0] == "alt"
     assert es["luecke"].issues >= 1 and es["luecke"].issue_text and es["alt"].issues == 0
     assert [e.name for e in filtered(es.values(), sort="check")][0] == "luecke"
+    # the rating saved in the script (else none) and sorting by it
+    Funscript([Action(0, 10), Action(500, 90)], metadata={"vtf_rating": 86}).save(funscript_path_for(gap))
+    es = {e.name: e for e in scan(tmp_path)}
+    assert es["luecke"].score == 86 and es["alt"].score == -1
+    assert [e.name for e in filtered(es.values(), sort="score")][0] == "luecke"
     stats.reset()
     assert a.exists()
