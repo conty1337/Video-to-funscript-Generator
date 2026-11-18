@@ -47,6 +47,8 @@ class TrackingBox(QWidget):
     suggestRequested = Signal()     # "KI-Vorschlag": find body parts in the current frame
     drawModeChanged = Signal(str)   # "box", "outline" or "stroke": what a drag in the video draws
     autoRequested = Signal()        # "Automatisch finden": toy, reference and arrow by themselves
+    scenesRequested = Signal()      # "Szenenwechsel suchen"
+    calibrated = Signal()           # a section just got both "Ganz drin" and "Ganz draußen"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -123,6 +125,11 @@ class TrackingBox(QWidget):
         lay.addWidget(self.ai_btn)
         lay.addWidget(self.ai_check)
         self.ai_btn.clicked.connect(self.suggestRequested)
+        self.scenes_btn = QPushButton(tr("Szenenwechsel suchen"))
+        self.scenes_btn.setToolTip(tr("Sucht harte Schnitte im Video. Liegt einer mitten in einem Abschnitt, meldet die Prüfung ihn (F3 springt hin): dort die Kästchen neu markieren"))
+        self.scenes_btn.setStyleSheet("padding: 0 8px;")
+        lay.addWidget(self.scenes_btn)
+        self.scenes_btn.clicked.connect(self.scenesRequested)
         self.ai_check.toggled.connect(self.analysisChanged)
 
         # bound methods, no lambdas: a lambda holding self makes a reference cycle that
@@ -482,10 +489,13 @@ class TrackingBox(QWidget):
         if i is None:
             return tr("Kalibrieren geht nur innerhalb eines Abschnitts")
         key = "calib_in_ms" if kind == "in" else "calib_out_ms"
+        was = self.sections[i].calibrated
         self.sections[i] = replace(self.sections[i], **{key: int(ms)})
         self.refresh()
         self.generatorChanged.emit()
         s = self.sections[i]
+        if s.calibrated and not was:
+            self.calibrated.emit()
         what = tr("ganz drin (0)") if kind == "in" else tr("ganz draußen (100)")
         rest = (tr("kalibriert – das Script nutzt jetzt die echte Tiefe") if s.calibrated else
                 tr("jetzt noch „Ganz draußen“ setzen") if kind == "in" else tr("jetzt noch „Ganz drin“ setzen"))

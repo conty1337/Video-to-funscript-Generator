@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, editing, gpu
-from ..analysis import MotionData, cached_motion
+from ..analysis import MotionData, cached_motion, section_ranges
 from ..batch import VIDEO_EXTS, make_metadata
 from ..editing import rhythm
 from ..funscript import (
@@ -52,11 +52,13 @@ from ..prep import (
     load_bookmarks,
     load_checked,
     load_cuts,
+    load_scenes,
     load_prep,
     prep_path,
     save_bookmarks,
     save_checked,
     save_cuts,
+    save_scenes,
     save_prep,
 )
 from ..quality import check as check_script
@@ -66,6 +68,7 @@ from ..quality import describe as describe_issue
 from ..quality import summary as issue_summary
 from ..scriptdir import (
     LINK_KEY,
+    RATING_KEY,
     SETTINGS_KEY,
     find_script,
     find_video,
@@ -106,6 +109,10 @@ class ElidedLabel(QLabel):
         p.setFont(self.font())
         text = p.fontMetrics().elidedText(self.text(), Qt.ElideRight, self.width())
         p.drawText(self.rect(), int(self.alignment()), text)
+
+
+SIDEBAR_W = 320      # editor: both sidebars, the same (the video sits in the middle)
+PLAYER_SIDE_W = 300  # player: only the playlist, the video gets the room
 
 
 class MainWindow(QMainWindow):
@@ -181,6 +188,8 @@ class MainWindow(QMainWindow):
         self.issues: list = []                        # script check: places worth a look
         self._checked: set[str] = set()               # findings ticked off as fine (issue_key)
         self._issue_last = None                       # the finding F3 showed last
+        self.scenes: list[int] | None = None          # scene changes found (ms), None = not looked for
+        self._scenes_worker = None
         self._issues_dlg = None
         from ..stats import Recorder
         self.stats = Recorder()                       # playing time, strokes (only on this computer)
@@ -259,7 +268,7 @@ class MainWindow(QMainWindow):
         self.side = QStackedWidget()
         self.side.addWidget(analysis)
         self.side.addWidget(self.player)
-        self.side.setFixedWidth(300)
+        self.side.setFixedWidth(SIDEBAR_W)
 
         # ---- right: script settings
         script_scroll = QScrollArea()
@@ -268,7 +277,7 @@ class MainWindow(QMainWindow):
         script_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         script_scroll.setWidget(self.panel.script_page)
         self.script_side = script_scroll
-        self.script_side.setFixedWidth(300)
+        self.script_side.setFixedWidth(SIDEBAR_W)
 
         # ---- bottom: the timeline across the whole width, one lane per row
         self.heat = HeatBar()
@@ -433,6 +442,11 @@ class MainWindow(QMainWindow):
         self.panel.methodChanged.connect(self._method_changed)
         self.panel.generatorChanged.connect(self.regen_timer.start)
         self.panel.suggestRequested.connect(self.suggest_settings)
+        self.panel.auto_suggest.setChecked(str(self.qsettings.value("suggest/auto", "false")).lower() == "true")
+        self.panel.auto_suggest.toggled.connect(
+            lambda on: self.qsettings.setValue("suggest/auto", "true" if on else "false"))
+        self.panel.tracking.calibrated.connect(self._auto_suggest)
+        self.panel.tracking.scenesRequested.connect(self.find_scenes)
         self.panel.analysisChanged.connect(self._analysis_outdated)
         self.curve.seekRequested.connect(self.seek_ms)
         self.curve.sectionEdgeMoved.connect(self._section_edge_moved)
@@ -458,6 +472,7 @@ class MainWindow(QMainWindow):
         self._act(m, tr("Funscript exportieren"), self.export, QKeySequence.Save)
         self._act(m, tr("Funscript exportieren unter…"), self.export_as, QKeySequence.SaveAs)
         self._act(m, tr("Funscript laden…"), self.load_funscript_dialog)
+        self._act(m, tr("Heatmap als Bild speichern…"), self.export_heatmap)
         self._act(m, tr("Einstellungen…"), self.open_settings, "Ctrl+,")
         m.addSeparator()
         self._act(m, tr("Stapelverarbeitung…"), self.open_batch, "Ctrl+B")
@@ -771,6 +786,7 @@ class MainWindow(QMainWindow):
         self._show_bookmarks()
         self.cuts = load_cuts(path)
         self._checked = load_checked(path)
+        self.scenes = load_scenes(path)
         self._cut_start = None
         self._skip_resume = None
         self._countdown_off = None
@@ -832,6 +848,7 @@ class MainWindow(QMainWindow):
         self._show_bookmarks()
         self.cuts = []
         self._checked = set()
+        self.scenes = None
         self._cut_start = None
         self._show_cuts()
         self.rail.set_speed(0.0)
@@ -896,8 +913,7 @@ class MainWindow(QMainWindow):
         """Check the stroke script again (cheap): marks in the curve, count on the button.
         Findings ticked off as fine stay away while the points around them are the same."""
         acts = self.stroke_actions()
-        lost = [(a, b) for a, b, _ar in self._lost_stretches()]
-        found = check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost) if acts else []
+        found = self._found_issues(acts)
         self.issues = [it for it in found if issue_key(it, acts) not in self._checked]
         self.curve.set_issues([(it.start_ms, it.end_ms) for it in self.issues])
         n = len(self.issues)
@@ -907,12 +923,78 @@ class MainWindow(QMainWindow):
         if self._issues_dlg is not None and self._issues_dlg.isVisible():
             self._issues_dlg.refresh()
 
+    def _scene_spots(self) -> list[int]:
+        """Scene changes inside a tracking section that no section starts at."""
+        if not self.scenes or self.panel.mode != "track":
+            return []
+        from ..scenes import needs_new_boxes
+        dur = max(self.curve.duration_ms, self.frame_count / self.fps * 1000 if self.fps else 0)
+        return needs_new_boxes(self.scenes, section_ranges(self.panel.sections, dur))
+
+    def _found_issues(self, acts) -> list:
+        if not acts:
+            return []
+        lost = [(a, b) for a, b, _ar in self._lost_stretches()]
+        return check_script(acts, self.panel.generator_settings().max_speed, self.cuts, lost, self._scene_spots())
+
+    def find_scenes(self):
+        """Scene changes in the background; those inside a section show up in the check."""
+        if not self.video_path:
+            self._status(tr("Erst ein Video öffnen"))
+            return
+        if self._scenes_worker is not None and self._scenes_worker.isRunning():
+            return
+        from .workers import ScenesWorker
+        w = ScenesWorker(self.video_path, self.panel.analysis_settings().hwaccel)
+        w.setParent(self)
+        path = self.video_path
+        w.progress.connect(lambda f: self._status(tr("Suche Szenenwechsel … {0} %", int(f * 100))))
+        w.done.connect(lambda cuts: self._scenes_found(path, cuts))
+        w.failed.connect(lambda e: self._status(tr("Szenenwechsel-Suche fehlgeschlagen: {0}", e)))
+        w.finished.connect(lambda: self.panel.tracking.scenes_btn.setEnabled(True))
+        self.panel.tracking.scenes_btn.setEnabled(False)
+        self._scenes_worker = w
+        w.start()
+        self._status(tr("Suche Szenenwechsel …"))
+
+    def _scenes_found(self, path: str, cuts: list):
+        try:
+            save_scenes(path, cuts)
+        except OSError:
+            pass
+        if path != self.video_path:
+            return
+        self.scenes = list(cuts)
+        self._update_issues()
+        inside = len(self._scene_spots())
+        self._status(tr("{0} Szenenwechsel gefunden", len(cuts))
+                     + (tr(", {0} davon mitten in einem Abschnitt: Prüfung / F3 springt hin", inside) if inside else ""))
+
+    def export_heatmap(self):
+        acts = self.stroke_actions()
+        if len(acts) < 2 or not self.video_path:
+            self._status(tr("Noch kein Script"))
+            return
+        start = str(save_paths(self.video_path)[-1].with_suffix("")) + ".heatmap.png"
+        path, _ = QFileDialog.getSaveFileName(self, tr("Heatmap als Bild speichern"), start, tr("Bild (*.png)"))
+        if not path:
+            return
+        from .heatbar import heatmap_image
+        dur = max(self.curve.duration_ms, acts[-1].at)
+        if heatmap_image(acts, dur).save(path):
+            self._status(tr("Heatmap gespeichert: {0}", Path(path).name))
+        else:
+            self._status(tr("Heatmap nicht gespeichert: {0}", path))
+
+    def _auto_suggest(self):
+        if self.panel.auto_suggest.isChecked() and self.motion is not None:
+            QTimer.singleShot(0, self.suggest_settings)
+
     def tick_issues(self, items):
         """Mark findings as fine (or fixed by eye): saved next to the cuts, shown again once
         the script changes there."""
         acts = self.stroke_actions()
-        found = check_script(acts, self.panel.generator_settings().max_speed, self.cuts,
-                             [(a, b) for a, b, _ar in self._lost_stretches()]) if acts else []
+        found = self._found_issues(acts)
         current = {issue_key(it, acts) for it in found}
         self._checked = (self._checked & current) | {issue_key(it, acts) for it in items}
         self._save_checked()
@@ -1749,6 +1831,7 @@ class MainWindow(QMainWindow):
     def set_player_mode(self, on: bool):
         on = bool(on)
         self.side.setCurrentWidget(self.player if on else self.side.widget(0))
+        self.side.setFixedWidth(PLAYER_SIDE_W if on else SIDEBAR_W)
         self._apply_sides()
         self.mode_player.setChecked(on)
         self.mode_edit.setChecked(not on)
@@ -1990,6 +2073,7 @@ class MainWindow(QMainWindow):
         errs = motion.meta.get("decoder_errors") or []
         self.status_label.setToolTip("\n".join(f"{DECODER_LABELS.get(m, m)}: {e}" for m, e in errs)
                                      if errs else "")
+        self._auto_suggest()
 
     def _analysis_failed(self, msg: str):
         self._analysis_end(tr("Analyse fehlgeschlagen"))
@@ -2243,6 +2327,14 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, tr("Export"), tr("Noch keine Punkte vorhanden. Analysiere zuerst das Video."))
             return
         meta = make_metadata(self.video_path)
+        rated = {}
+        if self.motion is not None and axes.get("L0"):          # its rating for the library
+            from ..tuning import score
+            try:
+                rated = {RATING_KEY: score(self.motion, self.panel.generator_settings(), self.panel.sections,
+                                           self.cuts, axes["L0"])}
+            except Exception:                                    # a rating is never worth a lost save
+                rated = {}
         saved: list[str] = []
         written: list[Path] = []
         try:
@@ -2257,7 +2349,8 @@ class MainWindow(QMainWindow):
                         continue
                     Funscript(acts, metadata={**self._metadata_for(target, meta),
                                                 LINK_KEY: video_link(self.video_path, target),
-                                                SETTINGS_KEY: asdict(self.panel.generator_settings())}).save(target)
+                                                SETTINGS_KEY: asdict(self.panel.generator_settings()),
+                                                **(rated if axis == "L0" else {})}).save(target)
                     written.append(target)
                     if target.name not in saved:
                         saved.append(target.name)

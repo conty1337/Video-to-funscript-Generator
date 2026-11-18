@@ -330,6 +330,19 @@ but gets this percentage of its usual stroke further, it is sliding slowly in or
 out. The curve then glides along instead of staying flat and jumping up at the
 end. Smaller = glides more often, larger = pauses more often.
 
+**Automatically after analysis** (check box below the button, kept): opens
+“Suggest settings” by itself as soon as an analysis is done or a section got
+“Fully in” and “Fully out”.
+
+**Find scene changes** (button in the tracking area): finds hard cuts in the video
+(saved in `<video>.vtf.json`). If one lies inside a section, the check reports it
+as “Scene change” (F3 jumps there): mark the boxes anew there. A section starting
+right at the cut is fine.
+
+**Heatmap as an image**: File → “Save heatmap as image…” saves the script's tempo
+over time (colours as under the timeline) with the stroke curve over it as a PNG,
+e.g. to share.
+
 **Profiles**: at the top of the script settings. “+” saves the current settings
 under a name (e.g. “machine sideways”, “riding”), the list loads them with one click,
 “−” deletes. Saved in `profiles.json` in the data folder (else the config folder),
@@ -352,7 +365,9 @@ decoder for this app (once decoding runs on the graphics card).
 
 **Batch processing**: File → Batch processing (Ctrl+B) or drop a folder onto the
 window. The current settings are used. Videos that already have a `.funscript`
-are skipped (can be switched off).
+are skipped (can be switched off). With **“Suggest settings for each video”** the batch
+finds sensitivity, smoothing and minimum gap for every video itself (like “Suggest
+settings”, a little longer per video); the log shows the values found and the rating.
 
 ### Player
 
@@ -385,9 +400,10 @@ without changing the script.
 **Library** (Ctrl+L or the button at the top): every video with a script in a
 folder (with subfolders), with length, strokes per minute, average tempo,
 rating and heatmap. Search, sort (name, rating, tempo, newest, length, last played, played
-most, needs a look) and
+most, needs a look, rating) and
 filter by stars. The “Check” column counts the places the check in the editor would
-point out (hover to see them). Rate: click the stars or press 1–5 (0 = none). A double click
+point out (hover to see them). The “Rating” column shows the rating when saved (0–100,
+as in “Suggest settings”; – = saved without an analysis) and can be sorted by. Rate: click the stars or press 1–5 (0 = none). A double click
 plays, “Add to playlist” appends the selected ones, “Open in editor” to edit.
 The ratings stay on your computer (`~/.config/video-to-funscript/library.json`).
 

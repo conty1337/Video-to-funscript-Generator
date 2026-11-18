@@ -236,6 +236,7 @@ def video_link(video: str | Path, script: str | Path) -> str:
     return Path(os.path.relpath(os.path.abspath(video), os.path.abspath(Path(script).parent))).as_posix()
 
 
+RATING_KEY = "vtf_rating"       # funscript metadata: its rating 0..100 (tuning.score)
 SETTINGS_KEY = "vtf_settings"   # funscript metadata: the script settings it was made with
 
 

@@ -38,6 +38,31 @@ class AnalysisWorker(QThread):
             self.failed.emit(str(e))
 
 
+class ScenesWorker(QThread):
+    """Looks for scene changes in a video (scenes.find_cuts)."""
+    progress = Signal(float)
+    done = Signal(object)          # list of ms
+    failed = Signal(str)
+
+    def __init__(self, path: str, hwaccel: str = "auto"):
+        super().__init__()
+        self.path, self.hwaccel = path, hwaccel
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        from ..scenes import find_cuts
+        try:
+            cuts = find_cuts(self.path, self.hwaccel, self.progress.emit, lambda: self._stop)
+            if not self._stop:
+                self.done.emit(cuts)
+        except Exception as e:
+            traceback.print_exc()
+            self.failed.emit(str(e))
+
+
 class SuggestWorker(QThread):
     """Tries script settings on the finished analysis (tuning.suggest)."""
     progress = Signal(float)
@@ -71,9 +96,10 @@ class BatchWorker(QThread):
     done = Signal(object)          # BatchResult
 
     def __init__(self, folder: str, an: AnalysisSettings, gen: GeneratorSettings,
-                 recursive: bool, overwrite: bool):
+                 recursive: bool, overwrite: bool, tune: bool = False):
         super().__init__()
         self.args = (folder, an, gen, recursive, overwrite)
+        self.tune = tune
         self._stop = False
 
     def stop(self):
@@ -85,7 +111,7 @@ class BatchWorker(QThread):
             res = run_batch(folder, an, gen, recursive, overwrite,
                             on_file=lambda i, n, p: self.fileStarted.emit(i, n, str(p)),
                             on_progress=self.progress.emit, log=self.log.emit,
-                            cancel=lambda: self._stop)
+                            cancel=lambda: self._stop, tune=self.tune)
         except Exception as e:
             self.log.emit(tr("Fehler: {0}", e))
             res = None

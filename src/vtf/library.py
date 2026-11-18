@@ -14,7 +14,7 @@ from .funscript import Funscript
 from .i18n import tr
 from .prep import load_cuts
 from .quality import check, summary
-from .scriptdir import files_in, find_script, find_video, video_stem
+from .scriptdir import RATING_KEY, files_in, find_script, find_video, video_stem
 from .scriptdir import settings as script_settings
 
 STROKE_MIN = 10          # a step of at least this many positions is a stroke
@@ -35,6 +35,7 @@ class Entry:
     rating: int = 0               # 0..5
     missing: bool = False         # a script in the script folder whose video was not found
     issues: int = 0               # places worth a look (the editor's check)
+    score: int = -1               # the script's rating 0..100 (saved with it), -1 = none
     issue_text: str = ""
     played_s: float = 0.0         # played on this computer, all days (statistics)
     last_played: str = ""         # ISO day it was last played
@@ -46,9 +47,14 @@ class Entry:
 
 def _numbers(e: Entry) -> None:
     try:
-        acts = Funscript.load(e.script).actions
+        fs = Funscript.load(e.script)
     except (OSError, ValueError, KeyError, TypeError):
         return
+    acts = fs.actions
+    try:
+        e.score = int((fs.metadata or {}).get(RATING_KEY, -1))
+    except (TypeError, ValueError):
+        e.score = -1
     acts = sorted(acts, key=lambda a: a.at)
     if len(acts) < 2:
         return
@@ -144,6 +150,7 @@ SORTS = {
     "recent": (tr("Zuletzt gespielt"), lambda e: (e.last_played, e.played_s), True),
     "played": (tr("Oft gespielt"), lambda e: e.played_s, True),
     "check": (tr("Zu prüfen"), lambda e: e.issues, True),
+    "score": (tr("Wertung"), lambda e: e.score, True),
 }
 
 

@@ -2329,6 +2329,11 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         p._fill_profiles()
         app.processEvents()
         assert p.script_page.minimumSizeHint().width() <= w.script_side.viewport().width()   # nothing cut off
+        assert w.side.maximumWidth() == w.script_side.maximumWidth()                       # symmetric
+        w.set_player_mode(True)
+        assert w.side.maximumWidth() < w.script_side.maximumWidth()                        # player: video first
+        w.set_player_mode(False)
+        assert w.side.maximumWidth() == w.script_side.maximumWidth()
     finally:
         w.motion = None
         w.regen_timer.stop()
@@ -2352,3 +2357,73 @@ def test_curve_keeps_its_span_after_an_empty_timeline(app):
     c.set_data(c.t_ms[:0], c.signal[:0], [], 5_000)
     c.set_data(c.t_ms[:0], c.signal[:0], [], 600_000)
     assert c.view_ms == 60_000
+
+
+def test_heatmap_export_auto_suggest_and_scenes(app, sine_video, tmp_path, monkeypatch):
+    """Heatmap as a picture (fast = coloured, the curve over it); the suggestion opens by
+    itself after an analysis or a finished calibration only when switched on (kept); scene
+    changes inside a section become spots in the check."""
+    import shutil
+    import numpy as np
+    from PySide6.QtGui import QColor
+    from vtf.analysis import MotionData, TrackSection
+    from vtf.funscript import Action
+    from vtf.gui import main_window as mw
+    from vtf.gui.heatbar import STOPS, heatmap_image
+
+    img = heatmap_image([Action(0, 0), Action(200, 100), Action(10_000, 100)], 10_000, 400, 60)
+    assert (img.width(), img.height()) == (400, 60)
+    assert img.pixelColor(2, 2) != QColor(*STOPS[0][1])           # fast at the start: coloured
+    assert img.pixelColor(300, 30) == QColor(*STOPS[0][1])        # standing still: dark
+
+    video = tmp_path / "szene.avi"
+    shutil.copy(sine_video, video)
+    w = mw.MainWindow()
+    try:
+        w.set_player_mode(False)
+        w.open_video(str(video))
+        acts = [Action(k * 400, 90 if k % 2 else 10) for k in range(30)]
+        w.curve.set_actions(acts)
+        out = tmp_path / "h.png"
+        monkeypatch.setattr(mw.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(out), "")))
+        w.export_heatmap()
+        assert out.is_file() and out.stat().st_size > 0
+
+        opened = []
+        monkeypatch.setattr(w, "suggest_settings", lambda: opened.append(1))
+        w.motion = MotionData("x", 30.0, np.zeros(30, np.float32), np.zeros(30, np.float32))
+        w.panel.auto_suggest.setChecked(False)
+        w._auto_suggest()
+        app.processEvents()
+        assert not opened                                          # off: nothing opens
+        w.panel.auto_suggest.setChecked(True)
+        assert w.qsettings.value("suggest/auto") == "true"
+        w.panel.tracking.calibrated.emit()                         # "Ganz drin" + "Ganz draußen" set
+        app.processEvents()
+        assert opened == [1]
+        w.panel.auto_suggest.setChecked(False)
+        tb = w.panel.tracking
+        tb.sections = [TrackSection(0, ((0.2, 0.3, 0.2, 0.2),))]
+        fired = []
+        tb.calibrated.connect(lambda: fired.append(1))
+        tb.calibrate("in", 500)
+        assert not fired                                           # only half
+        tb.calibrate("out", 900)
+        tb.calibrate("out", 950)
+        assert fired == [1]                                        # once, when it became complete
+
+        w.motion = None                                            # no regenerating over the test points
+        w.panel.method.setCurrentIndex(w.panel.method.findData("track"))
+        w.panel.tracking.sections = [TrackSection(0, ((0.2, 0.3, 0.2, 0.2), (0.5, 0.4, 0.2, 0.2)))]
+        w.regen_timer.stop()
+        w.curve.set_actions(acts)
+        w._scenes_found(str(video), [3000])
+        assert [i.kind for i in w.issues if i.kind == "scene"] == ["scene"]
+        from vtf.prep import load_scenes
+        assert load_scenes(video) == [3000]
+    finally:
+        w.motion = None
+        w.regen_timer.stop()
+        w.dirty = False
+        w.close()
+        w.deleteLater()

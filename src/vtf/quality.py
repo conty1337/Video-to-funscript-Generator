@@ -9,6 +9,7 @@ Each finding is an Issue(kind, start ms, end ms, text). Kinds:
 * "jitter": many tiny strokes in a row (trembling instead of strokes)
 * "small":  strokes suddenly much smaller than around them (the box may have slipped)
 * "beat":   one stroke much slower than the ones around it (the rhythm stops)
+* "scene":  a scene change inside a tracking section: the boxes have to be marked anew
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ KIND_LABELS = {
     "jitter": tr("Zittern"),
     "small": tr("Hübe plötzlich klein"),
     "beat": tr("Takt setzt aus"),
+    "scene": tr("Szenenwechsel"),
 }
 
 
@@ -87,10 +89,10 @@ def _around_median(v: np.ndarray) -> np.ndarray:
     return out
 
 
-def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
+def check(actions, max_speed: float = 0, cuts=(), lost=(), scenes=()) -> list[Issue]:
     """Places worth a look, sorted by time. `max_speed`: positions per second (0 = the
     default), `cuts`: (from, to) the player skips, `lost`: (from, to) where tracking lost
-    an area."""
+    an area, `scenes`: scene changes where the tracking boxes have to be marked anew."""
     acts = sorted(actions, key=lambda a: a.at)
     issues: list[Issue] = []
     limit = max_speed or DEFAULT_MAX_SPEED
@@ -143,6 +145,10 @@ def check(actions, max_speed: float = 0, cuts=(), lost=()) -> list[Issue]:
     for a, b in lost:
         if b - a >= LOST_MIN_MS and not _in_cut(a, b, cuts):
             issues.append(Issue("lost", int(a), int(b), tr("Tracking hat hier einen Bereich verloren")))
+    for c in scenes:
+        if not _in_cut(c, c, cuts):
+            issues.append(Issue("scene", int(c), int(c) + 500,
+                                tr("Kästchen hier neu markieren (sie folgen sonst etwas anderem)")))
     return _merge(issues)
 
 

@@ -327,6 +327,15 @@ def test_saving_drops_emptied_axes_and_keeps_foreign_metadata(cfg, sine_video):
                                                                           "vtf_video": "sine.avi"}
         # the script keeps its own settings and brings them back when the video is opened again
         assert meta["vtf_settings"]["sensitivity"] == w.panel.sensitivity.value()
+        assert "vtf_rating" not in meta                               # no analysis: no rating
+        import numpy as np
+        from vtf.analysis import MotionData
+        t = np.arange(90) / 30
+        w.motion = MotionData("x", 30.0, np.zeros(90, np.float32), np.diff(np.sin(t * 6) * 20, prepend=0).astype(np.float32))
+        w.export()
+        assert 0 <= Funscript.load(near).metadata["vtf_rating"] <= 100   # analysed: rated for the library
+        w.motion = None
+        meta = Funscript.load(near).metadata
         g = dict(meta["vtf_settings"], sensitivity=23, invert=True)
         Funscript(Funscript.load(near).actions, metadata={**meta, "vtf_settings": g}).save(near)
         hwaccel = w.panel.hwaccel.currentData()

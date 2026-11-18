@@ -31,7 +31,7 @@ from ..thumbs import get_thumb, make_thumb, publish
 from . import theme
 from .heatbar import heat_color
 
-COL_THUMB, COL_NAME, COL_LEN, COL_RATE, COL_TEMPO, COL_CHECK, COL_STARS, COL_HEAT = range(8)
+COL_THUMB, COL_NAME, COL_LEN, COL_RATE, COL_TEMPO, COL_CHECK, COL_SCORE, COL_STARS, COL_HEAT = range(9)
 THUMB_W, THUMB_H = 64, 36    # preview picture in the list
 ENTRY_ROLE = Qt.UserRole + 1
 STAR = 18                # px per star
@@ -177,8 +177,8 @@ class LibraryDialog(QDialog):
         self.tree.setAlternatingRowColors(False)
         self.tree.setRootIsDecorated(False)
         self.tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.tree.setHeaderLabels(["", tr("Video"), tr("Länge"), tr("Hübe/min"), tr("Tempo"), tr("Prüfen"), tr("Bewertung"),
-                                   tr("Heatmap")])
+        self.tree.setHeaderLabels(["", tr("Video"), tr("Länge"), tr("Hübe/min"), tr("Tempo"), tr("Prüfen"), tr("Wertung"),
+                                   tr("Bewertung"), tr("Heatmap")])
         self.thumb_delegate = _ThumbDelegate(self.tree)
         self.tree.setItemDelegateForColumn(COL_THUMB, self.thumb_delegate)
         self.tree.setItemDelegateForColumn(COL_HEAT, _HeatDelegate(self.tree))
@@ -190,7 +190,8 @@ class LibraryDialog(QDialog):
         self.tree.headerItem().setToolTip(COL_TEMPO, tr("Mittleres Tempo in Positionen pro Sekunde"))
         self.tree.headerItem().setToolTip(COL_CHECK, tr("Stellen, die sich die Prüfung im Editor ansehen würde"))
         self.tree.headerItem().setToolTip(COL_RATE, tr("Hübe pro Minute, solange sich das Script bewegt"))
-        for c, w in ((COL_THUMB, THUMB_W + 8), (COL_LEN, 72), (COL_RATE, 84), (COL_TEMPO, 72), (COL_CHECK, 64), (COL_STARS, 104),
+        self.tree.headerItem().setToolTip(COL_SCORE, tr("Wertung beim Speichern (wie bei „Einstellungen vorschlagen“): wie gut die Hübe der Bewegung folgen, weniger Stellen zum Prüfen. – = noch keine"))
+        for c, w in ((COL_THUMB, THUMB_W + 8), (COL_LEN, 72), (COL_RATE, 84), (COL_TEMPO, 72), (COL_CHECK, 64), (COL_SCORE, 72), (COL_STARS, 104),
                      (COL_HEAT, 240)):
             self.tree.setColumnWidth(c, w)
         self.thumbsMade.connect(self.tree.viewport().update)
@@ -273,7 +274,8 @@ class LibraryDialog(QDialog):
         for e in shown:
             name = e.name + tr(" · Video fehlt") if e.missing else e.name
             it = QTreeWidgetItem(["", name, _fmt_len(e.duration_ms), f"{e.per_min:.0f}",
-                                  f"{e.avg_speed:.0f}", str(e.issues) if e.issues else "ok", "", ""])
+                                  f"{e.avg_speed:.0f}", str(e.issues) if e.issues else "ok",
+                                  str(e.score) if e.score >= 0 else "–", "", ""])
             if e.missing:
                 it.setForeground(COL_NAME, theme.qcolor(theme.MUTED))
                 it.setToolTip(COL_NAME, tr("Video nicht gefunden (verschoben oder umbenannt?) – Doppelklick sucht es\n{0}",
@@ -284,7 +286,7 @@ class LibraryDialog(QDialog):
                 it.setToolTip(COL_NAME, str(e.video) + played)
             it.setToolTip(COL_TEMPO, tr("mittleres Tempo {0:.0f} Pos./s, höchstes {1:.0f}", e.avg_speed, e.max_speed))
             it.setToolTip(COL_CHECK, e.issue_text if e.issues else tr("Nichts aufgefallen"))
-            for c in (COL_LEN, COL_RATE, COL_TEMPO, COL_CHECK):
+            for c in (COL_LEN, COL_RATE, COL_TEMPO, COL_CHECK, COL_SCORE):
                 it.setTextAlignment(c, Qt.AlignRight | Qt.AlignVCenter)
                 it.setFont(c, theme.mono_font(12))
             it.setData(COL_THUMB, ENTRY_ROLE, e)

@@ -159,3 +159,23 @@ def test_plateau_gets_one_point_in_its_middle():
     t, sig = _plateau_signal("double")
     acts = extract_actions(t, sig, GeneratorSettings(sensitivity=70, min_interval_ms=60))
     assert len([a for a in acts if a.pos > 70]) >= 16
+
+
+def test_batch_finds_settings_and_rates(tmp_path, monkeypatch):
+    """With "suggest settings for each video" the batch picks its own sensitivity etc. and
+    every script carries its rating (shown in the library)."""
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    from videogen import make_video
+    from vtf.scriptdir import RATING_KEY, SETTINGS_KEY
+    folder = tmp_path / "videos"
+    folder.mkdir()
+    v = make_video(folder / "a.avi", seconds=3)
+    logged = []
+    gen = GeneratorSettings(sensitivity=100, smoothing_ms=0, min_interval_ms=0)
+    r = run_batch(folder, AnalysisSettings(hwaccel="none"), gen, tune=True, log=logged.append)
+    assert len(r.done) == 1 and not r.failed
+    meta = json.loads(funscript_path_for(v).read_text())["metadata"]
+    assert 0 <= meta[RATING_KEY] <= 100
+    s = meta[SETTINGS_KEY]
+    assert (s["sensitivity"], s["smoothing_ms"], s["min_interval_ms"]) != (100, 0, 0)
+    assert any("Wertung" in m for m in logged) and any("Empfindlichkeit" in m for m in logged)

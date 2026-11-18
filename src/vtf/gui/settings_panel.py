@@ -184,6 +184,8 @@ class SettingsPanel(QWidget):
         self.suggest_btn = QPushButton(tr("Einstellungen vorschlagen …"))
         self.suggest_btn.setToolTip(tr("Tastet sich selbst an die besten Werte für Empfindlichkeit, Glättung und Mindestabstand heran (die anderen Regler bleiben): Hübe folgen der Bewegung, wenig Stellen zum Prüfen. Kein neues Analysieren"))
         self.suggest_btn.clicked.connect(self.suggestRequested)
+        self.auto_suggest = QCheckBox(tr("Automatisch nach der Analyse"))
+        self.auto_suggest.setToolTip(tr("Öffnet „Einstellungen vorschlagen“ von selbst, sobald eine Analyse fertig ist oder ein Abschnitt „Ganz drin“ und „Ganz draußen“ bekommen hat"))
 
         def group(title: str, tip: str) -> None:
             lay.addSpacing(10)
@@ -197,6 +199,7 @@ class SettingsPanel(QWidget):
         lay.addLayout(f_hub)
         lay.addSpacing(4)
         lay.addWidget(self.suggest_btn)
+        lay.addWidget(self.auto_suggest)
         group(tr("Video"), tr("Hängt vom Video ab: das kann der Vorschlag nicht beurteilen"))
         lay.addLayout(f_vid)
         group(tr("Gerät"), tr("Geschmack und Gerät: dafür gibt es kein „besser“"))
