@@ -111,6 +111,9 @@ class ElidedLabel(QLabel):
         p.drawText(self.rect(), int(self.alignment()), text)
 
 
+SIDEBAR_W = 320      # both sidebars, the same: the video sits in the middle
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -264,7 +267,7 @@ class MainWindow(QMainWindow):
         self.side = QStackedWidget()
         self.side.addWidget(analysis)
         self.side.addWidget(self.player)
-        self.side.setFixedWidth(300)
+        self.side.setFixedWidth(SIDEBAR_W)
 
         # ---- right: script settings
         script_scroll = QScrollArea()
@@ -273,7 +276,7 @@ class MainWindow(QMainWindow):
         script_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         script_scroll.setWidget(self.panel.script_page)
         self.script_side = script_scroll
-        self.script_side.setFixedWidth(300)
+        self.script_side.setFixedWidth(SIDEBAR_W)
 
         # ---- bottom: the timeline across the whole width, one lane per row
         self.heat = HeatBar()

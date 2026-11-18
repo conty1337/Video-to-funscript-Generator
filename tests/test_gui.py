@@ -2329,6 +2329,7 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         p._fill_profiles()
         app.processEvents()
         assert p.script_page.minimumSizeHint().width() <= w.script_side.viewport().width()   # nothing cut off
+        assert w.side.maximumWidth() == w.script_side.maximumWidth()                       # symmetric
     finally:
         w.motion = None
         w.regen_timer.stop()

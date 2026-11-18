@@ -161,7 +161,7 @@ class SettingsPanel(QWidget):
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(4)                                # with a scroll bar the sidebar is 8 px narrower
+        rl.setSpacing(8)
         self.pos_min = QSpinBox()
         self.pos_max = QSpinBox()
         dash = QLabel(tr("bis"))
