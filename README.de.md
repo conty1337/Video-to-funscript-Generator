@@ -354,6 +354,19 @@ scheinbar still, kommt dabei aber um so viel Prozent seines üblichen Hubs weite
 fährt es langsam rein oder raus. Dann gleitet die Kurve mit, statt flach zu
 bleiben und am Ende hochzuspringen. Kleiner = öfter gleiten, größer = öfter Pause.
 
+**Automatisch nach der Analyse** (Haken unter dem Knopf, bleibt
+gespeichert): öffnet „Einstellungen vorschlagen“ von selbst, sobald eine Analyse
+fertig ist oder ein Abschnitt „Ganz drin“ und „Ganz draußen“ bekommen hat.
+
+**Szenenwechsel suchen** (Knopf im Tracking-Bereich): findet harte Schnitte im
+Video (gespeichert in `<Video>.vtf.json`). Liegt einer mitten in einem Abschnitt,
+meldet die Prüfung ihn als „Szenenwechsel“ (F3 springt hin): dort die Kästchen neu
+markieren. Beginnt ein Abschnitt direkt am Schnitt, ist alles in Ordnung.
+
+**Heatmap als Bild**: Datei → „Heatmap als Bild speichern…“ speichert das Tempo
+des Scripts über die Zeit (Farben wie unter der Zeitleiste) mit der Hub-Kurve
+darüber als PNG, z. B. zum Teilen.
+
 **Profile**: Oben in den Script-Einstellungen. „+“ speichert die aktuellen
 Einstellungen unter einem Namen (z. B. „Maschine seitlich“, „Reiten“), die Liste lädt
 sie mit einem Klick, „−“ löscht. Gespeichert in `profiles.json` im Datenordner (sonst

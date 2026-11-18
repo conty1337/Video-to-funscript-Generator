@@ -38,6 +38,31 @@ class AnalysisWorker(QThread):
             self.failed.emit(str(e))
 
 
+class ScenesWorker(QThread):
+    """Looks for scene changes in a video (scenes.find_cuts)."""
+    progress = Signal(float)
+    done = Signal(object)          # list of ms
+    failed = Signal(str)
+
+    def __init__(self, path: str, hwaccel: str = "auto"):
+        super().__init__()
+        self.path, self.hwaccel = path, hwaccel
+        self._stop = False
+
+    def stop(self):
+        self._stop = True
+
+    def run(self):
+        from ..scenes import find_cuts
+        try:
+            cuts = find_cuts(self.path, self.hwaccel, self.progress.emit, lambda: self._stop)
+            if not self._stop:
+                self.done.emit(cuts)
+        except Exception as e:
+            traceback.print_exc()
+            self.failed.emit(str(e))
+
+
 class SuggestWorker(QThread):
     """Tries script settings on the finished analysis (tuning.suggest)."""
     progress = Signal(float)

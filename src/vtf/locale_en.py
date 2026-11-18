@@ -2327,4 +2327,38 @@ EN: dict[str, str] = {
         "Rating",
     "Wertung beim Speichern (wie bei „Einstellungen vorschlagen“): wie gut die Hübe der Bewegung folgen, weniger Stellen zum Prüfen. – = noch keine":
         "Rating when saved (as in “Suggest settings”): how well the strokes follow the movement, fewer spots to check. – = none yet",
+    ", {0} davon mitten in einem Abschnitt: Prüfung / F3 springt hin":
+        ", {0} of them inside a section: the check / F3 jumps there",
+    "Bild (*.png)":
+        "Image (*.png)",
+    "Erst ein Video öffnen":
+        "Open a video first",
+    "Heatmap als Bild speichern":
+        "Save heatmap as image",
+    "Heatmap als Bild speichern…":
+        "Save heatmap as image…",
+    "Heatmap gespeichert: {0}":
+        "Heatmap saved: {0}",
+    "Heatmap nicht gespeichert: {0}":
+        "Heatmap not saved: {0}",
+    "Kästchen hier neu markieren (sie folgen sonst etwas anderem)":
+        "Mark the boxes anew here (else they follow something else)",
+    "Automatisch nach der Analyse":
+        "Automatically after analysis",
+    "Suche Szenenwechsel …":
+        "Looking for scene changes …",
+    "Suche Szenenwechsel … {0} %":
+        "Looking for scene changes … {0} %",
+    "Szenenwechsel-Suche fehlgeschlagen: {0}":
+        "Scene change search failed: {0}",
+    "{0} Szenenwechsel gefunden":
+        "{0} scene changes found",
+    "Szenenwechsel":
+        "Scene change",
+    "Szenenwechsel suchen":
+        "Find scene changes",
+    "Sucht harte Schnitte im Video. Liegt einer mitten in einem Abschnitt, meldet die Prüfung ihn (F3 springt hin): dort die Kästchen neu markieren":
+        "Looks for hard cuts in the video. If one lies inside a section, the check reports it (F3 jumps there): mark the boxes anew there",
+    "Öffnet „Einstellungen vorschlagen“ von selbst, sobald eine Analyse fertig ist oder ein Abschnitt „Ganz drin“ und „Ganz draußen“ bekommen hat":
+        "Opens “Suggest settings” by itself as soon as an analysis is done or a section got “Fully in” and “Fully out”",
 }

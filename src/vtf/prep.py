@@ -80,7 +80,8 @@ def _write(video: str | Path, data: dict) -> Path | None:
 
 
 def data_has(data: dict) -> bool:
-    return bool(data.get("sections") or data.get("bookmarks") or data.get("cuts") or data.get("checked"))
+    return bool(data.get("sections") or data.get("bookmarks") or data.get("cuts") or data.get("checked")
+                or data.get("scenes") is not None)
 
 
 def save_bookmarks(video: str | Path, bookmarks) -> Path | None:
@@ -113,6 +114,23 @@ def load_cuts(video: str | Path) -> list[tuple[int, int]]:
         return sorted((int(c[0]), int(c[1])) for c in _read(prep_path(video)).get("cuts", []))
     except (ValueError, TypeError, IndexError):
         return []
+
+
+def save_scenes(video: str | Path, cuts) -> Path | None:
+    """Scene changes found in the video (ms); an empty list means: looked, none."""
+    data = _read(prep_path(video))
+    data.setdefault("version", PREP_VERSION)
+    data["scenes"] = [int(c) for c in sorted(cuts)]
+    return _write(video, data)
+
+
+def load_scenes(video: str | Path) -> list[int] | None:
+    """None if the video was not looked at yet."""
+    v = _read(prep_path(video)).get("scenes")
+    try:
+        return sorted(int(c) for c in v) if isinstance(v, list) else None
+    except (TypeError, ValueError):
+        return None
 
 
 def save_checked(video: str | Path, keys) -> Path | None:
@@ -149,7 +167,7 @@ def save_prep(video: str | Path, sections) -> Path | None:
             **({"stroke": list(_box(s.stroke))} if s.stroke else {}),
         } for s in secs],
     }
-    for key in ("bookmarks", "cuts", "checked"):
+    for key in ("bookmarks", "cuts", "checked", "scenes"):
         if old.get(key):
             data[key] = old[key]
     return _write(video, data)

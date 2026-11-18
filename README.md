@@ -330,6 +330,19 @@ but gets this percentage of its usual stroke further, it is sliding slowly in or
 out. The curve then glides along instead of staying flat and jumping up at the
 end. Smaller = glides more often, larger = pauses more often.
 
+**Automatically after analysis** (check box below the button, kept): opens
+“Suggest settings” by itself as soon as an analysis is done or a section got
+“Fully in” and “Fully out”.
+
+**Find scene changes** (button in the tracking area): finds hard cuts in the video
+(saved in `<video>.vtf.json`). If one lies inside a section, the check reports it
+as “Scene change” (F3 jumps there): mark the boxes anew there. A section starting
+right at the cut is fine.
+
+**Heatmap as an image**: File → “Save heatmap as image…” saves the script's tempo
+over time (colours as under the timeline) with the stroke curve over it as a PNG,
+e.g. to share.
+
 **Profiles**: at the top of the script settings. “+” saves the current settings
 under a name (e.g. “machine sideways”, “riding”), the list loads them with one click,
 “−” deletes. Saved in `profiles.json` in the data folder (else the config folder),

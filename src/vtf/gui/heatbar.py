@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..funscript import Action
@@ -40,6 +40,28 @@ def bucket_speeds(actions: list[Action], duration_ms: float, buckets: int) -> li
         for i in range(i0, i1 + 1):
             out[i] = max(out[i], v)
     return out
+
+
+def heatmap_image(actions: list[Action], duration_ms: float, width: int = 1600, height: int = 120) -> QImage:
+    """The script as a picture to share: tempo colours over time (like the heatmap under the
+    timeline) with the stroke curve drawn thinly over them."""
+    img = QImage(width, height, QImage.Format.Format_RGB32)
+    img.fill(QColor(*STOPS[0][1]))
+    if len(actions) < 2 or duration_ms <= 0:
+        return img
+    p = QPainter(img)
+    for x, v in enumerate(bucket_speeds(actions, duration_ms, width)):
+        if v > 0:
+            p.fillRect(x, 0, 1, height, heat_color(v))
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(QPen(QColor(255, 255, 255, 150), 1.2))
+    path = QPainterPath()
+    for k, a in enumerate(actions):
+        pt = QPointF(a.at / duration_ms * (width - 1), 4 + (1 - a.pos / 100) * (height - 9))
+        path.moveTo(pt) if k == 0 else path.lineTo(pt)
+    p.drawPath(path)
+    p.end()
+    return img
 
 
 class HeatBar(QWidget):
