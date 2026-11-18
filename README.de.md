@@ -518,7 +518,11 @@ Einstellungen → Allgemein → **Stil**: die Form statt der Farbe, also Ecken, 
 Regler und Schrift. Standard, Rack (eckig mit Fadern wie im Studio-Rack), Terminal
 (alles in Monospace, eckige Umrisse), Weich (runde Pillen-Knöpfe ohne Linien),
 Messgerät (unterstrichene Felder, Nadel-Regler, kleine Schrift) und Glas (abgerundet,
-von oben beleuchtet, Akzent-Schein). Stil, Design und Akzent lassen sich frei
+von oben beleuchtet, Akzent-Schein). Dazu fünf Stile mit Blick in die Zukunft:
+Cockpit-HUD (nur feine Linien im Akzent, nichts gefüllt), Hologramm (leicht getönte,
+leuchtende Flächen, Ring-Regler), Cyber (eine Diagonale abgeschrägt, Akzentkante links),
+Orbit (Kapseln mit Licht aus der Mitte, Ringe als Regler) und Monolith (massive
+Blöcke ohne Linien, Eingeschaltetes ganz im Akzent). Stil, Design und Akzent lassen sich frei
 kombinieren. Alles steht in
 `~/.config/video-to-funscript/ui.json`.
 

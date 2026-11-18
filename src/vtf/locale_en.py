@@ -199,6 +199,11 @@ EN: dict[str, str] = {
     "Weich": "Soft",
     "Messgerät": "Gauge",
     "Glas": "Glass",
+    "Cockpit-HUD": "Cockpit HUD",
+    "Hologramm": "Hologram",
+    "Cyber": "Cyber",
+    "Orbit": "Orbit",
+    "Monolith": "Monolith",
     "Akzentfarbe: {0}":
         "Accent colour: {0}",
     "Alle":

@@ -488,6 +488,142 @@ QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border
 """
 
 
+# --- tomorrow: same direction (an exact, calm instrument), seen from a later decade
+def _a(alpha: float) -> str:
+    return qcolor(ACCENT, alpha).name(QColor.HexArgb)
+
+
+def _hud() -> str:
+    """Cockpit HUD: nothing filled, thin lines in the accent float over the dark."""
+    return f"""
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: transparent; border: 1px solid {_a(0.35)};
+    border-radius: 3px; color: {TEXT}; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ background: {_a(0.08)};
+    border-color: {ACCENT}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: {_a(0.16)};
+    color: {ACCENT}; border-color: {ACCENT}; }}
+QPushButton#primary {{ border: 1px solid {ACCENT_HOVER}; border-radius: 3px; }}
+QComboBox, QSpinBox, QLineEdit {{ background: transparent; border: 1px solid {_a(0.25)}; border-radius: 3px; }}
+QToolButton {{ border-radius: 3px; }}
+QCheckBox::indicator {{ background: transparent; border: 1px solid {_a(0.5)}; border-radius: 2px; }}
+QSlider::groove:horizontal {{ height: 1px; background: {_a(0.3)}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {ACCENT}; height: 1px; border-radius: 0; }}
+QSlider::handle:horizontal {{ width: 10px; height: 10px; margin: -5px 0; border-radius: 1px;
+    background: {BG}; border: 1px solid {ACCENT}; }}
+QSlider::handle:horizontal:hover {{ background: {_a(0.4)}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu, QComboBox QAbstractItemView {{ border: 1px solid {_a(0.35)}; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 2px; }}
+"""
+
+
+def _holo() -> str:
+    """Hologram: light-tinted panes with a glowing rim, ring handles."""
+    pane = f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {_a(0.14)}, stop:1 {_a(0.03)})"
+    return f"""
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: {pane}; border: 1px solid {_a(0.3)};
+    border-top-color: {_a(0.6)}; border-radius: 8px; color: {TEXT}; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ border-color: {_a(0.7)}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: {_a(0.28)};
+    color: {TEXT}; border-color: {ACCENT}; }}
+QPushButton#primary {{ border-radius: 8px; border: 1px solid {ACCENT_HOVER}; }}
+QComboBox, QSpinBox, QLineEdit {{ background: {_a(0.05)}; border: 1px solid {_a(0.25)}; border-radius: 8px; }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ background: {_a(0.1)}; }}
+QToolButton {{ border-radius: 8px; }}
+QCheckBox::indicator {{ background: {_a(0.08)}; border: 1px solid {_a(0.55)}; border-radius: 7px; }}
+QSlider::groove:horizontal {{ height: 4px; background: {_a(0.12)}; border-radius: 2px; }}
+QSlider::sub-page:horizontal {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {_a(0.1)},
+    stop:1 {ACCENT}); border-radius: 2px; }}
+QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 7px;
+    background: {BG}; border: 2px solid {ACCENT}; }}
+QProgressBar {{ background: {_a(0.12)}; }}
+QMenu {{ border: 1px solid {_a(0.35)}; border-radius: 10px; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 8px; }}
+QMenu::item:selected, QListWidget#settingsNav::item:selected {{ background: {_a(0.16)}; }}
+"""
+
+
+def _cyber() -> str:
+    """Cyber: corners cut on one diagonal, an accent edge on the left, heavy type."""
+    cut = "border-radius: 0; border-top-left-radius: 10px; border-bottom-right-radius: 10px;"
+    return f"""
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: {RAISED}; border: none;
+    border-left: 3px solid {EDGE_2}; {cut} font-weight: 600; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ border-left-color: {ACCENT};
+    background: {HOVER}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ border-left: 3px solid {ACCENT};
+    color: {ACCENT}; background: {_a(0.12)}; }}
+QPushButton#primary {{ {cut} border: none; border-left: 3px solid {TEXT}; font-weight: 800; }}
+QPushButton#transport {{ border: none; {cut} }}
+QComboBox, QSpinBox, QLineEdit {{ background: {DEEP}; border: 1px solid {EDGE}; border-left: 3px solid {EDGE_2};
+    {cut} }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border-left: 3px solid {ACCENT}; }}
+QToolButton {{ {cut} }}
+QCheckBox::indicator {{ border-radius: 0; border-top-left-radius: 5px; border-bottom-right-radius: 5px; }}
+QSlider::groove:horizontal {{ height: 6px; background: {DEEP}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 0; }}
+QSlider::handle:horizontal {{ width: 6px; height: 16px; margin: -5px 0; border-radius: 0; background: {TEXT}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ {cut} }}
+QListWidget#settingsNav::item:selected {{ border-left: 3px solid {ACCENT}; }}
+"""
+
+
+def _orbit() -> str:
+    """Orbit: round capsules lit from the centre, rings for handles, wide air."""
+    capsule = f"qradialgradient(cx:0.5, cy:0, radius:1, fx:0.5, fy:0, stop:0 {HOVER}, stop:1 {CARD})"
+    return f"""
+QPushButton, QPushButton#tool {{ background: {capsule}; border: 1px solid {EDGE}; border-radius: 16px; }}
+QPushButton#tool, QPushButton#segment {{ border-radius: 14px; }}
+QPushButton:hover, QPushButton#tool:hover {{ border-color: {EDGE_2}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: {capsule};
+    color: {ACCENT}; border: 1px solid {ACCENT}; }}
+QPushButton#primary {{ border-radius: 18px; background: qradialgradient(cx:0.5, cy:0, radius:1, fx:0.5, fy:0,
+    stop:0 {ACCENT_HOVER}, stop:1 {ACCENT}); }}
+QPushButton#transport {{ border-radius: 16px; border: 1px solid {EDGE}; }}
+QComboBox, QSpinBox, QLineEdit {{ border-radius: 14px; background: {DEEP}; border: 1px solid {EDGE}; padding: 0 12px; }}
+QToolButton {{ border-radius: 14px; }}
+QCheckBox::indicator {{ border-radius: 7px; background: transparent; border: 2px solid {EDGE_2}; }}
+QCheckBox::indicator:checked {{ border: 2px solid {ACCENT}; }}
+QSlider {{ min-height: 24px; }}
+QSlider::groove:horizontal {{ height: 2px; background: {EDGE}; border-radius: 1px; }}
+QSlider::sub-page:horizontal {{ background: {TEXT_2}; border-radius: 1px; }}
+QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -7px 0; border-radius: 7px;
+    background: {BG}; border: 2px solid {TEXT}; }}
+QSlider::handle:horizontal:hover {{ border-color: {ACCENT}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 2px; }}
+QMenu {{ border-radius: 14px; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 14px; }}
+"""
+
+
+def _monolith() -> str:
+    """Monolith: solid blocks without lines, the switched-on block is all accent."""
+    return f"""
+* {{ font-weight: 500; }}
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: {RAISED}; border: none; border-radius: 0;
+    color: {TEXT}; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ background: {HOVER}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: {ACCENT};
+    color: {ON_ACCENT}; }}
+QPushButton#primary {{ border-radius: 0; font-weight: 700; }}
+QPushButton#transport {{ border-radius: 0; }}
+QPushButton#transport:checked {{ background: {ACCENT}; }}
+QComboBox, QSpinBox, QLineEdit {{ background: {DEEP}; border: none; border-radius: 0; }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border: none; background: {HOVER}; }}
+QToolButton {{ border-radius: 0; }}
+QToolButton:checked {{ background: {ACCENT}; color: {ON_ACCENT}; }}
+QCheckBox::indicator {{ border: none; border-radius: 0; background: {HOVER}; }}
+QSlider::groove:horizontal {{ height: 10px; background: {DEEP}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {TEXT_2}; border-radius: 0; }}
+QSlider::handle:horizontal {{ width: 4px; height: 10px; margin: 0; border-radius: 0; background: {TEXT}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu {{ border: none; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 0; }}
+QMenu::item:selected, QListWidget#settingsNav::item:selected {{ background: {ACCENT}; color: {ON_ACCENT}; }}
+"""
+
+
 #: styles (key -> label, extra rules); combine freely with THEMES and the accent.
 STYLES = {
     "standard": (tr("Standard"), lambda: ""),
@@ -496,6 +632,11 @@ STYLES = {
     "soft": (tr("Weich"), _soft),
     "gauge": (tr("Messgerät"), _gauge),
     "glass": (tr("Glas"), _glass),
+    "hud": (tr("Cockpit-HUD"), _hud),
+    "holo": (tr("Hologramm"), _holo),
+    "cyber": (tr("Cyber"), _cyber),
+    "orbit": (tr("Orbit"), _orbit),
+    "monolith": (tr("Monolith"), _monolith),
 }
 DEFAULT_STYLE = "standard"
 STYLE = DEFAULT_STYLE

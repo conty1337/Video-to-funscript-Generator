@@ -484,7 +484,11 @@ Settings → General → **Style**: shape instead of colour, so corners, buttons
 sliders and type. Standard, Rack (square, studio-rack faders), Terminal (all
 monospace, square outlines), Soft (round pill buttons without lines), Gauge
 (ruled fields, needle sliders, small type) and Glass (rounded, lit from above,
-accent glow). Style, design and accent combine freely. Everything is stored in `~/.config/video-to-funscript/ui.json`.
+accent glow). Plus five styles looking ahead: Cockpit HUD (thin accent lines,
+nothing filled), Hologram (tinted glowing panes, ring sliders), Cyber (one diagonal
+cut, accent edge on the left), Orbit (capsules lit from the centre, ring handles)
+and Monolith (solid blocks without lines, what is on is all accent). Style, design
+and accent combine freely. Everything is stored in `~/.config/video-to-funscript/ui.json`.
 
 ![The editor in amber, blue, violet and green](docs/images/en/accents.png)
 

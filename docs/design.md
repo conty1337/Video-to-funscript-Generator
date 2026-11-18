@@ -28,6 +28,9 @@ Icons, Texte, Schrift, Layout, Details, Visuals und Bewegung in dieser Reihenfol
 - Fünf Stile (`STYLES`) ändern die Form statt der Farbe; ihre Regeln hängen hinter dem
   Grund-Stylesheet: Rack (Studio-Rack, Fader), Terminal (Monospace, Umrisse), Weich
   (Pillen), Messgerät (Linien, Nadeln), Glas (Licht von oben). Die Kurve bleibt gleich
+- Fünf weitere Stile sehen dieselbe Richtung (exaktes, ruhiges Instrument) aus einem
+  späteren Jahrzehnt: Cockpit-HUD, Hologramm, Cyber, Orbit, Monolith. Farbe nur über
+  den Akzent und seine Transparenzstufen, nie eine zweite Farbe
 - Ein Akzent, Bernstein `#e5a043` (wie eine Tally-Lampe): Script-Kurve, primäre
   Aktion, Fortschritt, Abspielposition, Hubschiene, Bereich 1 beim Tracking. Sonst
   nirgends. Wählbar sind fünf weitere Vorgaben (alle hell genug für dunkle Schrift
