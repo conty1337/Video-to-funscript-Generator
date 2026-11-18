@@ -23,6 +23,8 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     theme.set_accent(str(load_ui().get("accent") or theme.DEFAULT_ACCENT))
+    theme.set_theme(str(load_ui().get("theme") or theme.DEFAULT_THEME))
+    theme.set_style(str(load_ui().get("style") or theme.DEFAULT_STYLE))
     theme.apply(app)
     app.setApplicationName("Video-to-Funscript Generator")
     app.setOrganizationName("video-to-funscript")

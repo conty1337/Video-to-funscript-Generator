@@ -1,4 +1,4 @@
-"""Language and accent colour (chosen in the settings window, settings_dialog.py).
+"""Language, design and accent colour (chosen in the settings window, settings_dialog.py).
 
 The accent changes at once (also while the colour picker is open). The language is
 read once at start (i18n), so changing it offers a restart.
@@ -41,6 +41,16 @@ class Look:
         i18n.save_ui(accent=used)
         name = next((label for label, c in theme.ACCENTS.values() if c == used), used)
         self.win._status(tr("Akzentfarbe: {0}", name))
+
+    def set_theme(self, key: str) -> None:
+        used = theme.change_theme(QApplication.instance(), key)
+        i18n.save_ui(theme=used)
+        self.win._status(tr("Design: {0}", theme.THEMES[used][0]))
+
+    def set_style(self, key: str) -> None:
+        used = theme.change_style(QApplication.instance(), key)
+        i18n.save_ui(style=used)
+        self.win._status(tr("Stil: {0}", theme.STYLES[used][0]))
 
     def pick_accent(self) -> None:
         """Colour picker with live preview; Cancel puts the old colour back."""

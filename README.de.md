@@ -495,7 +495,7 @@ aus der Muster-Steuerung. Alles bleibt auf dem Rechner
 
 <img src="docs/images/de/stats.png" alt="Statistik" width="460">
 
-### Sprache und Akzentfarbe
+### Sprache, Stil, Design und Akzentfarbe
 
 Einstellungen (Datei → „Einstellungen…“, Strg+,) → Allgemein → **Sprache**: Deutsch oder Englisch, voreingestellt ist die Sprache des
 Systems. Die Sprache wechselt nach einem Neustart, als AppImage startet die App
@@ -506,7 +506,24 @@ Einstellungen → Allgemein → **Akzentfarbe**: Bernstein, Blau, Türkis, Grün
 über „Eigene Farbe…“ jede beliebige, mit Vorschau beim Aussuchen. Der Akzent
 zeichnet die Script-Kurve, den Hauptknopf, den Fortschritt, die Hub-Leiste und
 Bereich 1 beim Tracking aus, auch auf der Handy-Fernbedienung. Ist die Farbe
-dunkel, wird die Schrift darauf weiß. Beides steht in
+dunkel, wird die Schrift darauf weiß.
+
+Einstellungen → Allgemein → **Design**: die Grautöne für Flächen und Schrift,
+jeweils aus einer eigenen Welt: Graphit (Schnittplatz bei Nacht, Standard),
+Oszilloskop (grünliches Schwarz wie eine Leuchtröhre), Leitstand (Blau-Schiefer),
+Tonstudio (warmes Nussbraun) und Hoher Kontrast (reines Schwarz, hellere Schrift).
+Die Akzentfarbe bleibt dabei erhalten.
+
+Einstellungen → Allgemein → **Stil**: die Form statt der Farbe, also Ecken, Knöpfe,
+Regler und Schrift. Standard, Rack (eckig mit Fadern wie im Studio-Rack), Terminal
+(alles in Monospace, eckige Umrisse), Weich (runde Pillen-Knöpfe ohne Linien),
+Messgerät (unterstrichene Felder, Nadel-Regler, kleine Schrift) und Glas (abgerundet,
+von oben beleuchtet, Akzent-Schein). Dazu fünf Stile mit Blick in die Zukunft:
+Cockpit-HUD (nur feine Linien im Akzent, nichts gefüllt), Hologramm (leicht getönte,
+leuchtende Flächen, Ring-Regler), Cyber (eine Diagonale abgeschrägt, Akzentkante links),
+Orbit (Kapseln mit Licht aus der Mitte, Ringe als Regler) und Monolith (massive
+Blöcke ohne Linien, Eingeschaltetes ganz im Akzent). Stil, Design und Akzent lassen sich frei
+kombinieren. Alles steht in
 `~/.config/video-to-funscript/ui.json`.
 
 ![Der Editor in Bernstein, Blau, Violett und Grün](docs/images/de/accents.png)

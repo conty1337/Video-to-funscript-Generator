@@ -137,6 +137,18 @@ class SettingsDialog(QDialog):
         self.language.setCurrentIndex(max(0, self.language.findData(i18n.chosen())))
         self.language.currentIndexChanged.connect(lambda _i: win.look.set_language(self.language.currentData()))
         f.addRow(DeviceDialog._label(tr("Sprache")), self.language)
+        self.design = QComboBox()
+        for key, (label, _t) in theme.THEMES.items():
+            self.design.addItem(label, key)
+        self.design.setCurrentIndex(self.design.findData(theme.THEME))
+        self.design.activated.connect(lambda i: win.look.set_theme(self.design.itemData(i)))
+        f.addRow(DeviceDialog._label(tr("Design")), self.design)
+        self.style_box = QComboBox()
+        for key, (label, _rules) in theme.STYLES.items():
+            self.style_box.addItem(label, key)
+        self.style_box.setCurrentIndex(self.style_box.findData(theme.STYLE))
+        self.style_box.activated.connect(lambda i: win.look.set_style(self.style_box.itemData(i)))
+        f.addRow(DeviceDialog._label(tr("Stil")), self.style_box)
         self.accent = QComboBox()
         self._fill_accents()
         self.accent.activated.connect(self._accent_chosen)
