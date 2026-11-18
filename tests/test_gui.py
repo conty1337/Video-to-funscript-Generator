@@ -2330,6 +2330,10 @@ def test_profiles_suggestion_and_load_display(app, tmp_path, monkeypatch):
         app.processEvents()
         assert p.script_page.minimumSizeHint().width() <= w.script_side.viewport().width()   # nothing cut off
         assert w.side.maximumWidth() == w.script_side.maximumWidth()                       # symmetric
+        w.set_player_mode(True)
+        assert w.side.maximumWidth() < w.script_side.maximumWidth()                        # player: video first
+        w.set_player_mode(False)
+        assert w.side.maximumWidth() == w.script_side.maximumWidth()
     finally:
         w.motion = None
         w.regen_timer.stop()

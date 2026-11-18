@@ -111,7 +111,8 @@ class ElidedLabel(QLabel):
         p.drawText(self.rect(), int(self.alignment()), text)
 
 
-SIDEBAR_W = 320      # both sidebars, the same: the video sits in the middle
+SIDEBAR_W = 320      # editor: both sidebars, the same (the video sits in the middle)
+PLAYER_SIDE_W = 300  # player: only the playlist, the video gets the room
 
 
 class MainWindow(QMainWindow):
@@ -1830,6 +1831,7 @@ class MainWindow(QMainWindow):
     def set_player_mode(self, on: bool):
         on = bool(on)
         self.side.setCurrentWidget(self.player if on else self.side.widget(0))
+        self.side.setFixedWidth(PLAYER_SIDE_W if on else SIDEBAR_W)
         self._apply_sides()
         self.mode_player.setChecked(on)
         self.mode_edit.setChecked(not on)
