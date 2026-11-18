@@ -192,6 +192,13 @@ EN: dict[str, str] = {
     "Leitstand": "Control room",
     "Tonstudio": "Recording studio",
     "Hoher Kontrast": "High contrast",
+    "Stil": "Style",
+    "Stil: {0}": "Style: {0}",
+    "Rack": "Rack",
+    "Terminal": "Terminal",
+    "Weich": "Soft",
+    "Messgerät": "Gauge",
+    "Glas": "Glass",
     "Akzentfarbe: {0}":
         "Accent colour: {0}",
     "Alle":

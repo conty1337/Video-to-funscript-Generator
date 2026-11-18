@@ -495,7 +495,7 @@ aus der Muster-Steuerung. Alles bleibt auf dem Rechner
 
 <img src="docs/images/de/stats.png" alt="Statistik" width="460">
 
-### Sprache, Design und Akzentfarbe
+### Sprache, Stil, Design und Akzentfarbe
 
 Einstellungen (Datei → „Einstellungen…“, Strg+,) → Allgemein → **Sprache**: Deutsch oder Englisch, voreingestellt ist die Sprache des
 Systems. Die Sprache wechselt nach einem Neustart, als AppImage startet die App
@@ -512,7 +512,14 @@ Einstellungen → Allgemein → **Design**: die Grautöne für Flächen und Schr
 jeweils aus einer eigenen Welt: Graphit (Schnittplatz bei Nacht, Standard),
 Oszilloskop (grünliches Schwarz wie eine Leuchtröhre), Leitstand (Blau-Schiefer),
 Tonstudio (warmes Nussbraun) und Hoher Kontrast (reines Schwarz, hellere Schrift).
-Die Akzentfarbe bleibt dabei erhalten. Alles steht in
+Die Akzentfarbe bleibt dabei erhalten.
+
+Einstellungen → Allgemein → **Stil**: die Form statt der Farbe, also Ecken, Knöpfe,
+Regler und Schrift. Standard, Rack (eckig mit Fadern wie im Studio-Rack), Terminal
+(alles in Monospace, eckige Umrisse), Weich (runde Pillen-Knöpfe ohne Linien),
+Messgerät (unterstrichene Felder, Nadel-Regler, kleine Schrift) und Glas (abgerundet,
+von oben beleuchtet, Akzent-Schein). Stil, Design und Akzent lassen sich frei
+kombinieren. Alles steht in
 `~/.config/video-to-funscript/ui.json`.
 
 ![Der Editor in Bernstein, Blau, Violett und Grün](docs/images/de/accents.png)

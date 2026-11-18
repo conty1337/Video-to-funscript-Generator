@@ -144,6 +144,16 @@ def test_designs():
     finally:
         theme.set_theme(theme.DEFAULT_THEME)
     assert theme.BG == "#141415" and theme.HAIRLINE == "rgba(237, 237, 237, 0.08)"
+    base = theme.build_qss()
+    try:
+        for key in theme.STYLES:
+            assert theme.set_style(key) == key
+            qss = theme.build_qss()
+            assert qss.startswith(base) and (key == "standard") == (qss == base)
+            assert qss.count("{") == qss.count("}")
+        assert theme.set_style("gibt-es-nicht") == theme.DEFAULT_STYLE
+    finally:
+        theme.set_style(theme.DEFAULT_STYLE)
 
 
 def test_accent_changes_the_app(tmp_path):
@@ -176,6 +186,9 @@ assert btn.text() == "Start" and not btn.icon().isNull()
 look.set_theme("studio")
 assert theme.BG in app.styleSheet() and i18n.load_ui()["theme"] == "studio"
 assert theme.ACCENT == blue and w.said[-1] == "Design: Tonstudio", w.said
+look.set_style("rack")
+assert "font-weight: 600" in app.styleSheet() and i18n.load_ui()["style"] == "rack"
+assert w.said[-1] == "Stil: Rack", w.said
 look.set_accent("#3a1f5c")                   # own colour
 assert theme.ON_ACCENT == "#ffffff"
 QtWidgets.QColorDialog.exec = lambda self: 0  # cancelled

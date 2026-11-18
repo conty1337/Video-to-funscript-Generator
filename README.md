@@ -463,7 +463,7 @@ from the pattern control. Everything stays on your computer
 
 <img src="docs/images/en/stats.png" alt="Statistics" width="460">
 
-### Language, design and accent colour
+### Language, style, design and accent colour
 
 Settings (File → “Settings…”, Ctrl+,) → General → **Language**: English or German, by default the language of the system.
 The language changes after a restart; as an AppImage the app offers to restart
@@ -479,7 +479,12 @@ Settings → General → **Design**: the greys for surfaces and text, each from 
 world of its own: Graphite (edit bay at night, default), Oscilloscope (green-black
 like a phosphor tube), Control room (blue slate), Recording studio (warm walnut)
 and High contrast (pure black, brighter text). The accent colour is kept.
-Everything is stored in `~/.config/video-to-funscript/ui.json`.
+
+Settings → General → **Style**: shape instead of colour, so corners, buttons,
+sliders and type. Standard, Rack (square, studio-rack faders), Terminal (all
+monospace, square outlines), Soft (round pill buttons without lines), Gauge
+(ruled fields, needle sliders, small type) and Glass (rounded, lit from above,
+accent glow). Style, design and accent combine freely. Everything is stored in `~/.config/video-to-funscript/ui.json`.
 
 ![The editor in amber, blue, violet and green](docs/images/en/accents.png)
 

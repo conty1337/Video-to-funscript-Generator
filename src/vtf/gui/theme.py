@@ -354,7 +354,165 @@ QStatusBar QLabel {{ color: {MUTED}; padding: 0 8px; }}
 
 QPlainTextEdit {{ background: {CARD}; border: 1px solid {HAIRLINE}; border-radius: 8px; padding: 8px; color: {TEXT_2}; }}
 QDialog, QMessageBox {{ background: {BG}; }}
+""" + STYLES[STYLE][1]()
+
+
+# ------------------------------------------------------------ styles
+# A style changes shape, not colour: corners, borders, buttons, sliders, type. Its rules are
+# appended after the base sheet, so the same selector wins. Each comes from its own world.
+def _rack() -> str:
+    """Studio rack: square metal, lit-from-above keys, real faders."""
+    key = f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {HOVER}, stop:1 {CARD})"
+    return f"""
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: {key}; border: 1px solid {EDGE};
+    border-top-color: {EDGE_2}; border-radius: 2px; font-weight: 600; }}
+QPushButton:hover, QPushButton#tool:hover {{ background: {HOVER}; }}
+QPushButton:pressed, QPushButton#tool:pressed {{ background: {DEEP}; border-top-color: {DEEP}; }}
+QPushButton#primary {{ border-radius: 2px; border: 1px solid {ACCENT_HOVER}; font-weight: 700; }}
+QPushButton#tool:checked, QPushButton#segment:checked {{ background: {DEEP}; color: {ACCENT}; border-color: {ACCENT}; }}
+QComboBox, QSpinBox, QLineEdit {{ border-radius: 2px; background: {DEEP}; border: 1px solid {EDGE}; }}
+QToolButton {{ border-radius: 2px; }}
+QCheckBox::indicator {{ border-radius: 1px; background: {DEEP}; }}
+QSlider::groove:horizontal {{ height: 6px; background: {DEEP}; border: 1px solid {EDGE}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {MUTED}; border-radius: 0; }}
+QSlider::handle:horizontal {{ background: {key}; border: 1px solid {EDGE_2}; width: 10px; height: 18px;
+    margin: -7px 0; border-radius: 1px; }}
+QSlider::handle:horizontal:hover {{ background: {TEXT_2}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 2px; }}
 """
+
+
+def _terminal() -> str:
+    """Terminal: one monospace face, square outlines, inverted when on."""
+    return f"""
+* {{ font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 12px; }}
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: transparent; border: 1px solid {TEXT_2};
+    border-radius: 0; color: {TEXT}; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ background: {TEXT}; color: {BG}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: {ACCENT};
+    color: {ON_ACCENT}; border-color: {ACCENT}; }}
+QPushButton#primary {{ border-radius: 0; border: 1px solid {ACCENT}; }}
+QPushButton#transport {{ border-radius: 0; }}
+QComboBox, QSpinBox, QLineEdit {{ border-radius: 0; background: {DEEP}; border: 1px solid {MUTED}; }}
+QToolButton {{ border-radius: 0; }}
+QCheckBox::indicator {{ border-radius: 0; border: 1px solid {TEXT_2}; background: transparent; }}
+QSlider::groove:horizontal {{ height: 1px; background: {MUTED}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {TEXT}; height: 1px; border-radius: 0; }}
+QSlider::handle:horizontal {{ width: 8px; height: 12px; margin: -6px 0; border-radius: 0; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu, QComboBox QAbstractItemView {{ border: 1px solid {TEXT_2}; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 0; }}
+QMenu::item:selected, QListWidget#settingsNav::item:selected {{ background: {TEXT}; color: {BG}; }}
+"""
+
+
+def _soft() -> str:
+    """Soft: pill keys without lines, big round handles, like a remote in the hand."""
+    return f"""
+QPushButton, QPushButton#tool {{ border: none; border-radius: 16px; background: {RAISED}; }}
+QPushButton#tool {{ border-radius: 14px; }}
+QPushButton#primary {{ border-radius: 18px; }}
+QPushButton#segment {{ border-radius: 14px; }}
+QPushButton#transport {{ border-radius: 16px; }}
+QPushButton:checked, QPushButton#tool:checked {{ background: {qcolor(ACCENT, 0.18).name(QColor.HexArgb)};
+    color: {ACCENT}; border: none; }}
+QComboBox, QSpinBox, QLineEdit {{ border: none; border-radius: 14px; padding: 0 12px; }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border: 1px solid {ACCENT}; }}
+QToolButton {{ border-radius: 14px; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 8px; border: none; }}
+QSlider {{ min-height: 24px; }}
+QSlider::groove:horizontal {{ height: 8px; border-radius: 4px; }}
+QSlider::sub-page:horizontal {{ background: {ACCENT}; border-radius: 4px; }}
+QSlider::handle:horizontal {{ width: 18px; height: 18px; margin: -5px 0; border-radius: 9px; background: {TEXT};
+    border: 3px solid {BG}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 2px; }}
+QMenu {{ border-radius: 12px; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 12px; }}
+"""
+
+
+def _gauge() -> str:
+    """Measuring instrument: small type, ruled fields, needle handles, nothing raised."""
+    return f"""
+* {{ font-size: 12px; }}
+QPushButton, QPushButton#tool, QPushButton#segment {{ background: transparent; border: none;
+    border-bottom: 2px solid {EDGE}; border-radius: 0; color: {TEXT_2}; }}
+QPushButton:hover, QPushButton#tool:hover, QPushButton#segment:hover {{ background: transparent; color: {TEXT};
+    border-bottom-color: {TEXT_2}; }}
+QPushButton:checked, QPushButton#tool:checked, QPushButton#segment:checked {{ background: transparent;
+    color: {ACCENT}; border-bottom-color: {ACCENT}; }}
+QPushButton#primary {{ border-radius: 0; border-bottom: 2px solid {ACCENT_HOVER}; color: {ON_ACCENT}; }}
+QPushButton#transport {{ border: none; border-radius: 0; }}
+QComboBox, QSpinBox, QLineEdit {{ background: transparent; border: none; border-bottom: 1px solid {EDGE_2};
+    border-radius: 0; padding: 0 2px; }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border-bottom: 1px solid {ACCENT}; }}
+QToolButton {{ border-radius: 0; }}
+QCheckBox::indicator {{ width: 12px; height: 12px; border-radius: 0; background: transparent; }}
+QSlider::groove:horizontal {{ height: 1px; background: {EDGE_2}; border-radius: 0; }}
+QSlider::sub-page:horizontal {{ background: {ACCENT}; height: 1px; border-radius: 0; }}
+QSlider::handle:horizontal {{ width: 3px; height: 16px; margin: -8px 0; border-radius: 0; background: {TEXT}; }}
+QProgressBar, QProgressBar::chunk {{ border-radius: 0; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 0; }}
+QListWidget#settingsNav::item:selected {{ background: transparent; color: {ACCENT}; }}
+"""
+
+
+def _glass() -> str:
+    """Glass: rounded panes lit from the top edge, accent glow on focus."""
+    pane = f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {HOVER}, stop:1 {RAISED})"
+    glow = qcolor(ACCENT, 0.55).name(QColor.HexArgb)
+    return f"""
+QPushButton, QPushButton#tool {{ background: {pane}; border: 1px solid {HAIRLINE}; border-top-color: {EDGE_2};
+    border-radius: 12px; }}
+QPushButton:hover, QPushButton#tool:hover {{ border-color: {EDGE_2}; }}
+QPushButton#primary {{ border-radius: 12px; background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+    stop:0 {ACCENT_HOVER}, stop:1 {ACCENT}); }}
+QPushButton:checked, QPushButton#tool:checked {{ border: 1px solid {glow}; color: {ACCENT}; }}
+QPushButton#segment {{ border-radius: 10px; }}
+QPushButton#segment:checked {{ background: {pane}; border-top: 1px solid {EDGE_2}; }}
+QComboBox, QSpinBox, QLineEdit {{ border-radius: 12px; background: {CARD}; border: 1px solid {EDGE};
+    border-bottom-color: {HAIRLINE}; }}
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border: 1px solid {glow}; }}
+QToolButton {{ border-radius: 10px; }}
+QCheckBox::indicator {{ border-radius: 5px; background: {pane}; }}
+QSlider::groove:horizontal {{ height: 6px; border-radius: 3px; background: {CARD}; border: 1px solid {HAIRLINE}; }}
+QSlider::sub-page:horizontal {{ border-radius: 3px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+    stop:0 {qcolor(ACCENT, 0.25).name(QColor.HexArgb)}, stop:1 {ACCENT}); }}
+QSlider::handle:horizontal {{ width: 14px; height: 14px; margin: -5px 0; border-radius: 7px;
+    background: {TEXT}; border: 1px solid {glow}; }}
+QProgressBar {{ border-radius: 3px; }}
+QProgressBar::chunk {{ border-radius: 3px; }}
+QMenu {{ border-radius: 12px; border: 1px solid {EDGE}; }}
+QMenu::item, QListWidget#playlist::item, QListWidget#settingsNav::item {{ border-radius: 10px; }}
+"""
+
+
+#: styles (key -> label, extra rules); combine freely with THEMES and the accent.
+STYLES = {
+    "standard": (tr("Standard"), lambda: ""),
+    "rack": (tr("Rack"), _rack),
+    "terminal": (tr("Terminal"), _terminal),
+    "soft": (tr("Weich"), _soft),
+    "gauge": (tr("Messgerät"), _gauge),
+    "glass": (tr("Glas"), _glass),
+}
+DEFAULT_STYLE = "standard"
+STYLE = DEFAULT_STYLE
+
+
+def set_style(key: str) -> str:
+    """Make style `key` current (unknown -> standard)."""
+    global STYLE
+    STYLE = key if key in STYLES else DEFAULT_STYLE
+    return STYLE
+
+
+def change_style(app: QApplication, key: str) -> str:
+    """Switch the style while the app runs."""
+    used = set_style(key)
+    change_accent(app, ACCENT)
+    return used
 
 
 def apply(app: QApplication) -> None:

@@ -35,7 +35,7 @@ def load_ui() -> dict:
 
 
 def save_ui(**values) -> None:
-    """Merge the given keys into ui.json (language, accent, theme)."""
+    """Merge the given keys into ui.json (language, accent, theme, style)."""
     d = load_ui()
     d.update(values)
     f = ui_file()

@@ -47,6 +47,11 @@ class Look:
         i18n.save_ui(theme=used)
         self.win._status(tr("Design: {0}", theme.THEMES[used][0]))
 
+    def set_style(self, key: str) -> None:
+        used = theme.change_style(QApplication.instance(), key)
+        i18n.save_ui(style=used)
+        self.win._status(tr("Stil: {0}", theme.STYLES[used][0]))
+
     def pick_accent(self) -> None:
         """Colour picker with live preview; Cancel puts the old colour back."""
         app = QApplication.instance()
