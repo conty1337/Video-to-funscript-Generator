@@ -1,4 +1,4 @@
-"""Visual system: graphite ramp, one accent (amber unless the user picks another), lucide line icons.
+"""Visual system: graphite ramp (or one of THEMES), one accent (amber unless the user picks another), lucide line icons.
 
 Direction (see docs/design.md): an edit bay at night. The chrome stays
 quiet, the stroke curve is the one element that carries colour.
@@ -45,6 +45,44 @@ ACCENT = "#e5a043"     # amber tally light; set_accent() changes the three accen
 ACCENT_HOVER = "#eeb25e"
 ON_ACCENT = "#141415"
 NEGATIVE = "#e5484d"
+HOVER = "#2a2a2d"      # button hover, between RAISED and TEXT
+EDGE = "rgba(237, 237, 237, 0.16)"     # input border on hover
+EDGE_2 = "rgba(237, 237, 237, 0.32)"   # checkbox border on hover
+
+#: designs (key -> label, surfaces and text). Each comes from a world of its own (unslop
+#: direction step); the accent stays the user's choice. Text roles keep >= 4.5:1 on BG and DEEP.
+THEMES = {
+    "graphite": (tr("Graphit"), dict(      # edit bay at night
+        DEEP="#0f0f10", BG="#141415", CARD="#19191b", RAISED="#232325", HOVER="#2a2a2d",
+        TEXT="#ededed", TEXT_2="#a1a1a6", MUTED="#85858b", INK=(237, 237, 237))),
+    "scope": (tr("Oszilloskop"), dict(     # phosphor tube, green-black glass
+        DEEP="#0a0e0c", BG="#0e1310", CARD="#121915", RAISED="#1b241f", HOVER="#222d27",
+        TEXT="#e2ede6", TEXT_2="#9db2a5", MUTED="#7f968a", INK=(226, 237, 230))),
+    "control": (tr("Leitstand"), dict(     # control room, blue-slate consoles
+        DEEP="#0b0e13", BG="#0f131a", CARD="#141922", RAISED="#1e2530", HOVER="#262e3b",
+        TEXT="#e5e9f0", TEXT_2="#9ea8b8", MUTED="#7f8a9c", INK=(229, 233, 240))),
+    "studio": (tr("Tonstudio"), dict(      # walnut desk, tube amp
+        DEEP="#100d0b", BG="#15110e", CARD="#1b1613", RAISED="#271f1a", HOVER="#2f2620",
+        TEXT="#efe7df", TEXT_2="#b2a598", MUTED="#93867a", INK=(239, 231, 223))),
+    "contrast": (tr("Hoher Kontrast"), dict(   # OLED black, harder edges
+        DEEP="#000000", BG="#050505", CARD="#0c0c0c", RAISED="#1c1c1c", HOVER="#262626",
+        TEXT="#ffffff", TEXT_2="#c2c2c2", MUTED="#9c9c9c", INK=(255, 255, 255), LINE=0.16)),
+}
+DEFAULT_THEME = "graphite"
+THEME = DEFAULT_THEME
+
+
+def set_theme(key: str) -> str:
+    """Make design `key` current (unknown -> default) and refit the accent to it."""
+    global THEME, DEEP, BG, CARD, RAISED, HOVER, TEXT, TEXT_2, MUTED, HAIRLINE, EDGE, EDGE_2
+    THEME = key if key in THEMES else DEFAULT_THEME
+    t = THEMES[THEME][1]
+    DEEP, BG, CARD, RAISED, HOVER = t["DEEP"], t["BG"], t["CARD"], t["RAISED"], t["HOVER"]
+    TEXT, TEXT_2, MUTED = t["TEXT"], t["TEXT_2"], t["MUTED"]
+    ink, line = ", ".join(map(str, t["INK"])), t.get("LINE", 0.08)
+    HAIRLINE, EDGE, EDGE_2 = (f"rgba({ink}, {a:g})" for a in (line, line * 2, line * 4))
+    set_accent(ACCENT)
+    return THEME
 
 #: accent colours to choose from (key -> label, colour); any other colour can be picked too.
 #: All bright enough for dark text on them and far enough from NEGATIVE (stop, errors).
@@ -147,7 +185,8 @@ _ICONS = {
 }
 
 
-def icon_pixmap(name: str, color: str = TEXT_2, px: int = 16, ratio: float = 2.0) -> QPixmap:
+def icon_pixmap(name: str, color: str | None = None, px: int = 16, ratio: float = 2.0) -> QPixmap:
+    color = color or TEXT_2
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
            f'stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'
            f'{_ICONS[name]}</svg>')
@@ -174,7 +213,8 @@ def accent_icon(button, name: str, text: str | None = None):
     return button
 
 
-def icon(name: str, color: str = TEXT_2, px: int = 16) -> QIcon:
+def icon(name: str, color: str | None = None, px: int = 16) -> QIcon:
+    color = color or TEXT_2
     ic = QIcon()
     ic.addPixmap(icon_pixmap(name, color, px), QIcon.Normal)
     ic.addPixmap(icon_pixmap(name, TEXT, px), QIcon.Active)
@@ -226,7 +266,7 @@ QLabel#value {{ color: {TEXT_2}; }}
 
 QPushButton {{ background: {RAISED}; border: 1px solid {HAIRLINE}; border-radius: 8px;
               padding: 0 16px; min-height: 32px; color: {TEXT}; }}
-QPushButton:hover {{ background: #2a2a2d; }}
+QPushButton:hover {{ background: {HOVER}; }}
 QPushButton:checked {{ color: {ACCENT}; border-color: {ACCENT}; }}
 QPushButton:pressed {{ background: {CARD}; }}
 QPushButton:disabled {{ color: {MUTED}; background: {CARD}; }}
@@ -248,7 +288,7 @@ QPushButton#tool:checked {{ background: {RAISED}; color: {ACCENT}; border-color:
 QComboBox, QSpinBox, QLineEdit {{ background: {RAISED}; border: 1px solid {HAIRLINE}; border-radius: 8px;
                                   padding: 0 8px; min-height: 28px; selection-background-color: {ACCENT};
                                   selection-color: {ON_ACCENT}; }}
-QComboBox:hover, QSpinBox:hover, QLineEdit:hover {{ border-color: rgba(237, 237, 237, 0.16); }}
+QComboBox:hover, QSpinBox:hover, QLineEdit:hover {{ border-color: {EDGE}; }}
 QComboBox:focus, QSpinBox:focus, QLineEdit:focus {{ border-color: {ACCENT}; }}
 QSpinBox QLineEdit, QAbstractSpinBox QLineEdit {{ background: transparent; border: none; padding: 0;
                                                  min-height: 0; border-radius: 0; }}
@@ -263,8 +303,8 @@ QCheckBox {{ spacing: 8px; color: {TEXT_2}; background: transparent; }}
 QCheckBox:hover {{ color: {TEXT}; }}
 QCheckBox:disabled {{ color: {MUTED}; }}
 QCheckBox::indicator {{ width: 14px; height: 14px; border-radius: 4px; background: {RAISED};
-                       border: 1px solid rgba(237, 237, 237, 0.16); }}
-QCheckBox::indicator:hover {{ border-color: rgba(237, 237, 237, 0.32); }}
+                       border: 1px solid {EDGE}; }}
+QCheckBox::indicator:hover {{ border-color: {EDGE_2}; }}
 QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; image: url(%CHECK%); }}
 QCheckBox::indicator:disabled {{ background: {CARD}; border-color: {HAIRLINE}; }}
 
@@ -342,6 +382,13 @@ def apply(app: QApplication) -> None:
     if not hasattr(app, "_vtf_fit"):
         app._vtf_fit = DialogFitter(app)
         app.installEventFilter(app._vtf_fit)
+
+
+def change_theme(app: QApplication, key: str) -> str:
+    """Switch the design while the app runs (keeps the accent)."""
+    used = set_theme(key)
+    change_accent(app, ACCENT)
+    return used
 
 
 def change_accent(app: QApplication, color: str) -> str:

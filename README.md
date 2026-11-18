@@ -463,7 +463,7 @@ from the pattern control. Everything stays on your computer
 
 <img src="docs/images/en/stats.png" alt="Statistics" width="460">
 
-### Language and accent colour
+### Language, design and accent colour
 
 Settings (File → “Settings…”, Ctrl+,) → General → **Language**: English or German, by default the language of the system.
 The language changes after a restart; as an AppImage the app offers to restart
@@ -474,7 +474,12 @@ Settings → General → **Accent colour**: amber, blue, teal, green, violet, pi
 via “Custom colour…”, with a live preview while choosing. The accent marks the
 script curve, the main button, progress, the stroke rail and tracking area 1,
 on the phone remote too. If the colour is dark, the text on it turns white.
-Both are stored in `~/.config/video-to-funscript/ui.json`.
+
+Settings → General → **Design**: the greys for surfaces and text, each from a
+world of its own: Graphite (edit bay at night, default), Oscilloscope (green-black
+like a phosphor tube), Control room (blue slate), Recording studio (warm walnut)
+and High contrast (pure black, brighter text). The accent colour is kept.
+Everything is stored in `~/.config/video-to-funscript/ui.json`.
 
 ![The editor in amber, blue, violet and green](docs/images/en/accents.png)
 

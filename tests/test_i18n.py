@@ -124,6 +124,28 @@ def test_accent_colours():
         theme.set_accent(theme.DEFAULT_ACCENT)
 
 
+def test_designs():
+    pytest.importorskip("PySide6.QtGui", exc_type=ImportError)
+    from PySide6.QtGui import QColor
+    from vtf.gui import theme
+
+    def ratio(a, b):
+        la, lb = sorted((theme._luminance(QColor(a)), theme._luminance(QColor(b))))
+        return (lb + 0.05) / (la + 0.05)
+    try:
+        for key in theme.THEMES:
+            assert theme.set_theme(key) == key
+            for text in (theme.TEXT, theme.TEXT_2, theme.MUTED):
+                assert ratio(text, theme.BG) >= 4.5 and ratio(text, theme.DEEP) >= 4.5, (key, text)
+            assert ratio(theme.ACCENT, theme.ON_ACCENT) >= 4.5, key
+            qss = theme.build_qss()
+            assert theme.HOVER in qss and theme.EDGE in qss and theme.DEEP in qss
+        assert theme.set_theme("gibt-es-nicht") == theme.DEFAULT_THEME
+    finally:
+        theme.set_theme(theme.DEFAULT_THEME)
+    assert theme.BG == "#141415" and theme.HAIRLINE == "rgba(237, 237, 237, 0.08)"
+
+
 def test_accent_changes_the_app(tmp_path):
     """Runs in its own process: restyling the app re-polishes every widget, and the GUI
     tests before this one leave thousands behind (minutes instead of a second)."""
@@ -151,6 +173,9 @@ assert theme.ACCENT == blue and blue in app.styleSheet()
 assert i18n.load_ui()["accent"] == blue
 assert w.said[-1] == "Akzentfarbe: Blau", w.said
 assert btn.text() == "Start" and not btn.icon().isNull()
+look.set_theme("studio")
+assert theme.BG in app.styleSheet() and i18n.load_ui()["theme"] == "studio"
+assert theme.ACCENT == blue and w.said[-1] == "Design: Tonstudio", w.said
 look.set_accent("#3a1f5c")                   # own colour
 assert theme.ON_ACCENT == "#ffffff"
 QtWidgets.QColorDialog.exec = lambda self: 0  # cancelled

@@ -185,6 +185,13 @@ EN: dict[str, str] = {
         "Current video",
     "Akzentfarbe":
         "Accent colour",
+    "Design": "Design",
+    "Design: {0}": "Design: {0}",
+    "Graphit": "Graphite",
+    "Oszilloskop": "Oscilloscope",
+    "Leitstand": "Control room",
+    "Tonstudio": "Recording studio",
+    "Hoher Kontrast": "High contrast",
     "Akzentfarbe: {0}":
         "Accent colour: {0}",
     "Alle":

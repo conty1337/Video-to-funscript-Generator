@@ -21,6 +21,10 @@ Icons, Texte, Schrift, Layout, Details, Visuals und Bewegung in dieser Reihenfol
 - Graphit-Grautöne für alle Flächen: `#0f0f10` Toolbar und Seitenleiste,
   `#141415` Fenster, `#19191b` Video und Kurve, `#232325` Eingabefelder
 - Drei Textrollen: `#ededed`, `#a1a1a6`, `#85858b`
+- Vier weitere Designs (`THEMES`) tauschen nur Flächen und Text, jedes aus einer
+  eigenen Welt derselben Richtung: Oszilloskop (Phosphor, grünliches Schwarz),
+  Leitstand (Blau-Schiefer), Tonstudio (Nussbaum, Röhre), Hoher Kontrast (OLED-Schwarz).
+  Gleiche Helligkeitsstufen wie Graphit, alle Textrollen mindestens 4,5:1
 - Ein Akzent, Bernstein `#e5a043` (wie eine Tally-Lampe): Script-Kurve, primäre
   Aktion, Fortschritt, Abspielposition, Hubschiene, Bereich 1 beim Tracking. Sonst
   nirgends. Wählbar sind fünf weitere Vorgaben (alle hell genug für dunkle Schrift
