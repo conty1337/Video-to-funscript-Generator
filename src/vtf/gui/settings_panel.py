@@ -117,13 +117,16 @@ class SettingsPanel(QWidget):
         self.profile.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.profile.setMinimumContentsLength(6)       # long names are cut, the sidebar keeps its width
         self.profile_save = QToolButton()
-        self.profile_save.setText("+")
+        self.profile_save.setIcon(theme.icon("plus", px=14))
         self.profile_save.setToolTip(tr("Aktuelle Script-Einstellungen als Profil speichern"))
         self.profile_save.clicked.connect(self._save_profile)
         self.profile_del = QToolButton()
-        self.profile_del.setText("−")
+        self.profile_del.setIcon(theme.icon("trash", px=14))
         self.profile_del.setToolTip(tr("Gewähltes Profil löschen"))
         self.profile_del.clicked.connect(self._delete_profile)
+        for b in (self.profile_save, self.profile_del):
+            b.setFixedWidth(24)           # icon only: the name field gets the room
+            b.setStyleSheet("padding: 0;")
         pl.addWidget(self.profile, 1)
         pl.addWidget(self.profile_save)
         pl.addWidget(self.profile_del)
