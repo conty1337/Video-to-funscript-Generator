@@ -31,6 +31,8 @@ class SyncSettings:
     pos_max: int = 100
     invert: bool = False
     max_speed: float = 500.0   # position units per second (F21S: 100 in ~200 ms)
+    stretch_pct: int = 0       # announce strokes this much longer: devices with speed steps
+                               # (Fredorch: the next faster step) arrive early and pause otherwise
 
     def map(self, pos: float) -> float:
         p = 100 - pos if self.invert else pos
@@ -149,5 +151,5 @@ class ScriptSync:
             delta = pos - cur
             if abs(delta) > max_delta:
                 pos = cur + max_delta * (1 if delta > 0 else -1)
-        self.device.move(pos, duration_ms)
+        self.device.move(pos, duration_ms * (100 + self.settings.stretch_pct) // 100)
         self._cmd_pos = pos

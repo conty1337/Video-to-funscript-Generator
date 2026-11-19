@@ -193,6 +193,9 @@ EN: dict[str, str] = {
     "Tonstudio": "Recording studio",
     "Hoher Kontrast": "High contrast",
     "Stil": "Style",
+    "Hübe strecken": "Stretch strokes",
+    "Sagt dem Gerät jeden Hub so viel länger an. Hilft, wenn es am Ende jedes Hubs kurz stehen bleibt (Geräte mit Geschwindigkeitsstufen wie der F21S kommen sonst zu früh an)":
+        "Tells the device every stroke takes this much longer. Helps when it stops briefly at the end of each stroke (devices with speed steps like the F21S arrive early otherwise)",
     "Stil: {0}": "Style: {0}",
     "Rack": "Rack",
     "Terminal": "Terminal",
@@ -1894,8 +1897,8 @@ EN: dict[str, str] = {
         "Timeline",
     "Zeitversatz":
         "Time offset",
-    "Zeitversatz, Tempo, Hubbereich, Richtung und Vibration auf Standard":
-        "Time offset, tempo, stroke range, direction and vibration to default",
+    "Zeitversatz, Tempo, Strecken, Hubbereich, Richtung und Vibration auf Standard":
+        "Time offset, tempo, stretch, stroke range, direction and vibration to default",
     "Ziel":
         "Target",
     "Zittern":
