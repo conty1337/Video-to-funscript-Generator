@@ -53,7 +53,7 @@ RX 5700 XT, but it runs on any Linux with Python ≥ 3.10. The interface is in
 - Other players: mpv, VLC, DeoVR, HereSphere
 
 **Devices**
-- Fredorch F21S and hundreds more via [Intiface Central](https://intiface.com/central/),
+- Fredorch F21S and hundreds more via the built-in Intiface Engine or [Intiface Central](https://intiface.com/central/),
   OSR2/SR6 and other TCode devices with all axes, vibrators; a simulation without a device
 - Setup assistant, **phone remote** in the browser (QR code), safety timer, emergency stop (Esc)
 
@@ -495,17 +495,20 @@ and accent combine freely. Everything is stored in `~/.config/video-to-funscript
 ## Controlling a device
 
 The app plays the script on a device in sync with the video. The Bluetooth
-connection is handled by **[Intiface Central](https://intiface.com/central/)**
-(free, open source, an AppImage for Linux). It supports the **Fredorch F21S**
-via its “fredorch” protocol; the device shows up as `YXlinksSPP`.
+connection is handled by the **Intiface Engine** from the Buttplug project (open
+source, BSD). It ships inside the AppImage, in the newest version at every build,
+and starts by itself when you connect. It supports the **Fredorch F21S** via its
+“fredorch” protocol; the device shows up as `YXlinksSPP`. If
+**[Intiface Central](https://intiface.com/central/)** is already running, the app
+uses it. The built-in engine needs glibc 2.38 or newer (e.g. Fedora 39, Ubuntu
+24.04); on older systems start Intiface Central.
 
-1. Start Intiface Central and click **“Start Server”** (address
-   `ws://127.0.0.1:12345`).
-2. Switch the device on. The maker's phone app must not be connected, the device
+1. Switch the device on. The maker's phone app must not be connected, the device
    allows one connection only.
-3. In this app: **Device** (toolbar or Ctrl+D) → type “Intiface Central” →
-   **Connect**. The app starts the device search, and the device appears in the list.
-4. Test with **Top/Bottom**, then play the video: the device follows the script.
+2. In this app: **Device** (toolbar or Ctrl+D) → type “Bluetooth (Intiface)” →
+   **Connect**. The app starts the engine and the device search, and the device
+   appears in the list.
+3. Test with **Top/Bottom**, then play the video: the device follows the script.
 
 **Easiest the first time:** Device → **Setup assistant**. It walks through
 connecting, direction, stroke range, top speed (4 strokes to try per step) and

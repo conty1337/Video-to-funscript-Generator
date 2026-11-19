@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..device import Device, DeviceError, SimulatedDevice
+from ..device import Device, DeviceError, SimulatedDevice, engine
 from ..device.buttplug import DEFAULT_URL, VIBE_MODES, ButtplugDevice
 from ..device.sync import ScriptSync, SyncSettings
 from ..device.tcode import DEFAULT_PORT as TCODE_PORT
@@ -32,7 +32,7 @@ from ..i18n import tr
 from ..safety import SafetyGuard, SafetySettings
 from . import theme
 
-KINDS = [(tr("Simulation (ohne Gerät)"), "sim"), (tr("Intiface Central (Bluetooth)"), "intiface"),
+KINDS = [(tr("Simulation (ohne Gerät)"), "sim"), (tr("Bluetooth (Intiface)"), "intiface"),
          (tr("OSR2/SR6 u.a. (TCode, USB oder WLAN)"), "tcode")]
 
 
@@ -54,6 +54,7 @@ class DeviceController(QObject):
         self.axis_syncs: dict = {}
         self._axis_actions: dict = {}
         self._connecting = False
+        self._engine = None          # built-in Intiface Engine we started, if any
         self.status = QLabel(tr("Gerät · nicht verbunden"))
         self.status.setFont(theme.mono_font(11))
         window.statusBar().addPermanentWidget(self.status)
@@ -175,6 +176,8 @@ class DeviceController(QObject):
 
         def run():
             try:
+                if isinstance(dev, ButtplugDevice) and (self._engine is None or self._engine.poll() is not None):
+                    self._engine = engine.ensure(dev.url)
                 dev.connect()
                 if isinstance(dev, ButtplugDevice) and not any(d.usable for d in dev.devices.values()):
                     dev.start_scanning()
@@ -247,6 +250,7 @@ class DeviceController(QObject):
 
     def shutdown(self) -> None:
         self.disconnect_device()
+        engine.stop(self._engine)
 
     # ------------------------------------------------------------ ui
     def _on_message(self, msg: str) -> None:
@@ -314,7 +318,7 @@ class DeviceDialog(QDialog):
         title = QLabel(tr("Verbindung"))
         title.setObjectName("section")
         lay.addWidget(title)
-        cap = QLabel(tr("Für den Fredorch F21S: Intiface Central starten, Server starten, dann hier verbinden. Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde."))
+        cap = QLabel(tr("Für den Fredorch F21S: Gerät einschalten und verbinden. Die eingebaute Intiface Engine startet von selbst, ein laufendes Intiface Central wird genutzt. Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde."))
         cap.setObjectName("caption")
         cap.setWordWrap(True)
         cap.setMinimumWidth(412)          # 460 px dialog minus margins

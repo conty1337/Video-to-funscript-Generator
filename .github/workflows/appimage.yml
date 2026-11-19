@@ -34,6 +34,21 @@ jobs:
           QT="$(python -c 'import PySide6, os; print(os.path.dirname(PySide6.__file__))')"
           ldd "$QT"/QtMultimedia.abi3.so "$QT"/Qt/lib/libQt6Multimedia.so.6 | grep "not found" || true
           python -c "import PySide6.QtMultimedia; print('QtMultimedia ok')"
+      - name: Intiface Engine holen (immer die neueste)
+        # Buttplug-Server ohne Fenster (BSD), damit niemand Intiface Central installieren muss.
+        # Läuft erst ab glibc 2.38; sonst nutzt die App wie bisher ein laufendes Intiface Central.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$(gh release list -R buttplugio/buttplug --exclude-drafts --exclude-pre-releases --limit 50 \
+                 --json tagName --jq '[.[].tagName | select(startswith("intiface-engine-"))][0]')"
+          [ -n "$TAG" ] || { echo "::error::Keine Intiface-Engine-Version gefunden"; exit 1; }
+          mkdir -p build/engine
+          gh release download "$TAG" -R buttplugio/buttplug --pattern '*-linux-x64.zip' --dir build/engine --clobber
+          unzip -o -q build/engine/*-linux-x64.zip -d build/engine
+          chmod +x build/engine/intiface-engine
+          echo "INTIFACE_ENGINE=$PWD/build/engine/intiface-engine" >> "$GITHUB_ENV"
+          echo "Intiface Engine: $TAG"
       - name: AppImage bauen
         run: PYTHON=python ./scripts/build-appimage.sh
       - name: Selbsttest des AppImage

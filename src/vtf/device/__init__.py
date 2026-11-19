@@ -1,4 +1,4 @@
-"""Device control: a common interface, a simulator and Intiface Central (Buttplug)."""
+"""Device control: a common interface, a simulator, Intiface (Buttplug, built-in engine) and TCode."""
 
 from .base import Device, DeviceError
 from .simulated import SimulatedDevice

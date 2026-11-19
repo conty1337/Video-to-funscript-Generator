@@ -44,6 +44,12 @@ APPDIR=build/AppDir
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 cp -a dist/vtf-gui "$APPDIR/usr/lib-vtf"
+# Intiface Engine (BSD, Buttplug-Server) neben die App; die CI setzt INTIFACE_ENGINE
+if [ -n "${INTIFACE_ENGINE:-}" ]; then
+  install -m 755 "$INTIFACE_ENGINE" "$APPDIR/usr/lib-vtf/intiface-engine"
+  cp "$(dirname "$INTIFACE_ENGINE")/README.md" "$APPDIR/usr/lib-vtf/intiface-engine-README.md"   # Lizenztext
+  echo "==> Intiface Engine eingebaut"
+fi
 cat > "$APPDIR/AppRun" <<'RUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"

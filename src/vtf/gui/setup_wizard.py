@@ -275,7 +275,7 @@ class SetupWizard(QDialog):
 
     # ------------------------------------------------------------ pages
     def _page_connect(self):
-        v = self._page(tr("1. Verbinden"), tr("Für den Fredorch F21S: Intiface Central starten und „Start Server“ klicken, Gerät einschalten (Handy-App getrennt), dann hier verbinden. Ohne Gerät geht alles auch mit der Simulation."))
+        v = self._page(tr("1. Verbinden"), tr("Für den Fredorch F21S: Gerät einschalten (Handy-App getrennt), dann hier verbinden. Die eingebaute Intiface Engine startet von selbst. Ohne Gerät geht alles auch mit der Simulation."))
         self.kind = QComboBox()
         for label, val in KINDS:
             self.kind.addItem(label, val)

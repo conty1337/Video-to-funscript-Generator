@@ -600,10 +600,10 @@ EN: dict[str, str] = {
         "then starts over",
     "für":
         "for",
-    "Für den Fredorch F21S: Intiface Central starten und „Start Server“ klicken, Gerät einschalten (Handy-App getrennt), dann hier verbinden. Ohne Gerät geht alles auch mit der Simulation.":
-        "For the Fredorch F21S: start Intiface Central and click “Start Server”, switch the device on (phone app disconnected), then connect here. Without a device everything works with the simulation too.",
-    "Für den Fredorch F21S: Intiface Central starten, Server starten, dann hier verbinden. Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde.":
-        "For the Fredorch F21S: start Intiface Central, start its server, then connect here. The simulation shows on the stroke rail how the device would move.",
+    "Für den Fredorch F21S: Gerät einschalten (Handy-App getrennt), dann hier verbinden. Die eingebaute Intiface Engine startet von selbst. Ohne Gerät geht alles auch mit der Simulation.":
+        "For the Fredorch F21S: switch the device on (phone app disconnected), then connect here. The built-in Intiface Engine starts by itself. Without a device everything works with the simulation too.",
+    "Für den Fredorch F21S: Gerät einschalten und verbinden. Die eingebaute Intiface Engine startet von selbst, ein laufendes Intiface Central wird genutzt. Die Simulation zeigt auf der Hubschiene, wie sich das Gerät bewegen würde.":
+        "For the Fredorch F21S: switch the device on and connect. The built-in Intiface Engine starts by itself; a running Intiface Central is used. The simulation shows on the stroke rail how the device would move.",
     "Für die Körpererkennung werden einmalig zwei Modelle geladen (zusammen etwa {0} MB, von download.openmmlab.com, Lizenz Apache-2.0). Sie bleiben auf diesem Rechner unter\n{1}\nund laufen danach ohne Internet.\n\nJetzt laden?":
         "For body detection two models are downloaded once (about {0} MB together, from download.openmmlab.com, licence Apache-2.0). They stay on this computer under\n{1}\nand then run without internet.\n\nDownload now?",
     "Für einen Bezug braucht es noch einen Bereich als Toy – erst einen zweiten aufziehen":
@@ -806,10 +806,10 @@ EN: dict[str, str] = {
         "Added to the start menu",
     "Intensiv":
         "Intense",
-    "Intiface Central (Bluetooth)":
-        "Intiface Central (Bluetooth)",
-    "Intiface Central nicht erreichbar unter {0}. Läuft Intiface und ist der Server gestartet?":
-        "Intiface Central not reachable at {0}. Is Intiface running and the server started?",
+    "Bluetooth (Intiface)":
+        "Bluetooth (Intiface)",
+    "Intiface nicht erreichbar unter {0}. Ist Bluetooth an? Ohne eingebaute Engine: Intiface Central starten und den Server starten.":
+        "Intiface not reachable at {0}. Is Bluetooth on? Without the built-in engine: start Intiface Central and its server.",
     "Intiface-Adresse":
         "Intiface address",
     "Jeder 2. Schlag":
