@@ -66,6 +66,14 @@ def test_sync_follows_next_action_with_time_until_it():
     assert dev.commands[-1][0] == 100   # heading to 1500 / pos 100
 
 
+def test_stretch_announces_longer_strokes():
+    sync, dev, clock = make(STROKES, max_speed=0, stretch_pct=20)
+    play(sync, 0, 480)
+    sync.tick(510, True)                # 490 ms until the action at 1000 -> told 588
+    pos, dur = dev.commands[-1]
+    assert pos == 0 and abs(dur - 588) <= 2
+
+
 def test_offset_sends_earlier():
     sync, dev, clock = make(STROKES, max_speed=0, offset_ms=100)
     play(sync, 0, 880)                  # t = media + 100
