@@ -141,8 +141,8 @@ def test_device_dialog_layout(app):
         assert field.height() >= 30
         assert field.parentWidget().height() >= field.height()   # not clipped
     size = d.size()
-    d.log("Fehler: Intiface Central nicht erreichbar unter ws://127.0.0.1:12345. "
-          "Läuft Intiface und ist der Server gestartet?")
+    d.log("Fehler: Intiface nicht erreichbar unter ws://127.0.0.1:12345. Ist Bluetooth an? "
+          "Ohne eingebaute Engine: Intiface Central starten und den Server starten.")
     app.processEvents()
     assert d.size() == size
     assert d.pmin.height() >= 30

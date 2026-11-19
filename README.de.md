@@ -56,7 +56,7 @@ Oberfläche gibt es auf **Deutsch und Englisch**.
 - Andere Player: mpv, VLC, DeoVR, HereSphere
 
 **Geräte**
-- Fredorch F21S und hunderte weitere über [Intiface Central](https://intiface.com/central/),
+- Fredorch F21S und hunderte weitere über die eingebaute Intiface Engine oder [Intiface Central](https://intiface.com/central/),
   OSR2/SR6 und andere TCode-Geräte mit allen Achsen, Vibratoren; Simulation ohne Gerät
 - Einrichtungs-Assistent, **Handy-Fernbedienung** im Browser (QR-Code),
   Sicherheits-Timer, Not-Aus (Esc)
@@ -531,18 +531,20 @@ kombinieren. Alles steht in
 ## Gerät steuern
 
 Die App spielt das Script synchron zum Video auf einem Gerät ab. Die
-Bluetooth-Verbindung übernimmt **[Intiface Central](https://intiface.com/central/)**
-(kostenlos, Open Source, für Linux als AppImage). Es unterstützt den
+Bluetooth-Verbindung übernimmt die **Intiface Engine** aus dem Buttplug-Projekt
+(Open Source, BSD). Sie steckt im AppImage, bei jedem Build in der neuesten
+Version, und startet beim Verbinden von selbst. Sie unterstützt den
 **Fredorch F21S** über sein Protokoll „fredorch“, das Gerät meldet sich als
-`YXlinksSPP`.
+`YXlinksSPP`. Läuft schon **[Intiface Central](https://intiface.com/central/)**,
+nimmt die App das. Die eingebaute Engine braucht glibc 2.38 oder neuer (z. B.
+Fedora 39, Ubuntu 24.04); auf älteren Systemen Intiface Central starten.
 
-1. Intiface Central starten und auf **„Start Server“** klicken (Adresse
-   `ws://127.0.0.1:12345`).
-2. Gerät einschalten. Die Hersteller-App am Handy darf nicht verbunden sein,
+1. Gerät einschalten. Die Hersteller-App am Handy darf nicht verbunden sein,
    das Gerät erlaubt nur eine Verbindung.
-3. In dieser App: **Gerät** (Toolbar oder Strg+D) → Art „Intiface Central“ →
-   **Verbinden**. Die App startet die Gerätesuche, und das Gerät erscheint in der Liste.
-4. Mit **Oben/Unten** testen, dann das Video abspielen: Das Gerät folgt dem Script.
+2. In dieser App: **Gerät** (Toolbar oder Strg+D) → Art „Bluetooth (Intiface)“ →
+   **Verbinden**. Die App startet die Engine und die Gerätesuche, und das Gerät
+   erscheint in der Liste.
+3. Mit **Oben/Unten** testen, dann das Video abspielen: Das Gerät folgt dem Script.
 
 **Am einfachsten beim ersten Mal:** Gerät → **Einrichtungs-Assistent**. Er führt
 durch Verbinden, Richtung, Hubbereich, Höchsttempo (4 Hübe zum Ausprobieren

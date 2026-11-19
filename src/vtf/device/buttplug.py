@@ -105,7 +105,7 @@ class ButtplugDevice(Device):
             self._ws = self._cm.__enter__() if hasattr(self._cm, "__enter__") else self._cm
         except Exception as e:
             self._ws = None
-            raise DeviceError(tr("Intiface Central nicht erreichbar unter {0}. Läuft Intiface und ist der Server gestartet?", self.url)) from e
+            raise DeviceError(tr("Intiface nicht erreichbar unter {0}. Ist Bluetooth an? Ohne eingebaute Engine: Intiface Central starten und den Server starten.", self.url)) from e
         self._stop.clear()
         self._reader = threading.Thread(target=self._read_loop, name="buttplug-reader", daemon=True)
         self._reader.start()
