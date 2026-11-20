@@ -534,6 +534,10 @@ Settings in the device window:
   longer, if a device is early there. A short pause at the end of a stroke is
   normal on the F21S (only 20 speed steps).
 - **Reverse direction**.
+- **Drive test…**: drives full strokes with fixed times (0.5 to 3 s); a circle
+  lights up when the device should be at the top or bottom. Note per time whether
+  it is on time and goes all the way; “Copy result” gives the measurements as
+  text, e.g. to tune the timing of a device like the F21S from them.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
 device stops at once. After a start or a seek it first moves slowly to the

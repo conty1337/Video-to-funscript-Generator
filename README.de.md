@@ -571,6 +571,10 @@ Einstellungen im Gerätefenster:
   annimmt. Mit − länger, falls ein Gerät dort zu früh ist. Eine kleine Pause am
   Hubende ist beim F21S normal (nur 20 Geschwindigkeitsstufen).
 - **Richtung umkehren**.
+- **Fahrtest…**: fährt volle Hübe mit festen Zeiten (0,5 bis 3 s), ein Kreis leuchtet,
+  wenn das Gerät oben bzw. unten sein soll. Pro Zeit eintragen, ob es pünktlich ist und
+  ganz durchfährt; „Ergebnis kopieren“ gibt die Messwerte als Text, etwa um das
+  Timing eines Geräts wie des F21S daraus abzustimmen.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen
