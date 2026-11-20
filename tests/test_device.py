@@ -66,19 +66,6 @@ def test_sync_follows_next_action_with_time_until_it():
     assert dev.commands[-1][0] == 100   # heading to 1500 / pos 100
 
 
-def test_stretch_announces_longer_strokes():
-    sync, dev, clock = make(STROKES, max_speed=0, stretch_pct=20)
-    play(sync, 0, 480)
-    sync.tick(510, True)                # 490 ms until the action at 1000 -> told 588
-    pos, dur = dev.commands[-1]
-    assert pos == 0 and abs(dur - 588) <= 2
-    slow = [Action(0, 0), Action(3000, 100), Action(6000, 0)]
-    sync, dev, clock = make(slow, max_speed=0, stretch_pct=20)
-    play(sync, 0, 2980)
-    sync.tick(3010, True)               # slow stroke: 2990 ms, only the 1 s share is stretched
-    assert abs(dev.commands[-1][1] - (2990 + 200)) <= 2
-
-
 def test_offset_sends_earlier():
     sync, dev, clock = make(STROKES, max_speed=0, offset_ms=100)
     play(sync, 0, 880)                  # t = media + 100
@@ -191,7 +178,8 @@ def test_buttplug_connect_scan_move_stop(intiface):
     assert wait_for(lambda: any(n == "StopDeviceCmd" for n, _ in intiface.received))
     linear = [b for n, b in intiface.received if n == "LinearCmd"][-1]
     assert linear["DeviceIndex"] == 3
-    assert linear["Vectors"] == [{"Index": 0, "Duration": 400, "Position": 0.75}]
+    # Fredorch: 11 steps, 400 ms asked -> closest speed step takes 470 ms, sent as 471
+    assert linear["Vectors"] == [{"Index": 0, "Duration": 471, "Position": 0.75}]
     dev.disconnect()
     assert not dev.connected
     assert any("Fredorch Device" in m for m in msgs)

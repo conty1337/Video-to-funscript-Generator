@@ -564,11 +564,11 @@ Einstellungen im Gerätefenster:
   bekommt seine Befehle früher. Startwert 0, typisch 50–150 ms.
 - **Max. Tempo**: Hübe, die schneller wären, werden verkürzt, nicht verzögert.
   So bleibt das Gerät synchron und wird geschont.
-- **Hübe strecken** (0–40 %, Standard 0): sagt dem Gerät jeden Hub so viel länger
-  an, bei Hüben über 1 s höchstens so viel wie bei 1 s (langsame Hübe hängen sonst
-  hinterher). Der F21S kennt nur 20 Geschwindigkeitsstufen und nimmt immer die nächst
-  schnellere, kommt also zu früh an und bleibt kurz stehen. Mit etwa 10–25 % fährt
-  er durch; der nächste Befehl übernimmt, bevor er anhält.
+- **F21S-Timing** (automatisch): Der F21S kennt nur 16 Positionen und 20
+  Geschwindigkeitsstufen, und Intifaces Treiber nimmt von sich aus immer die nächst
+  schnellere Stufe, kommt also zu früh an und bleibt kurz stehen. Die App kennt die
+  Stufentabelle des Treibers und fordert für jeden Hub die Stufe an, deren Fahrzeit
+  der echten Zeit am nächsten kommt, bei schnellen wie bei langsamen Hüben.
 - **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).
 - **Richtung umkehren**.
 

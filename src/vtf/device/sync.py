@@ -22,7 +22,6 @@ from .base import Device
 APPROACH_MS = 500          # glide time after start/seek
 RAMP_START = 0.3           # gentle start: the strokes begin at this part of their size
 SEEK_JUMP_MS = 400         # media time jump that counts as a seek
-STRETCH_UP_TO_MS = 1000    # stretch_pct applies up to this stroke length; longer ones get the same extra
 
 
 @dataclass
@@ -32,8 +31,6 @@ class SyncSettings:
     pos_max: int = 100
     invert: bool = False
     max_speed: float = 500.0   # position units per second (F21S: 100 in ~200 ms)
-    stretch_pct: int = 0       # announce strokes this much longer: devices with speed steps
-                               # (Fredorch: the next faster step) arrive early and pause otherwise
 
     def map(self, pos: float) -> float:
         p = 100 - pos if self.invert else pos
@@ -152,6 +149,5 @@ class ScriptSync:
             delta = pos - cur
             if abs(delta) > max_delta:
                 pos = cur + max_delta * (1 if delta > 0 else -1)
-        extra = min(duration_ms, STRETCH_UP_TO_MS) * self.settings.stretch_pct // 100
-        self.device.move(pos, duration_ms + extra)
+        self.device.move(pos, duration_ms)
         self._cmd_pos = pos
