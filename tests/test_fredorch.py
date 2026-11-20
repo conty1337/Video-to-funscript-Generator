@@ -25,3 +25,8 @@ def test_slow_stroke_no_longer_early():
     # 2.5 s: alone 1930 (570 early), closest 2668 (168 late)
     assert fredorch.driver_speed(15, fredorch.duration_for(15, 2500)) == 5
     assert fredorch.duration_for(0, 300) == 300 and fredorch.step(100) == 15 and fredorch.step(52) == 8
+
+
+def test_travel_time_is_known():
+    sent = fredorch.duration_for(15, 2200)
+    assert fredorch.travel_ms(15, sent) == 1930 and fredorch.travel_ms(0, 500) == 0

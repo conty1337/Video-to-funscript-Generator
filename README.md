@@ -531,7 +531,8 @@ Settings in the device window:
   and Intiface's driver on its own always takes the next faster step, so it
   arrives early and stops briefly. The app knows the driver's step table and asks
   for the step whose travel time is closest to the real time, for fast and slow
-  strokes alike.
+  strokes alike. Knowing when it arrives, the app sends the next stroke right away
+  if it gets there early: no pause, and the stroke keeps its full length.
 - **Stroke range**: which part of the device's travel is used (depth).
 - **Reverse direction**.
 

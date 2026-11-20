@@ -568,7 +568,9 @@ Einstellungen im Gerätefenster:
   Geschwindigkeitsstufen, und Intifaces Treiber nimmt von sich aus immer die nächst
   schnellere Stufe, kommt also zu früh an und bleibt kurz stehen. Die App kennt die
   Stufentabelle des Treibers und fordert für jeden Hub die Stufe an, deren Fahrzeit
-  der echten Zeit am nächsten kommt, bei schnellen wie bei langsamen Hüben.
+  der echten Zeit am nächsten kommt, bei schnellen wie bei langsamen Hüben. Weil sie
+  damit weiß, wann er ankommt, schickt sie den nächsten Hub gleich los, wenn er früher
+  da ist: keine Pause, der Hub bleibt voll lang.
 - **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).
 - **Richtung umkehren**.
 
