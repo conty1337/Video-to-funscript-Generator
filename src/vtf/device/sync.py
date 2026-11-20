@@ -49,7 +49,6 @@ class ScriptSync:
         self._target_idx: int | None = None
         self._resume_at: float | None = None
         self._cmd_pos: float | None = None
-        self._arrive_at: float | None = None   # when the device reaches its target, if known
         self.enabled = True
         self.intensity = 100           # % of every stroke, around the middle (player, live)
         self.ramp_ms = 0               # gentle start: strokes grow to full size over this long
@@ -75,7 +74,6 @@ class ScriptSync:
                 self._target_idx = i
 
     def _reset(self) -> None:
-        self._arrive_at = None
         self._last_t = None
         self._target_idx = None
         self._resume_at = None
@@ -116,16 +114,12 @@ class ScriptSync:
                 return
             self._resume_at = None
         idx = bisect.bisect_right(self._times, t)
-        if idx == self._target_idx and self._arrive_at is not None and t >= self._arrive_at:
-            idx += 1      # already there (speed steps): go on now instead of standing still
-        if idx >= len(self.actions) or (self._target_idx is not None and idx <= self._target_idx):
+        if idx >= len(self.actions) or idx == self._target_idx:
             return
         self._target_idx = idx
         target = self.actions[idx]
         duration = max(1, int(target.at - t))
         self._command(s.map(self._shape(target.pos, t)), duration)
-        exp = getattr(self.device, "expected_ms", None)
-        self._arrive_at = t + exp if exp and exp < duration else None
 
     # ------------------------------------------------------------ helpers
     def _shape(self, pos: float, t: float) -> float:
@@ -140,7 +134,6 @@ class ScriptSync:
         if pos is None:
             return
         self._target_idx = None
-        self._arrive_at = None
         self._resume_at = t + APPROACH_MS
         self._cmd_pos = None
         target = self.settings.map(self._shape(pos, t))

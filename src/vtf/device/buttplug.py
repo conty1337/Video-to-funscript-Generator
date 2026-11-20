@@ -14,7 +14,6 @@ import threading
 from dataclasses import dataclass, field
 
 from ..i18n import tr
-from . import fredorch
 from .base import Device, DeviceError
 
 DEFAULT_URL = "ws://127.0.0.1:12345"
@@ -90,7 +89,6 @@ class ButtplugDevice(Device):
         self.vibe_mode = "speed"
         self._vibe_last: float | None = None
         self._vibe_sent = -1.0
-        self._fred_step = 0               # Fredorch driver: last commanded step (it starts at 0)
 
     # ------------------------------------------------------------ connection
     @property
@@ -167,12 +165,6 @@ class ButtplugDevice(Device):
             self._vibrate(dev, float(position), duration_ms)
             return
         pos = max(0.0, min(100.0, float(position))) / 100
-        self.expected_ms = None
-        if fredorch.is_fredorch(dev.name):
-            new = fredorch.step(position)
-            dist = abs(new - self._fred_step)
-            self.expected_ms = fredorch.travel_ms(dist, int(duration_ms))
-            self._fred_step = new
         vectors = [{"Index": i, "Duration": max(0, int(duration_ms)), "Position": round(pos, 4)}
                    for i in range(dev.linear_features)]
         # fire and forget: waiting for "Ok" would add a full round trip of latency

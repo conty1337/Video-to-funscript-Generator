@@ -66,24 +66,6 @@ def test_sync_follows_next_action_with_time_until_it():
     assert dev.commands[-1][0] == 100   # heading to 1500 / pos 100
 
 
-def test_goes_on_when_the_device_arrives_early():
-    """Speed steps (F21S): the device says it gets there in 300 of 490 ms; the next stroke
-    starts then instead of after a standstill, and is not sent twice."""
-    sync, dev, clock = make(STROKES, max_speed=0)
-    play(sync, 0, 480)
-    dev.expected_ms = 300
-    sync.tick(510, True)                 # heading to pos 0 at 1000, arrives at ~810
-    n = len(dev.commands)
-    play(sync, 530, 790)
-    assert len(dev.commands) == n        # still on its way
-    dev.expected_ms = None
-    sync.tick(820, True)                 # there: on to pos 100 at 1500 right away
-    assert len(dev.commands) == n + 1 and dev.commands[-1][0] == 100
-    assert abs(dev.commands[-1][1] - 680) <= 1
-    play(sync, 840, 1480)                # passing the action at 1000 sends nothing again
-    assert len(dev.commands) == n + 1
-
-
 def test_offset_sends_earlier():
     sync, dev, clock = make(STROKES, max_speed=0, offset_ms=100)
     play(sync, 0, 880)                  # t = media + 100
@@ -197,7 +179,6 @@ def test_buttplug_connect_scan_move_stop(intiface):
     linear = [b for n, b in intiface.received if n == "LinearCmd"][-1]
     assert linear["DeviceIndex"] == 3
     assert linear["Vectors"] == [{"Index": 0, "Duration": 400, "Position": 0.75}]
-    assert dev.expected_ms == 315        # Fredorch, 11 steps: the step below 400 ms takes 315
     dev.disconnect()
     assert not dev.connected
     assert any("Fredorch Device" in m for m in msgs)
