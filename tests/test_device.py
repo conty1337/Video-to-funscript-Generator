@@ -66,6 +66,18 @@ def test_sync_follows_next_action_with_time_until_it():
     assert dev.commands[-1][0] == 100   # heading to 1500 / pos 100
 
 
+def test_slow_strokes_announced_shorter():
+    slow = [Action(0, 0), Action(3000, 100), Action(6000, 0)]
+    sync, dev, clock = make(slow, max_speed=0, slow_pct=30)
+    play(sync, 0, 2980)
+    sync.tick(3010, True)                # 2990 ms: 1000 + 1990 * 0.7 = 2393
+    assert abs(dev.commands[-1][1] - 2393) <= 2
+    sync, dev, clock = make(STROKES, max_speed=0, slow_pct=30)
+    play(sync, 0, 480)
+    sync.tick(510, True)                 # 490 ms: fast strokes untouched
+    assert abs(dev.commands[-1][1] - 490) <= 1
+
+
 def test_offset_sends_earlier():
     sync, dev, clock = make(STROKES, max_speed=0, offset_ms=100)
     play(sync, 0, 880)                  # t = media + 100

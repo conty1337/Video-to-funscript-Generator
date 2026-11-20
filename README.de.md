@@ -565,9 +565,11 @@ Einstellungen im Gerätefenster:
 - **Max. Tempo**: Hübe, die schneller wären, werden verkürzt, nicht verzögert.
   So bleibt das Gerät synchron und wird geschont.
 - **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).
-- Beim **F21S** kann am Ende eines Hubs eine kleine Pause entstehen: Er kennt nur 20
-  Geschwindigkeitsstufen, Intifaces Treiber nimmt die nächst schnellere, und die
-  Maschine nimmt einen neuen Befehl erst nach der Fahrt sauber an. So bleibt sie im Takt.
+- **Langsame Hübe** (−50 bis +50 %, Standard 0): gilt nur für Hübe über 1 s. Mit +
+  sagt die App sie kürzer an. Das braucht der **F21S**, wenn er bei langsamen Stellen
+  hinterherhängt: In seinen langsamen Stufen ist er langsamer, als Intifaces Treiber
+  annimmt. Mit − länger, falls ein Gerät dort zu früh ist. Eine kleine Pause am
+  Hubende ist beim F21S normal (nur 20 Geschwindigkeitsstufen).
 - **Richtung umkehren**.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt

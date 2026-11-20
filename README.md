@@ -528,9 +528,11 @@ Settings in the device window:
 - **Max. tempo**: strokes that would be faster are shortened, not delayed. So the
   device stays in sync and is spared.
 - **Stroke range**: which part of the device's travel is used (depth).
-- With the **F21S** a short pause can show at the end of a stroke: it only has 20
-  speed steps, Intiface's driver takes the next faster one, and the device only
-  takes a new command cleanly after a move. This keeps it in sync.
+- **Slow strokes** (−50 to +50 %, default 0): only for strokes over 1 s. With +
+  the app announces them shorter. The **F21S** needs this when it lags at slow
+  parts: in its slow steps it is slower than Intiface's driver assumes. With −
+  longer, if a device is early there. A short pause at the end of a stroke is
+  normal on the F21S (only 20 speed steps).
 - **Reverse direction**.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
