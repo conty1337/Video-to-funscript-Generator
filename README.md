@@ -528,7 +528,8 @@ Settings in the device window:
 - **Max. tempo**: strokes that would be faster are shortened, not delayed. So the
   device stays in sync and is spared.
 - **Stretch strokes** (0–40 %, default 0): tells the device every stroke takes
-  this much longer. The F21S only has 20 speed steps and always takes the next
+  this much longer, strokes over 1 s at most as much as 1 s (slow strokes would
+  lag otherwise). The F21S only has 20 speed steps and always takes the next
   faster one, so it arrives early and stops briefly. With about 10–25 % it keeps
   moving; the next command takes over before it stops.
 - **Stroke range**: which part of the device's travel is used (depth).

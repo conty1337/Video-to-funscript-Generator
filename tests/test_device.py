@@ -72,6 +72,11 @@ def test_stretch_announces_longer_strokes():
     sync.tick(510, True)                # 490 ms until the action at 1000 -> told 588
     pos, dur = dev.commands[-1]
     assert pos == 0 and abs(dur - 588) <= 2
+    slow = [Action(0, 0), Action(3000, 100), Action(6000, 0)]
+    sync, dev, clock = make(slow, max_speed=0, stretch_pct=20)
+    play(sync, 0, 2980)
+    sync.tick(3010, True)               # slow stroke: 2990 ms, only the 1 s share is stretched
+    assert abs(dev.commands[-1][1] - (2990 + 200)) <= 2
 
 
 def test_offset_sends_earlier():
