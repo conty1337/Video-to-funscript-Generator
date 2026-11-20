@@ -193,6 +193,20 @@ EN: dict[str, str] = {
     "Tonstudio": "Recording studio",
     "Hoher Kontrast": "High contrast",
     "Stil": "Style",
+    "Fahrtest": "Drive test",
+    "Fahrtest…": "Drive test…",
+    "Volle Hübe mit festen Zeiten: prüfen, ob das Gerät pünktlich ankommt und ganz durchfährt":
+        "Full strokes with fixed times: check whether the device arrives on time and goes all the way",
+    "Fährt volle Hübe in der gewählten Zeit. Der Kreis leuchtet, wenn das Gerät oben bzw. unten sein soll. Danach eintragen, was du gesehen hast, und für die nächste Zeit wiederholen. Zum Schluss „Ergebnis kopieren“ und weitergeben.":
+        "Drives full strokes in the chosen time. The circle lights up when the device should be at the top or bottom. Then note what you saw and repeat for the next time. Finally “Copy result” and pass it on.",
+    "{0} s pro Hub": "{0} s per stroke",
+    "pünktlich": "on time",
+    "zu früh, wartet": "early, waits",
+    "zu spät": "late",
+    "fährt ganz durch": "goes all the way",
+    "Eintragen": "Note",
+    "Ergebnis kopieren": "Copy result",
+    "Kein Gerät verbunden.": "No device connected.",
     "Langsame Hübe": "Slow strokes",
     "Nur Hübe über 1 s: + sagt sie kürzer an, wenn das Gerät dort hinterherhängt (der F21S ist in langsamen Stufen langsamer als Intiface annimmt), − länger, wenn es zu früh ist":
         "Only strokes over 1 s: + announces them shorter when the device lags there (the F21S is slower in its slow steps than Intiface assumes), − longer when it is early",

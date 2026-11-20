@@ -278,6 +278,11 @@ class DeviceController(QObject):
             self.dialog.close()
             self.dialog = None             # rebuilt with the new values next time
 
+    def open_drive_test(self) -> None:
+        from .drive_test import DriveTestDialog
+
+        DriveTestDialog(self, self.win).exec()
+
     def open_dialog(self) -> None:
         if self.dialog is None:
             self.dialog = DeviceDialog(self, self.win)
@@ -355,6 +360,10 @@ class DeviceDialog(QDialog):
         self.wizard_btn.setToolTip(tr("Schritt für Schritt: Verbindung, Richtung, Hubbereich, Höchsttempo, Verzögerung"))
         self.wizard_btn.clicked.connect(ctl.open_wizard)
         lay.addWidget(self.wizard_btn)
+        self.drive_btn = QPushButton(tr("Fahrtest…"))
+        self.drive_btn.setToolTip(tr("Volle Hübe mit festen Zeiten: prüfen, ob das Gerät pünktlich ankommt und ganz durchfährt"))
+        self.drive_btn.clicked.connect(ctl.open_drive_test)
+        lay.addWidget(self.drive_btn)
 
         lay.addSpacing(16)
         lay.addWidget(theme.section_title(tr("Wiedergabe"), self.reset_playback,
