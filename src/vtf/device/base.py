@@ -21,7 +21,6 @@ class Device(ABC):
     """
 
     name: str = tr("Gerät")
-    expected_ms: int | None = None    # travel time of the last move, when the device knows it
 
     def __init__(self):
         self._listeners: list[Callable[[str], None]] = []

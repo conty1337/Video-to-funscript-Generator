@@ -527,13 +527,10 @@ Settings in the device window:
   gets its commands earlier. Starts at 0, typically 50–150 ms.
 - **Max. tempo**: strokes that would be faster are shortened, not delayed. So the
   device stays in sync and is spared.
-- **F21S timing** (automatic): the F21S only has 16 positions and 20 speed steps,
-  and Intiface's driver always takes the next faster step, so it arrives a bit
-  early. A slower step would be worse: the device finishes each move before it
-  takes the next and would fall behind. The app knows the driver's step table, so
-  it knows when the device arrives and sends the next stroke right then: no pause,
-  no lag.
 - **Stroke range**: which part of the device's travel is used (depth).
+- With the **F21S** a short pause can show at the end of a stroke: it only has 20
+  speed steps, Intiface's driver takes the next faster one, and the device only
+  takes a new command cleanly after a move. This keeps it in sync.
 - **Reverse direction**.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
