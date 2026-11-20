@@ -52,6 +52,12 @@ def driver_speed(distance: int, duration_ms: int) -> int:
     return next((s + 1 for s, t in enumerate(row) if t < duration_ms), 20)
 
 
+def travel_ms(distance: int, sent_ms: int) -> int:
+    """How long the move really takes when `sent_ms` is sent (0: no move)."""
+    speed = driver_speed(distance, sent_ms)
+    return SPEED_MATRIX[min(distance, POSITIONS) - 1][speed - 1] if speed else 0
+
+
 def duration_for(distance: int, duration_ms: int) -> int:
     """The duration to send so the driver picks the speed whose travel time is closest
     to `duration_ms` (ties: the slower one, which flows into the next stroke)."""

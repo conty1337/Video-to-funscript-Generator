@@ -167,9 +167,12 @@ class ButtplugDevice(Device):
             self._vibrate(dev, float(position), duration_ms)
             return
         pos = max(0.0, min(100.0, float(position))) / 100
+        self.expected_ms = None
         if fredorch.is_fredorch(dev.name):
             new = fredorch.step(position)
-            duration_ms = fredorch.duration_for(abs(new - self._fred_step), int(duration_ms))
+            dist = abs(new - self._fred_step)
+            duration_ms = fredorch.duration_for(dist, int(duration_ms))
+            self.expected_ms = fredorch.travel_ms(dist, duration_ms)
             self._fred_step = new
         vectors = [{"Index": i, "Duration": max(0, int(duration_ms)), "Position": round(pos, 4)}
                    for i in range(dev.linear_features)]
