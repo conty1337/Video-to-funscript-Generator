@@ -171,8 +171,7 @@ class ButtplugDevice(Device):
         if fredorch.is_fredorch(dev.name):
             new = fredorch.step(position)
             dist = abs(new - self._fred_step)
-            duration_ms = fredorch.duration_for(dist, int(duration_ms))
-            self.expected_ms = fredorch.travel_ms(dist, duration_ms)
+            self.expected_ms = fredorch.travel_ms(dist, int(duration_ms))
             self._fred_step = new
         vectors = [{"Index": i, "Duration": max(0, int(duration_ms)), "Position": round(pos, 4)}
                    for i in range(dev.linear_features)]

@@ -3,8 +3,9 @@
 The device has 16 positions (0..15) and 20 speed steps. Intiface's driver turns
 (distance, duration) into a speed with the table below: the slowest step whose
 travel time is *shorter* than the duration. So the device always arrives early and
-waits for the next command. Knowing the table, we ask for the step whose travel time
-is closest to the real time instead, so slow and fast strokes both flow.
+waits for the next command. We leave the step to the driver (a slower one would make
+the device fall behind: it finishes a move before it takes the next) and use the
+table to know when it arrives, so the next stroke can start right then.
 
 SPEED_MATRIX from buttplug crates/buttplug_server/src/device/protocol_impl/fredorch.rs
 (Copyright 2016-2026 Nonpolynomial Labs LLC, BSD 3-Clause).
@@ -56,14 +57,3 @@ def travel_ms(distance: int, sent_ms: int) -> int:
     """How long the move really takes when `sent_ms` is sent (0: no move)."""
     speed = driver_speed(distance, sent_ms)
     return SPEED_MATRIX[min(distance, POSITIONS) - 1][speed - 1] if speed else 0
-
-
-def duration_for(distance: int, duration_ms: int) -> int:
-    """The duration to send so the driver picks the speed whose travel time is closest
-    to `duration_ms` (ties: the slower one, which flows into the next stroke)."""
-    distance = min(distance, POSITIONS)
-    if distance == 0:
-        return duration_ms
-    row = SPEED_MATRIX[distance - 1]
-    best = min(row, key=lambda t: (abs(t - duration_ms), -t))
-    return best + 1          # the driver takes the first speed faster than this: exactly `best`
