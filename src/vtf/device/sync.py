@@ -22,6 +22,7 @@ from .base import Device
 APPROACH_MS = 500          # glide time after start/seek
 RAMP_START = 0.3           # gentle start: the strokes begin at this part of their size
 SEEK_JUMP_MS = 400         # media time jump that counts as a seek
+STRETCH_UP_TO_MS = 1000    # stretch_pct applies up to this stroke length; longer ones get the same extra
 
 
 @dataclass
@@ -151,5 +152,6 @@ class ScriptSync:
             delta = pos - cur
             if abs(delta) > max_delta:
                 pos = cur + max_delta * (1 if delta > 0 else -1)
-        self.device.move(pos, duration_ms * (100 + self.settings.stretch_pct) // 100)
+        extra = min(duration_ms, STRETCH_UP_TO_MS) * self.settings.stretch_pct // 100
+        self.device.move(pos, duration_ms + extra)
         self._cmd_pos = pos

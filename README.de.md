@@ -565,7 +565,8 @@ Einstellungen im Gerätefenster:
 - **Max. Tempo**: Hübe, die schneller wären, werden verkürzt, nicht verzögert.
   So bleibt das Gerät synchron und wird geschont.
 - **Hübe strecken** (0–40 %, Standard 0): sagt dem Gerät jeden Hub so viel länger
-  an. Der F21S kennt nur 20 Geschwindigkeitsstufen und nimmt immer die nächst
+  an, bei Hüben über 1 s höchstens so viel wie bei 1 s (langsame Hübe hängen sonst
+  hinterher). Der F21S kennt nur 20 Geschwindigkeitsstufen und nimmt immer die nächst
   schnellere, kommt also zu früh an und bleibt kurz stehen. Mit etwa 10–25 % fährt
   er durch; der nächste Befehl übernimmt, bevor er anhält.
 - **Hubbereich**: welcher Teil des Gerätewegs genutzt wird (Tiefe).

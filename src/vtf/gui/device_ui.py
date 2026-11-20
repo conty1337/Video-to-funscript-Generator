@@ -370,7 +370,7 @@ class DeviceDialog(QDialog):
         self.speed[1].setToolTip(tr("Höchstgeschwindigkeit in Positionen pro Sekunde. F21S: voller Hub frühestens in ca. 200 ms = 500 /s"))
         f.addRow(self._label(tr("Max. Tempo")), self.speed[0])
         self.stretch = self._slider(0, 40, s.stretch_pct, " %")
-        self.stretch[1].setToolTip(tr("Sagt dem Gerät jeden Hub so viel länger an. Hilft, wenn es am Ende jedes Hubs kurz stehen bleibt (Geräte mit Geschwindigkeitsstufen wie der F21S kommen sonst zu früh an)"))
+        self.stretch[1].setToolTip(tr("Sagt dem Gerät jeden Hub so viel länger an (bei Hüben über 1 s höchstens so viel wie bei 1 s). Hilft, wenn es am Ende jedes Hubs kurz stehen bleibt (Geräte mit Geschwindigkeitsstufen wie der F21S kommen sonst zu früh an)"))
         f.addRow(self._label(tr("Hübe strecken")), self.stretch[0])
         rng = QWidget()
         rl = QHBoxLayout(rng)
