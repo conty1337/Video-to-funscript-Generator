@@ -22,6 +22,7 @@ from .base import Device
 APPROACH_MS = 500          # glide time after start/seek
 RAMP_START = 0.3           # gentle start: the strokes begin at this part of their size
 SEEK_JUMP_MS = 400         # media time jump that counts as a seek
+SLOW_FROM_MS = 1000        # slow_pct changes only the part of a stroke longer than this
 
 
 @dataclass
@@ -31,6 +32,7 @@ class SyncSettings:
     pos_max: int = 100
     invert: bool = False
     max_speed: float = 500.0   # position units per second (F21S: 100 in ~200 ms)
+    slow_pct: int = 0          # >0: slow strokes announced shorter (device slower than told), <0 longer
 
     def map(self, pos: float) -> float:
         p = 100 - pos if self.invert else pos
@@ -119,6 +121,8 @@ class ScriptSync:
         self._target_idx = idx
         target = self.actions[idx]
         duration = max(1, int(target.at - t))
+        if s.slow_pct and duration > SLOW_FROM_MS:
+            duration = SLOW_FROM_MS + (duration - SLOW_FROM_MS) * (100 - s.slow_pct) // 100
         self._command(s.map(self._shape(target.pos, t)), duration)
 
     # ------------------------------------------------------------ helpers

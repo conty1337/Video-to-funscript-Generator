@@ -193,6 +193,9 @@ EN: dict[str, str] = {
     "Tonstudio": "Recording studio",
     "Hoher Kontrast": "High contrast",
     "Stil": "Style",
+    "Langsame Hübe": "Slow strokes",
+    "Nur Hübe über 1 s: + sagt sie kürzer an, wenn das Gerät dort hinterherhängt (der F21S ist in langsamen Stufen langsamer als Intiface annimmt), − länger, wenn es zu früh ist":
+        "Only strokes over 1 s: + announces them shorter when the device lags there (the F21S is slower in its slow steps than Intiface assumes), − longer when it is early",
     "Stil: {0}": "Style: {0}",
     "Rack": "Rack",
     "Terminal": "Terminal",
@@ -1894,8 +1897,8 @@ EN: dict[str, str] = {
         "Timeline",
     "Zeitversatz":
         "Time offset",
-    "Zeitversatz, Tempo, Hubbereich, Richtung und Vibration auf Standard":
-        "Time offset, tempo, stroke range, direction and vibration to default",
+    "Zeitversatz, Tempo, langsame Hübe, Hubbereich, Richtung und Vibration auf Standard":
+        "Time offset, tempo, slow strokes, stroke range, direction and vibration to default",
     "Ziel":
         "Target",
     "Zittern":
