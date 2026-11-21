@@ -82,7 +82,7 @@ class DeviceController(QObject):
     def _load_sync(self) -> SyncSettings:
         s = SyncSettings()
         for key, typ in (("offset_ms", int), ("pos_min", int), ("pos_max", int), ("max_speed", float),
-                         ("slow_pct", int), ("stretch_pct", int)):
+                         ("slow_pct", int), ("stretch_pct", int), ("hold_pct", int)):
             v = self.qs.value(f"device/{key}")
             if v is not None:
                 try:
@@ -154,7 +154,7 @@ class DeviceController(QObject):
 
     def save_sync(self) -> None:
         s = self.sync.settings
-        for key in ("offset_ms", "pos_min", "pos_max", "max_speed", "slow_pct", "stretch_pct", "invert"):
+        for key in ("offset_ms", "pos_min", "pos_max", "max_speed", "slow_pct", "stretch_pct", "hold_pct", "invert"):
             self.qs.setValue(f"device/{key}", getattr(s, key))
 
     # ------------------------------------------------------------ connection
@@ -172,6 +172,7 @@ class DeviceController(QObject):
             dev.vibe_mode = str(self.qs.value("device/vibe", "speed"))
             dev.fred_factors = self.fred_factors()
             dev.fred_limits = self.fred_limits()
+            dev.fred_hold_pct = self.sync.settings.hold_pct
             self.qs.setValue("device/url", url)
         dev.add_listener(self.message.emit)
         self.qs.setValue("device/kind", kind)
@@ -405,7 +406,7 @@ class DeviceDialog(QDialog):
 
         lay.addSpacing(16)
         lay.addWidget(theme.section_title(tr("Wiedergabe"), self.reset_playback,
-                                          tr("Zeitversatz, Tempo, langsame und schnelle Hübe, Hubbereich, Richtung und Vibration auf Standard")))
+                                          tr("Zeitversatz, Tempo, langsame und schnelle Hübe, F21S-Schwelle, Hubbereich, Richtung und Vibration auf Standard")))
         f = QFormLayout()
         f.setHorizontalSpacing(12)
         f.setVerticalSpacing(12)
@@ -422,6 +423,9 @@ class DeviceDialog(QDialog):
         self.stretch = self._slider(0, 30, s.stretch_pct, " %")
         self.stretch[1].setToolTip(tr("Nur Hübe bis 1 s: sagt sie so viel länger an. Hilft, wenn das Gerät am Ende schneller Hübe kurz stehen bleibt (der F21S nimmt sonst die nächst schnellere Stufe)"))
         f.addRow(self._label(tr("Schnelle Hübe")), self.stretch[0])
+        self.hold = self._slider(0, 10, s.hold_pct, " %")
+        self.hold[1].setToolTip(tr("Nur F21S (kennt nur 16 Positionen, je ca. 6,7 %): Bewegungen bis zu diesem Wert bleiben stehen, größere werden nach außen gerundet, damit Hübe ihr Ende erreichen. Kleiner = folgt auch kleinen Bewegungen (kann zappeln), größer = ruhiger (bleibt bei kleinen Bewegungen eher stehen)"))
+        f.addRow(self._label(tr("F21S-Schwelle")), self.hold[0])
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -501,8 +505,9 @@ class DeviceDialog(QDialog):
         self.up_btn.clicked.connect(lambda: ctl.test_move(100))
         self.down_btn.clicked.connect(lambda: ctl.test_move(0))
         self.stop_btn.clicked.connect(ctl.emergency_stop)
-        for w in (self.offset[1], self.speed[1], self.slow[1], self.stretch[1]):
+        for w in (self.offset[1], self.speed[1], self.slow[1], self.stretch[1], self.hold[1]):
             w.valueChanged.connect(self._apply)
+        theme.double_click_reset(self.hold[1], SyncSettings().hold_pct)
         theme.double_click_reset(self.stretch[1], SyncSettings().stretch_pct)
         theme.double_click_reset(self.slow[1], SyncSettings().slow_pct)
         theme.double_click_reset(self.offset[1], SyncSettings().offset_ms)
@@ -569,7 +574,7 @@ class DeviceDialog(QDialog):
     def reset_playback(self):
         d = SyncSettings()
         for w, v in ((self.offset[1], d.offset_ms), (self.speed[1], int(d.max_speed)),
-                     (self.slow[1], d.slow_pct), (self.stretch[1], d.stretch_pct), (self.pmin, d.pos_min),
+                     (self.slow[1], d.slow_pct), (self.stretch[1], d.stretch_pct), (self.hold[1], d.hold_pct), (self.pmin, d.pos_min),
                      (self.pmax, d.pos_max)):
             w.setValue(v)
         self.invert.setChecked(d.invert)
@@ -582,6 +587,9 @@ class DeviceDialog(QDialog):
         s.max_speed = float(self.speed[1].value())
         s.slow_pct = self.slow[1].value()
         s.stretch_pct = self.stretch[1].value()
+        s.hold_pct = self.hold[1].value()
+        if isinstance(self.ctl.device, ButtplugDevice):
+            self.ctl.device.fred_hold_pct = s.hold_pct
         s.pos_min, s.pos_max = self.pmin.value(), self.pmax.value()
         s.invert = self.invert.isChecked()
         self.ctl.save_sync()

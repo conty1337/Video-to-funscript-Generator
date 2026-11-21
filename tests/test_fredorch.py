@@ -50,8 +50,9 @@ def test_buttplug_sends_the_picked_duration(monkeypatch):
 
 def test_outward_rounding_and_exact_steps():
     import math
-    assert fredorch.step(3, 2) == 0 and fredorch.step(3, 0) == 1          # down: floor, up: ceil
-    assert fredorch.step(37, 5) == 6 and fredorch.step(97, 15) == 14
+    assert fredorch.step(3, 2) == 0 and fredorch.step(4, 0) == 1          # down: floor, up: ceil
+    assert fredorch.step(37, 5) == 6 and fredorch.step(96, 15) == 14
+    assert fredorch.step(4, 0, hold_pct=5) == 0 and fredorch.step(1, 0, hold_pct=0) == 1   # adjustable
     assert fredorch.step(35, 5) == 5                                      # < 0.4 steps: stays put
     assert fredorch.step(11 * 100 / 15, 0) == 11                          # exact step, no float slip
     for k in range(16):                                                   # Intiface: ceil(pos * 15)

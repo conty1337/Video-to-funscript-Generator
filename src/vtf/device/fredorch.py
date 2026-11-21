@@ -26,7 +26,7 @@ from statistics import mean
 
 POSITIONS = 15            # steps 0..15
 REFERENCE_STEPS = (10, 9)  # the table is right for these (drive test): they show the reaction time
-OUTWARD = 0.4              # steps (~2.7 %): smaller moves stay put, so jitter does not become strokes
+HOLD_PCT = 3               # default: moves up to this (% of the range) stay put, so jitter does not become strokes
 
 # travel time in ms per distance (1..15 steps, rows) and speed (1..20, columns)
 SPEED_MATRIX = (
@@ -53,14 +53,16 @@ def is_fredorch(name: str) -> bool:
     return "fredorch" in name.lower()
 
 
-def step(position: float, prev: int | None = None) -> int:
-    """0..100 -> device step 0..15, rounded away from `prev` (the step it stands on)."""
+def step(position: float, prev: int | None = None, hold_pct: float = HOLD_PCT) -> int:
+    """0..100 -> device step 0..15, rounded away from `prev` (the step it stands on);
+    moves up to `hold_pct` keep it where it is."""
     x = max(0.0, min(100.0, position)) / 100 * POSITIONS
     if prev is None:
         return round(x)
-    if x > prev + OUTWARD:
+    hold = hold_pct / 100 * POSITIONS
+    if x > prev + hold:
         return math.ceil(x - 1e-9)
-    if x < prev - OUTWARD:
+    if x < prev - hold:
         return math.floor(x + 1e-9)
     return prev
 

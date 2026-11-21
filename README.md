@@ -554,8 +554,9 @@ Settings in the device window:
   is driven shorter instead. Without a test, the fastest step of Intiface's table is
   the limit (a full stroke in 200 ms, 150 strokes/min). **Reset limits** goes back to it.
 - **F21S positions**: the device has only 16 positions. Strokes are rounded outward
-  (up rounds up, down rounds down) so they reach their ends; moves under about 3 %
-  stay put so jitter does not become strokes.
+  (up rounds up, down rounds down) so they reach their ends; moves up to the
+  **F21S threshold** (Playback, default 3 %) stay put so jitter does not become
+  strokes. Lower follows small moves too (may judder), higher is calmer.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
 device stops at once. After a start or a seek it first moves slowly to the

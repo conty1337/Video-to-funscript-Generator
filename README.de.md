@@ -593,7 +593,9 @@ Einstellungen im Gerätefenster:
   das wieder her.
 - **F21S-Positionen**: Das Gerät kennt nur 16 Positionen. Hübe werden nach außen
   gerundet (nach oben auf-, nach unten abgerundet), damit sie ihr Ende erreichen;
-  Bewegungen unter etwa 3 % bleiben stehen, damit Zittern keine Hübe wird.
+  Bewegungen bis zur **F21S-Schwelle** (Wiedergabe, Standard 3 %) bleiben stehen,
+  damit Zittern keine Hübe wird. Kleiner folgt auch kleinen Bewegungen (kann
+  zappeln), größer ist ruhiger.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen

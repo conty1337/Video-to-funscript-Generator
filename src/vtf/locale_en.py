@@ -1934,8 +1934,11 @@ EN: dict[str, str] = {
         "Timeline",
     "Zeitversatz":
         "Time offset",
-    "Zeitversatz, Tempo, langsame und schnelle Hübe, Hubbereich, Richtung und Vibration auf Standard":
-        "Time offset, tempo, slow and fast strokes, stroke range, direction and vibration to default",
+    "Zeitversatz, Tempo, langsame und schnelle Hübe, F21S-Schwelle, Hubbereich, Richtung und Vibration auf Standard":
+        "Time offset, tempo, slow and fast strokes, F21S threshold, stroke range, direction and vibration to default",
+    "F21S-Schwelle": "F21S threshold",
+    "Nur F21S (kennt nur 16 Positionen, je ca. 6,7 %): Bewegungen bis zu diesem Wert bleiben stehen, größere werden nach außen gerundet, damit Hübe ihr Ende erreichen. Kleiner = folgt auch kleinen Bewegungen (kann zappeln), größer = ruhiger (bleibt bei kleinen Bewegungen eher stehen)":
+        "F21S only (it knows just 16 positions, about 6.7 % each): moves up to this value stay put, larger ones are rounded outward so strokes reach their ends. Lower = follows small moves too (may judder), higher = calmer (more likely to stand still on small moves)",
     "Ziel":
         "Target",
     "Zittern":
