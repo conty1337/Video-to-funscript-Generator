@@ -204,6 +204,13 @@ EN: dict[str, str] = {
     "Fährt nach unten…": "Going to the bottom…",
     "Hub {0} von {1}: Leertaste, sobald es ankommt": "Stroke {0} of {1}: Space as soon as it arrives",
     "Fertig. Nächste Stufe wählen und Start.": "Done. Pick the next step and Start.",
+    "Aus den Messungen eine Korrektur pro Stufe berechnen, speichern und beim Abspielen nutzen":
+        "Compute a correction per step from the measurements, save it and use it for playback",
+    "Korrektur aus": "Correction off",
+    "Erst langsame Stufen messen (und Stufe 10 oder 9 als Vergleich).":
+        "Measure slow steps first (and step 10 or 9 as reference).",
+    "Korrektur übernommen, gilt ab jetzt beim Abspielen.": "Correction applied, used for playback from now on.",
+    "Korrektur aus: wieder wie Intiface.": "Correction off: as Intiface again.",
     "Ergebnis kopieren": "Copy result",
     "Kein Gerät verbunden.": "No device connected.",
     "Langsame Hübe": "Slow strokes",

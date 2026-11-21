@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 
@@ -169,6 +170,7 @@ class DeviceController(QObject):
         else:
             dev = ButtplugDevice(url or DEFAULT_URL)
             dev.vibe_mode = str(self.qs.value("device/vibe", "speed"))
+            dev.fred_factors = self.fred_factors()
             self.qs.setValue("device/url", url)
         dev.add_listener(self.message.emit)
         self.qs.setValue("device/kind", kind)
@@ -277,6 +279,18 @@ class DeviceController(QObject):
         if self.dialog is not None:
             self.dialog.close()
             self.dialog = None             # rebuilt with the new values next time
+
+    def fred_factors(self) -> dict[int, float]:
+        """F21S correction from the drive test (empty: off)."""
+        try:
+            return {int(k): float(v) for k, v in json.loads(str(self.qs.value("device/fred_factors", "{}"))).items()}
+        except (ValueError, TypeError, AttributeError):
+            return {}
+
+    def set_fred_factors(self, factors: dict[int, float]) -> None:
+        self.qs.setValue("device/fred_factors", json.dumps(factors))
+        if isinstance(self.device, ButtplugDevice):
+            self.device.fred_factors = dict(factors)
 
     def open_drive_test(self) -> None:
         from .drive_test import DriveTestDialog

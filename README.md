@@ -535,9 +535,13 @@ Settings in the device window:
   normal on the F21S (only 20 speed steps).
 - **Reverse direction**.
 - **Drive test…**: stopwatch for the F21S speed steps. Pick a step, the device
-  drives full strokes, and press Space at every arrival. Steps 10 and 9 serve as
-  reference (Intiface's table is right there); “Copy result” gives the measured
-  times as text, to tune the timing from them.
+  drives full strokes, and press Space at every arrival; ideally all steps from 10
+  to 1. Steps 10 and 9 serve as reference (Intiface's table is right there), and the
+  reaction time is taken off. **Apply** works out how much slower each step really
+  is and saves it. Playback then takes, for every stroke, the slowest step that
+  still arrives in time by its real speed, so slow strokes no longer lag.
+  **Correction off** goes back. “Copy result” gives measurements, reaction time,
+  factors and the step picked for strokes of 0.5 to 6 s as text.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
 device stops at once. After a start or a seek it first moves slowly to the

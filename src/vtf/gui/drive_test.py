@@ -1,7 +1,7 @@
 """Drive test (stopwatch): the device drives full strokes at one speed step of the
-Fredorch F21S, the user presses Space when it arrives. The measured travel times show
-how far the real device differs from the speed table in Intiface's driver; the result
-can be copied (to tune the F21S timing from real measurements)."""
+Fredorch F21S, the user presses Space when it arrives. "Übernehmen" turns the measured
+times into a correction per step (device/fredorch.py) that playback then uses; the
+copied report shows the numbers and which step the app would pick, for checking."""
 
 from __future__ import annotations
 
@@ -11,11 +11,13 @@ from PySide6.QtCore import QElapsedTimer, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
+from ..device import fredorch
 from ..i18n import dec, tr
 from . import theme
 
 #: travel time of a full stroke (15 steps) per speed step in Intiface's fredorch driver
-FULL_STROKE_MS = {1: 8048, 2: 7068, 3: 4442, 4: 3708, 5: 2668, 6: 1930, 7: 1800, 8: 1520, 9: 878, 10: 618}
+FULL_STROKE_MS = {s: fredorch.FULL_STROKE[s - 1] for s in range(1, 11)}
+SAMPLE_MS = (500, 1000, 1500, 2000, 2500, 3000, 4000, 6000)    # full strokes shown in the report
 ROUNDS = 4
 LEAD_MS = 2500           # glide to the bottom and settle first
 
@@ -26,11 +28,26 @@ def sent_ms(step: int) -> int:
     return FULL_STROKE_MS[step] + 1
 
 
-def report(results: dict) -> str:
-    """One line per measured step, for copying."""
-    return "\n".join(f"Stufe {s}: Intiface {FULL_STROKE_MS[s]} ms, gemessen {mean(t):.0f} ms "
-                     f"({', '.join(str(round(x)) for x in t)})"
-                     for s, t in sorted(results.items(), reverse=True))
+def report(results: dict, saved: dict | None = None) -> str:
+    """Measurements, the correction they give and what the app would pick, for copying."""
+    reaction, factors = fredorch.factors_from(results)
+    lines = [f"Reaktionszeit: {reaction:.0f} ms (aus Stufe 10/9)",
+             "Stufe  Intiface  gemessen  echt  Faktor  Einzelwerte"]
+    for s, t in sorted(results.items(), reverse=True):
+        f = factors.get(s)
+        real = mean(t) - reaction
+        lines.append(f"{s:>5}  {FULL_STROKE_MS[s]:>8}  {mean(t):>8.0f}  {real:>4.0f}  "
+                     f"{f'{f:.2f}' if f else '   -':>6}  {', '.join(str(round(x)) for x in t)}")
+    use = saved if saved is not None else factors
+    lines.append("Übernommen: " + (", ".join(f"{s}:{f:.2f}" for s, f in sorted(use.items())) if saved else "nein"))
+    lines.append("Voller Hub soll -> Stufe, echte Zeit, gesendet")
+    for d in SAMPLE_MS:
+        speed, sent = fredorch.pick(fredorch.POSITIONS, d, use)
+        if speed:
+            lines.append(f"{d:>5} ms -> Stufe {speed}, {fredorch.real_ms(fredorch.POSITIONS, speed, use):.0f} ms, {sent} ms")
+        else:
+            lines.append(f"{d:>5} ms -> wie Intiface, {d} ms")
+    return "\n".join(lines)
 
 
 class DriveTestDialog(QDialog):
@@ -69,9 +86,17 @@ class DriveTestDialog(QDialog):
         self.summary = QLabel()
         self.summary.setFont(theme.mono_font(12))
         lay.addWidget(self.summary)
+        btns = QHBoxLayout()
+        take = QPushButton(tr("Übernehmen"))
+        take.setToolTip(tr("Aus den Messungen eine Korrektur pro Stufe berechnen, speichern und beim Abspielen nutzen"))
+        take.clicked.connect(self.take)
+        off = QPushButton(tr("Korrektur aus"))
+        off.clicked.connect(self.clear)
         copy = QPushButton(tr("Ergebnis kopieren"))
-        copy.clicked.connect(lambda: QApplication.clipboard().setText(report(self.results)))
-        lay.addWidget(copy)
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(self._report()))
+        for b in (take, off, copy):
+            btns.addWidget(b)
+        lay.addLayout(btns)
         self.clock = QElapsedTimer()
         self.clock.start()
         self.lead = QTimer(self, singleShot=True)
@@ -115,9 +140,27 @@ class DriveTestDialog(QDialog):
             self._stroke()
             return
         self.results[self.step.currentData()] = self._times
-        self.summary.setText(report(self.results))
+        self.summary.setText(self._report())
         self.state.setText(tr("Fertig. Nächste Stufe wählen und Start."))
         self.step.setCurrentIndex(min(self.step.count() - 1, self.step.currentIndex() + 1))
+
+    def _report(self) -> str:
+        saved = self.ctl.fred_factors() if hasattr(self.ctl, "fred_factors") else {}
+        return report(self.results, saved)
+
+    def take(self):
+        _reaction, factors = fredorch.factors_from(self.results)
+        if not factors:
+            self.state.setText(tr("Erst langsame Stufen messen (und Stufe 10 oder 9 als Vergleich)."))
+            return
+        self.ctl.set_fred_factors(factors)
+        self.summary.setText(self._report())
+        self.state.setText(tr("Korrektur übernommen, gilt ab jetzt beim Abspielen."))
+
+    def clear(self):
+        self.ctl.set_fred_factors({})
+        self.summary.setText(self._report())
+        self.state.setText(tr("Korrektur aus: wieder wie Intiface."))
 
     def stop(self):
         self.lead.stop()
