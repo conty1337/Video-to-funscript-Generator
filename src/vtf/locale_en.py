@@ -195,16 +195,15 @@ EN: dict[str, str] = {
     "Stil": "Style",
     "Fahrtest": "Drive test",
     "Fahrtest…": "Drive test…",
-    "Volle Hübe mit festen Zeiten: prüfen, ob das Gerät pünktlich ankommt und ganz durchfährt":
-        "Full strokes with fixed times: check whether the device arrives on time and goes all the way",
-    "Fährt volle Hübe in der gewählten Zeit. Der Kreis leuchtet, wenn das Gerät oben bzw. unten sein soll. Danach eintragen, was du gesehen hast, und für die nächste Zeit wiederholen. Zum Schluss „Ergebnis kopieren“ und weitergeben.":
-        "Drives full strokes in the chosen time. The circle lights up when the device should be at the top or bottom. Then note what you saw and repeat for the next time. Finally “Copy result” and pass it on.",
-    "{0} s pro Hub": "{0} s per stroke",
-    "pünktlich": "on time",
-    "zu früh, wartet": "early, waits",
-    "zu spät": "late",
-    "fährt ganz durch": "goes all the way",
-    "Eintragen": "Note",
+    "Stoppuhr für die Geschwindigkeitsstufen des F21S: Fahrzeit eines vollen Hubs messen":
+        "Stopwatch for the F21S speed steps: measure the time of a full stroke",
+    "Stoppuhr für die Geschwindigkeitsstufen des F21S: Hubbereich 0 bis 100 einstellen, eine Stufe wählen, Start. Das Gerät fährt volle Hübe; drück jedes Mal die Leertaste, sobald es oben bzw. unten ankommt. Stufe 10 und 9 zuerst (Vergleich), dann die langsamen. Zum Schluss „Ergebnis kopieren“ und weitergeben.":
+        "Stopwatch for the F21S speed steps: set the stroke range to 0 to 100, pick a step, Start. The device drives full strokes; press Space each time it arrives at the top or bottom. Steps 10 and 9 first (reference), then the slow ones. Finally “Copy result” and pass it on.",
+    "Stufe {0} (laut Intiface {1} s)": "Step {0} (Intiface says {1} s)",
+    "Angekommen (Leertaste)": "Arrived (Space)",
+    "Fährt nach unten…": "Going to the bottom…",
+    "Hub {0} von {1}: Leertaste, sobald es ankommt": "Stroke {0} of {1}: Space as soon as it arrives",
+    "Fertig. Nächste Stufe wählen und Start.": "Done. Pick the next step and Start.",
     "Ergebnis kopieren": "Copy result",
     "Kein Gerät verbunden.": "No device connected.",
     "Langsame Hübe": "Slow strokes",

@@ -361,7 +361,7 @@ class DeviceDialog(QDialog):
         self.wizard_btn.clicked.connect(ctl.open_wizard)
         lay.addWidget(self.wizard_btn)
         self.drive_btn = QPushButton(tr("Fahrtest…"))
-        self.drive_btn.setToolTip(tr("Volle Hübe mit festen Zeiten: prüfen, ob das Gerät pünktlich ankommt und ganz durchfährt"))
+        self.drive_btn.setToolTip(tr("Stoppuhr für die Geschwindigkeitsstufen des F21S: Fahrzeit eines vollen Hubs messen"))
         self.drive_btn.clicked.connect(ctl.open_drive_test)
         lay.addWidget(self.drive_btn)
 
