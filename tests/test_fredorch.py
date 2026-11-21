@@ -46,3 +46,37 @@ def test_buttplug_sends_the_picked_duration(monkeypatch):
     dev.fred_factors = {s: 1.5 for s in range(1, 9)}
     dev.move(0, 2000)                                         # 15 steps back down
     assert sent[-1]["LinearCmd"]["Vectors"][0]["Duration"] == 879
+
+
+def test_outward_rounding_and_exact_steps():
+    import math
+    assert fredorch.step(3, 2) == 0 and fredorch.step(4, 0) == 1          # down: floor, up: ceil
+    assert fredorch.step(37, 5) == 6 and fredorch.step(96, 15) == 14
+    assert fredorch.step(4, 0, hold_pct=5) == 0 and fredorch.step(1, 0, hold_pct=0) == 1   # adjustable
+    assert fredorch.step(35, 5) == 5                                      # < 0.4 steps: stays put
+    assert fredorch.step(11 * 100 / 15, 0) == 11                          # exact step, no float slip
+    for k in range(16):                                                   # Intiface: ceil(pos * 15)
+        assert math.ceil(round(fredorch.wire(k), 4) * 15) == k
+
+
+def test_tempo_limit_shortens_too_fast_strokes():
+    assert fredorch.min_ms(15, {}) == 200 and fredorch.fit(15, 200, {}) == 15
+    assert fredorch.fit(15, 125, {}) == 8                                 # 240/min: 8 steps fit (119 ms)
+    assert fredorch.fit(15, 29, {}) == 1 and fredorch.fit(15, 10, {}) == 0
+    limits = {15: 300.0}                                                  # measured: 100/min at full depth
+    assert fredorch.min_ms(15, limits) == 300 and fredorch.min_ms(8, limits) == 119 * 1.5
+    assert fredorch.min_ms(15, {15: 100.0}) == 200                        # never faster than the table
+    assert fredorch.min_ms(11, {15: 400.0, 8: 119.0}) == 155 * (1 + 3 / 7)
+
+
+def test_buttplug_limits_and_rounds(monkeypatch):
+    from vtf.device.buttplug import ButtplugDevice, RemoteDevice
+    dev = ButtplugDevice()
+    sent = []
+    monkeypatch.setattr(dev, "_device", lambda: RemoteDevice(3, "Fredorch Device", 1, 15))
+    monkeypatch.setattr(dev, "_send", sent.append)
+    dev.move(100, 125)                                         # too fast for a full stroke
+    assert dev._fred_step == 8 and sent[-1]["LinearCmd"]["Vectors"][0]["Position"] == round(7.5 / 15, 4)
+    dev.fred_limits = None                                     # tempo test: no limit
+    dev.move(0, 50)
+    assert dev._fred_step == 0

@@ -207,3 +207,153 @@ class DriveTestDialog(QDialog):
     def done(self, r):
         self.stop()
         super().done(r)
+
+
+#: tempo test: depth in % -> distance in steps of the F21S
+DEPTHS = {100: 15, 75: 11, 50: 8, 25: 4}
+TEMPO_START, TEMPO_STEP, TEMPO_MAX = 60, 10, 300      # strokes (up and down) per minute
+PER_LEVEL = 8            # moves per tempo level, then it gets faster
+
+
+def per_min(ms: float) -> float:
+    """Strokes (up and down) per minute when one direction takes `ms`."""
+    return 30_000 / ms
+
+
+def limits_report(limits: dict[int, float]) -> str:
+    lines = ["Tiefe  Stufen  Tabelle  gemessen  (Hübe/min, höchstens)"]
+    for depth, dist in DEPTHS.items():
+        got = f"{per_min(limits[dist]):>8.0f}" if dist in limits else "       -"
+        lines.append(f"{depth:>4} %  {dist:>6}  {per_min(fredorch.SPEED_MATRIX[dist - 1][-1]):>7.0f}  {got}")
+    lines.append("Schnellere Stellen fährt das Gerät kürzer, statt zu zappeln.")
+    return "\n".join(lines)
+
+
+class TempoTestDialog(QDialog):
+    """Tempo test: full or partial strokes get faster step by step; the user presses Space
+    as soon as the device judders or no longer reaches the end. The last clean tempo per
+    depth is saved and playback never asks for more (device/fredorch.py: fit)."""
+
+    def __init__(self, ctl, parent=None):
+        super().__init__(parent)
+        self.ctl = ctl
+        self.setWindowTitle(tr("Tempo-Test"))
+        self.resize(640, 560)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 20, 24, 20)
+        lay.setSpacing(12)
+        text = QLabel(tr("Hubbereich 0 bis 100 einstellen, Tiefe wählen, Start. Das Gerät fährt immer schneller; drück die Leertaste, sobald es zappelt oder nicht mehr ganz durchfährt. Das letzte saubere Tempo wird gespeichert, schnellere Stellen fährt es danach kürzer."))
+        text.setWordWrap(True)
+        lay.addWidget(text)
+        row = QHBoxLayout()
+        self.depth = QComboBox()
+        for depth, dist in DEPTHS.items():
+            self.depth.addItem(tr("Tiefe {0} % ({1} Stufen)", depth, dist), dist)
+        row.addWidget(self.depth, 1)
+        start = theme.accent_icon(QPushButton(), "play", tr("Start"))
+        start.setObjectName("primary")
+        start.clicked.connect(self.start)
+        row.addWidget(start)
+        stop = QPushButton(theme.icon("x"), tr("Stopp (Esc)"))
+        stop.clicked.connect(self.stop)
+        row.addWidget(stop)
+        lay.addLayout(row)
+        self.tap_btn = QPushButton(tr("Zappelt (Leertaste)"))
+        self.tap_btn.setStyleSheet("min-height: 80px; font-size: 16px;")
+        self.tap_btn.clicked.connect(self.tap)
+        lay.addWidget(self.tap_btn)
+        QShortcut(QKeySequence(Qt.Key_Space), self, self.tap)
+        self.state = QLabel()
+        self.state.setObjectName("meta")
+        lay.addWidget(self.state)
+        self.summary = QPlainTextEdit(readOnly=True)
+        self.summary.setFont(theme.mono_font(12))
+        lay.addWidget(self.summary, 1)
+        btns = QHBoxLayout()
+        reset = QPushButton(tr("Grenzen zurücksetzen"))
+        reset.setToolTip(tr("Wieder nur die schnellste Stufe der Intiface-Tabelle als Grenze"))
+        reset.clicked.connect(self.reset)
+        copy = QPushButton(tr("Ergebnis kopieren"))
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(self.summary.toPlainText()))
+        btns.addWidget(reset)
+        btns.addWidget(copy)
+        lay.addLayout(btns)
+        self.timer = QTimer(self, singleShot=True)
+        self.timer.timeout.connect(self._stroke)
+        self.bpm = 0
+        self._moves = 0
+        self._pos = 0.0
+        self.summary.setPlainText(limits_report(self.ctl.fred_limits()))
+
+    @property
+    def device(self):
+        dev = self.ctl.device
+        return dev if dev is not None and dev.connected else None
+
+    def start(self):
+        if self.device is None:
+            self.state.setText(tr("Kein Gerät verbunden."))
+            return
+        self.ctl.sync.stop()
+        if hasattr(self.device, "fred_limits"):
+            self.device.fred_limits = None         # let it try, that is the point
+        self.bpm, self._moves, self._pos = TEMPO_START, 0, 0.0
+        self.device.move(self.ctl.sync.settings.map(0.0), LEAD_MS - 1000)
+        self.state.setText(tr("Fährt nach unten…"))
+        self.timer.start(LEAD_MS)
+
+    def _stroke(self):
+        if self.device is None:
+            return
+        if self._moves == PER_LEVEL:
+            self._moves = 0
+            self.bpm += TEMPO_STEP
+            if self.bpm > TEMPO_MAX:            # never juddered: the fastest tempo is fine
+                self._save(TEMPO_MAX)
+                return
+        half = per_min(self.bpm)                # ms per direction
+        self._pos = self.depth.currentData() * 100 / fredorch.POSITIONS if self._pos == 0 else 0.0
+        self.device.move(self.ctl.sync.settings.map(self._pos), int(half))
+        self._moves += 1
+        self.state.setText(tr("{0} Hübe/min: Leertaste, sobald es zappelt", self.bpm))
+        self.timer.start(int(half))
+
+    def tap(self):
+        if self.bpm and self.timer.isActive():
+            self._save(max(TEMPO_START, self.bpm - TEMPO_STEP))   # the level before was still clean
+
+    def _save(self, bpm: int):
+        limits = {**self.ctl.fred_limits(), self.depth.currentData(): per_min(bpm)}
+        self.stop()
+        self.ctl.set_fred_limits(limits)
+        self.summary.setPlainText(limits_report(limits))
+        self.state.setText(tr("Gespeichert: höchstens {0} Hübe/min bei dieser Tiefe. Nächste Tiefe wählen und Start.", bpm))
+        self.depth.setCurrentIndex(min(self.depth.count() - 1, self.depth.currentIndex() + 1))
+
+    def reset(self):
+        self.ctl.set_fred_limits({})
+        self.summary.setPlainText(limits_report({}))
+        self.state.setText(tr("Grenzen zurückgesetzt: wieder wie die Intiface-Tabelle."))
+
+    def stop(self):
+        self.timer.stop()
+        self.bpm = 0
+        if hasattr(self.device, "fred_limits"):
+            self.device.fred_limits = self.ctl.fred_limits()     # limit back on
+        self.state.setText("")
+        if self.device is not None:
+            try:
+                self.device.stop()
+            except Exception:
+                pass
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key_Escape:
+            self.stop()
+            ev.accept()
+            return
+        super().keyPressEvent(ev)
+
+    def done(self, r):
+        self.stop()
+        super().done(r)

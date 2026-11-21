@@ -547,6 +547,16 @@ Settings in the device window:
   for comparison. Steps measured again replace only their own values on Apply (measure step 10 or 9
   along again). **Correction off** goes back to Intiface's choice (the measurements stay). “Copy result” gives measurements, reaction time,
   factors and the step picked for strokes of 0.5 to 6 s as text.
+- **Tempo test…**: how fast the F21S still runs cleanly at which depth (100, 75,
+  50, 25 %). The device gets faster step by step; press Space as soon as it judders
+  or no longer goes all the way, and the last clean tempo is saved. Playback,
+  patterns and everything else never ask for more: a stroke that would be too fast
+  is driven shorter instead. Without a test, the fastest step of Intiface's table is
+  the limit (a full stroke in 200 ms, 150 strokes/min). **Reset limits** goes back to it.
+- **F21S positions**: the device has only 16 positions. Strokes are rounded outward
+  (up rounds up, down rounds down) so they reach their ends; moves up to the
+  **F21S threshold** (Playback, default 3 %) stay put so jitter does not become
+  strokes. Lower follows small moves too (may judder), higher is calmer.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
 device stops at once. After a start or a seek it first moves slowly to the
