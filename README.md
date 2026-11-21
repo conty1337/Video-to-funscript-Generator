@@ -540,8 +540,9 @@ Settings in the device window:
   reaction time is taken off. **Apply** works out how much slower each step really
   is and saves it. Playback then takes, for every stroke, the slowest step that
   still arrives in time by its real speed, so slow strokes no longer lag.
-  Steps measured again replace only their own values on Apply (measure step 10 or 9
-  along again). **Correction off** goes back. “Copy result” gives measurements, reaction time,
+  The measurements are saved and show again next time, next to Intiface's values
+  for comparison. Steps measured again replace only their own values on Apply (measure step 10 or 9
+  along again). **Correction off** goes back to Intiface's choice (the measurements stay). “Copy result” gives measurements, reaction time,
   factors and the step picked for strokes of 0.5 to 6 s as text.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the

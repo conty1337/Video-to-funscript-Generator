@@ -5,6 +5,7 @@ copied report shows the numbers and which step the app would pick, for checking.
 
 from __future__ import annotations
 
+import json
 from statistics import mean
 
 from PySide6.QtCore import QElapsedTimer, Qt, QTimer
@@ -38,9 +39,9 @@ def report(results: dict, saved: dict | None = None) -> str:
         real = mean(t) - reaction
         lines.append(f"{s:>5}  {FULL_STROKE_MS[s]:>8}  {mean(t):>8.0f}  {real:>4.0f}  "
                      f"{f'{f:.2f}' if f else '   -':>6}  {', '.join(str(round(x)) for x in t)}")
-    use = saved if saved is not None else factors
-    lines.append("Übernommen: " + (", ".join(f"{s}:{f:.2f}" for s, f in sorted(use.items())) if saved else "nein"))
-    lines.append("Voller Hub soll -> Stufe, echte Zeit, gesendet")
+    use = saved or factors          # nothing applied yet: preview what "Übernehmen" would give
+    lines.append("Übernommen: " + (", ".join(f"{s}:{f:.2f}" for s, f in sorted(saved.items())) if saved else "nein"))
+    lines.append("Voller Hub soll -> Stufe, echte Zeit, gesendet" + ("" if saved else " (Vorschau)"))
     for d in SAMPLE_MS:
         speed, sent = fredorch.pick(fredorch.POSITIONS, d, use)
         if speed:
@@ -55,7 +56,7 @@ class DriveTestDialog(QDialog):
         super().__init__(parent)
         self.ctl = ctl
         self.setWindowTitle(tr("Fahrtest"))
-        self.results: dict[int, list[float]] = {}
+        self.results = self._load()           # earlier measurements stay for comparison
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
         lay.setSpacing(12)
@@ -104,6 +105,8 @@ class DriveTestDialog(QDialog):
         self._sent_at: float | None = None
         self._times: list[float] = []
         self._pos = 0.0
+        if self.results:
+            self.summary.setText(self._report())
 
     @property
     def device(self):
@@ -140,9 +143,23 @@ class DriveTestDialog(QDialog):
             self._stroke()
             return
         self.results[self.step.currentData()] = self._times
+        self._save()
         self.summary.setText(self._report())
         self.state.setText(tr("Fertig. Nächste Stufe wählen und Start."))
         self.step.setCurrentIndex(min(self.step.count() - 1, self.step.currentIndex() + 1))
+
+    def _load(self) -> dict[int, list[float]]:
+        qs = getattr(self.ctl, "qs", None)
+        try:
+            raw = json.loads(str(qs.value("device/fred_measured", "{}"))) if qs is not None else {}
+            return {int(k): [float(x) for x in v] for k, v in raw.items()}
+        except (ValueError, TypeError, AttributeError):
+            return {}
+
+    def _save(self) -> None:
+        qs = getattr(self.ctl, "qs", None)
+        if qs is not None:
+            qs.setValue("device/fred_measured", json.dumps(self.results))
 
     def _report(self) -> str:
         saved = self.ctl.fred_factors() if hasattr(self.ctl, "fred_factors") else {}

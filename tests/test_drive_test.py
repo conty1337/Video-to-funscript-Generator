@@ -12,12 +12,14 @@ def test_sent_duration_picks_the_step_and_report():
     text = report({6: [2900, 3100], 9: [1000.4]})
     assert text.startswith("Reaktionszeit: 122 ms")
     assert "    6      1930      3000  2878    1.49  2900, 3100" in text
-    assert "Übernommen: nein" in text and " 2000 ms -> Stufe 7, 1800 ms, 1801 ms" in text
+    assert "Übernommen: nein" in text and "(Vorschau)" in text
+    assert " 2000 ms -> Stufe 7, 1800 ms, 1801 ms" in text      # preview from the measurement
     assert "  500 ms -> wie Intiface, 500 ms" in report({})   # nothing measured: as Intiface
 
 
-def test_dialog_measures_taps():
+def test_dialog_measures_taps(tmp_path):
     QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    from PySide6 import QtCore
     from vtf.device import SimulatedDevice
     from vtf.device.sync import ScriptSync
     from vtf.gui.drive_test import ROUNDS, DriveTestDialog, sent_ms
@@ -27,6 +29,7 @@ def test_dialog_measures_taps():
         device = SimulatedDevice()
         sync = ScriptSync()
         saved: dict = {}
+        qs = QtCore.QSettings(str(tmp_path / "s.ini"), QtCore.QSettings.IniFormat)
 
         def fred_factors(self):
             return self.saved
@@ -53,4 +56,7 @@ def test_dialog_measures_taps():
     d.clear()
     assert Ctl.saved == {} and "Übernommen: nein" in d.summary.text()
     d.done(0)
+    again = DriveTestDialog(Ctl())               # measurements come back next time
+    assert set(again.results) == {6} and "Stufe" in again.summary.text()
+    again.done(0)
     app.processEvents()
