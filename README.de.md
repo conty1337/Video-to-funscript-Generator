@@ -596,6 +596,12 @@ Einstellungen im Gerätefenster:
   Bewegungen bis zur **F21S-Schwelle** (Wiedergabe, Standard 3 %) bleiben stehen,
   damit Zittern keine Hübe wird. Kleiner folgt auch kleinen Bewegungen (kann
   zappeln), größer ist ruhiger.
+- **Kürzen statt warten** (Wiedergabe, 0 bis 4 Stufen, standardmäßig aus): Mit nur
+  20 Geschwindigkeiten kommt ein langsamer Hub oft zu früh an und bleibt am Ende
+  stehen. Die App fährt ihn dann bis zu so viele Stufen (je ca. 6,7 %) kürzer mit
+  einer langsameren Stufe, die zeitlich besser passt, damit er in Bewegung bleibt.
+  Gekürzt wird nur, wenn das wirklich Warten spart; bei manchen Hublängen passt
+  auch so keine langsamere Stufe.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen

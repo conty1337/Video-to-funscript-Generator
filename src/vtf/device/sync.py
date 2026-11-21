@@ -35,6 +35,7 @@ class SyncSettings:
     slow_pct: int = 0          # >0: slow strokes announced shorter (device slower than told), <0 longer
     stretch_pct: int = 0       # fast strokes (up to SLOW_FROM_MS) announced this much longer: devices
                                # with speed steps (F21S) take the next faster one and wait otherwise
+    shorten_steps: int = 0     # F21S: slow strokes up to this many steps shorter instead of waiting at the end
     hold_pct: int = 3          # F21S (16 positions): moves up to this stay put, larger ones round outward
 
     def map(self, pos: float) -> float:

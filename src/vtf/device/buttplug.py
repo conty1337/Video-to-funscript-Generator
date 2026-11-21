@@ -92,6 +92,7 @@ class ButtplugDevice(Device):
         self._vibe_sent = -1.0
         self.fred_factors: dict[int, float] = {}   # F21S: measured real/table time per speed step
         self.fred_limits: dict[int, float] | None = {}  # F21S tempo test: distance -> ms (None: no limit)
+        self.fred_shorten = 0             # F21S: up to this many steps shorter instead of standing still
         self.fred_hold_pct = fredorch.HOLD_PCT  # F21S: smaller moves stay put (setting "F21S-Schwelle")
         self._fred_step = 0               # Fredorch driver: last commanded step (it starts at 0)
 
@@ -175,6 +176,8 @@ class ButtplugDevice(Device):
             new = fredorch.step(position, prev, self.fred_hold_pct)
             if self.fred_limits is not None:       # too fast for the device: shorter stroke, no stalling
                 new = prev + (1 if new > prev else -1) * fredorch.fit(abs(new - prev), int(duration_ms), self.fred_limits)
+            if self.fred_shorten and new != prev:
+                new = prev + (1 if new > prev else -1) * fredorch.shorten(abs(new - prev), int(duration_ms), self.fred_factors, self.fred_shorten)
             _speed, duration_ms = fredorch.pick(abs(new - prev), int(duration_ms), self.fred_factors)
             self._fred_step = new
             pos = fredorch.wire(new)
