@@ -571,6 +571,8 @@ Einstellungen im Gerätefenster:
   annimmt. Mit − länger, falls ein Gerät dort zu früh ist. Eine kleine Pause am
   Hubende ist beim F21S normal (nur 20 Geschwindigkeitsstufen).
 - **Richtung umkehren**.
+- **Schnelle Hübe** (0–30 %, Standard 0): gilt nur für Hübe bis 1 s und sagt sie so viel
+  länger an. Gegen die kurze Pause am Ende schneller Hübe beim F21S (etwa 10 %).
 - **Fahrtest…**: Stoppuhr für die Geschwindigkeitsstufen des F21S. Eine Stufe
   wählen, das Gerät fährt volle Hübe, und bei jeder Ankunft die Leertaste drücken;
   am besten alle Stufen von 10 bis 1. Stufe 10 und 9 dienen als Vergleich (dort stimmt

@@ -534,6 +534,9 @@ Settings in the device window:
   longer, if a device is early there. A short pause at the end of a stroke is
   normal on the F21S (only 20 speed steps).
 - **Reverse direction**.
+- **Fast strokes** (0–30 %, default 0): only for strokes up to 1 s, announces them
+  this much longer. Against the short pause at the end of fast strokes on the F21S
+  (about 10 %).
 - **Drive test…**: stopwatch for the F21S speed steps. Pick a step, the device
   drives full strokes, and press Space at every arrival; ideally all steps from 10
   to 1. Steps 10 and 9 serve as reference (Intiface's table is right there), and the
