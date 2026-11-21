@@ -64,9 +64,10 @@ def test_tempo_limit_shortens_too_fast_strokes():
     assert fredorch.fit(15, 125, {}) == 8                                 # 240/min: 8 steps fit (119 ms)
     assert fredorch.fit(15, 29, {}) == 1 and fredorch.fit(15, 10, {}) == 0
     limits = {15: 300.0}                                                  # measured: 100/min at full depth
-    assert fredorch.min_ms(15, limits) == 300 and fredorch.min_ms(8, limits) == 119 * 1.5
+    assert fredorch.min_ms(15, limits) == 300 and fredorch.min_ms(8, limits) == 300 * 8 / 15
     assert fredorch.min_ms(15, {15: 100.0}) == 200                        # never faster than the table
-    assert fredorch.min_ms(11, {15: 400.0, 8: 119.0}) == 155 * (1 + 3 / 7)
+    assert fredorch.min_ms(11, {15: 400.0, 8: 120.0}) == 120 + 280 * 3 / 7
+    assert fredorch.fit(15, 643, {4: 500.0}) == 15     # only 25 % measured (slow): full strokes stay full
 
 
 def test_buttplug_limits_and_rounds(monkeypatch):

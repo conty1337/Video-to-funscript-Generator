@@ -73,17 +73,21 @@ def wire(step_: int) -> float:
 
 
 def min_ms(distance: int, limits: dict[int, float]) -> float:
-    """Shortest time for `distance` steps: the table's fastest step, slowed by the tempo
-    test (limits: distance -> ms, interpolated between the measured depths)."""
+    """Shortest time for `distance` steps: the table's fastest step, or the tempo test
+    (limits: distance -> ms) if slower. Between measured depths the time is interpolated;
+    a longer stroke never takes less than a shorter measured one, a shorter one scales down."""
     fastest = SPEED_MATRIX[distance - 1][-1]
-    pts = sorted((d, max(1.0, ms / SPEED_MATRIX[d - 1][-1])) for d, ms in limits.items() if 1 <= d <= POSITIONS)
+    pts = sorted((d, ms) for d, ms in limits.items() if 1 <= d <= POSITIONS)
     if not pts:
         return fastest
-    f = pts[0][1] if distance <= pts[0][0] else pts[-1][1]
-    for (d0, f0), (d1, f1) in zip(pts, pts[1:]):
-        if d0 <= distance <= d1:
-            f = f0 + (f1 - f0) * (distance - d0) / (d1 - d0)
-    return fastest * f
+    if distance >= pts[-1][0]:
+        ms = pts[-1][1]
+    elif distance <= pts[0][0]:
+        ms = pts[0][1] * distance / pts[0][0]
+    else:
+        ms = next(m0 + (m1 - m0) * (distance - d0) / (d1 - d0)
+                  for (d0, m0), (d1, m1) in zip(pts, pts[1:]) if d0 <= distance <= d1)
+    return max(fastest, ms)
 
 
 def fit(distance: int, duration_ms: int, limits: dict[int, float]) -> int:
