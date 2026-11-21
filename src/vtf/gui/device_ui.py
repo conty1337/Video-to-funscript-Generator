@@ -171,6 +171,7 @@ class DeviceController(QObject):
             dev = ButtplugDevice(url or DEFAULT_URL)
             dev.vibe_mode = str(self.qs.value("device/vibe", "speed"))
             dev.fred_factors = self.fred_factors()
+            dev.fred_limits = self.fred_limits()
             self.qs.setValue("device/url", url)
         dev.add_listener(self.message.emit)
         self.qs.setValue("device/kind", kind)
@@ -292,10 +293,27 @@ class DeviceController(QObject):
         if isinstance(self.device, ButtplugDevice):
             self.device.fred_factors = dict(factors)
 
+    def fred_limits(self) -> dict[int, float]:
+        """F21S tempo test: shortest time per distance in steps (empty: the table's fastest step)."""
+        try:
+            return {int(k): float(v) for k, v in json.loads(str(self.qs.value("device/fred_limits", "{}"))).items()}
+        except (ValueError, TypeError, AttributeError):
+            return {}
+
+    def set_fred_limits(self, limits: dict[int, float]) -> None:
+        self.qs.setValue("device/fred_limits", json.dumps(limits))
+        if isinstance(self.device, ButtplugDevice):
+            self.device.fred_limits = dict(limits)
+
     def open_drive_test(self) -> None:
         from .drive_test import DriveTestDialog
 
         DriveTestDialog(self, self.win).exec()
+
+    def open_tempo_test(self) -> None:
+        from .drive_test import TempoTestDialog
+
+        TempoTestDialog(self, self.win).exec()
 
     def open_dialog(self) -> None:
         if self.dialog is None:
@@ -377,7 +395,13 @@ class DeviceDialog(QDialog):
         self.drive_btn = QPushButton(tr("Fahrtest…"))
         self.drive_btn.setToolTip(tr("Stoppuhr für die Geschwindigkeitsstufen des F21S: Fahrzeit eines vollen Hubs messen"))
         self.drive_btn.clicked.connect(ctl.open_drive_test)
-        lay.addWidget(self.drive_btn)
+        self.tempo_btn = QPushButton(tr("Tempo-Test…"))
+        self.tempo_btn.setToolTip(tr("Wie schnell der F21S bei welcher Tiefe noch sauber fährt; schnellere Stellen werden dann kürzer statt zu zappeln"))
+        self.tempo_btn.clicked.connect(ctl.open_tempo_test)
+        tests = QHBoxLayout()
+        tests.addWidget(self.drive_btn)
+        tests.addWidget(self.tempo_btn)
+        lay.addLayout(tests)
 
         lay.addSpacing(16)
         lay.addWidget(theme.section_title(tr("Wiedergabe"), self.reset_playback,

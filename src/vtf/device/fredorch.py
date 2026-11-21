@@ -8,16 +8,25 @@ from that, a factor per step (real / table) is saved. With factors, the app pick
 slowest step whose *real* time still arrives in time and sends a duration that makes
 the driver take exactly that step. Without factors nothing changes.
 
+Positions: Intiface turns a position into a step with ceil(position * 15), so the app
+sends exact steps (`wire`) and rounds outward itself (`step`): up rounds up, down rounds
+down, so a stroke reaches its end instead of stopping one step short.
+
+Tempo limit: no command asks for a stroke faster than the device manages (fastest table
+step, or the tempo test's limits); such a stroke is made shorter instead (`fit`).
+
 SPEED_MATRIX from buttplug crates/buttplug_server/src/device/protocol_impl/fredorch.rs
 (Copyright 2016-2026 Nonpolynomial Labs LLC, BSD 3-Clause).
 """
 
 from __future__ import annotations
 
+import math
 from statistics import mean
 
 POSITIONS = 15            # steps 0..15
 REFERENCE_STEPS = (10, 9)  # the table is right for these (drive test): they show the reaction time
+OUTWARD = 0.4              # steps (~2.7 %): smaller moves stay put, so jitter does not become strokes
 
 # travel time in ms per distance (1..15 steps, rows) and speed (1..20, columns)
 SPEED_MATRIX = (
@@ -44,9 +53,43 @@ def is_fredorch(name: str) -> bool:
     return "fredorch" in name.lower()
 
 
-def step(position: float) -> int:
-    """0..100 -> device step 0..15."""
-    return round(max(0.0, min(100.0, position)) / 100 * POSITIONS)
+def step(position: float, prev: int | None = None) -> int:
+    """0..100 -> device step 0..15, rounded away from `prev` (the step it stands on)."""
+    x = max(0.0, min(100.0, position)) / 100 * POSITIONS
+    if prev is None:
+        return round(x)
+    if x > prev + OUTWARD:
+        return math.ceil(x - 1e-9)
+    if x < prev - OUTWARD:
+        return math.floor(x + 1e-9)
+    return prev
+
+
+def wire(step_: int) -> float:
+    """Position to send so Intiface's ceil(position * 15) gives exactly this step."""
+    return max(0.0, step_ - 0.5) / POSITIONS
+
+
+def min_ms(distance: int, limits: dict[int, float]) -> float:
+    """Shortest time for `distance` steps: the table's fastest step, slowed by the tempo
+    test (limits: distance -> ms, interpolated between the measured depths)."""
+    fastest = SPEED_MATRIX[distance - 1][-1]
+    pts = sorted((d, max(1.0, ms / SPEED_MATRIX[d - 1][-1])) for d, ms in limits.items() if 1 <= d <= POSITIONS)
+    if not pts:
+        return fastest
+    f = pts[0][1] if distance <= pts[0][0] else pts[-1][1]
+    for (d0, f0), (d1, f1) in zip(pts, pts[1:]):
+        if d0 <= distance <= d1:
+            f = f0 + (f1 - f0) * (distance - d0) / (d1 - d0)
+    return fastest * f
+
+
+def fit(distance: int, duration_ms: int, limits: dict[int, float]) -> int:
+    """Longest distance (up to `distance`) the device still manages in `duration_ms`."""
+    distance = min(distance, POSITIONS)
+    while distance > 0 and min_ms(distance, limits) > duration_ms:
+        distance -= 1
+    return distance
 
 
 def factors_from(measured: dict[int, list[float]]) -> tuple[float, dict[int, float]]:

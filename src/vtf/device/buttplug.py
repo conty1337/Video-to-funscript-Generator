@@ -91,6 +91,7 @@ class ButtplugDevice(Device):
         self._vibe_last: float | None = None
         self._vibe_sent = -1.0
         self.fred_factors: dict[int, float] = {}   # F21S: measured real/table time per speed step
+        self.fred_limits: dict[int, float] | None = {}  # F21S tempo test: distance -> ms (None: no limit)
         self._fred_step = 0               # Fredorch driver: last commanded step (it starts at 0)
 
     # ------------------------------------------------------------ connection
@@ -169,9 +170,13 @@ class ButtplugDevice(Device):
             return
         pos = max(0.0, min(100.0, float(position))) / 100
         if fredorch.is_fredorch(dev.name):
-            new = fredorch.step(position)
-            _speed, duration_ms = fredorch.pick(abs(new - self._fred_step), int(duration_ms), self.fred_factors)
+            prev = self._fred_step
+            new = fredorch.step(position, prev)
+            if self.fred_limits is not None:       # too fast for the device: shorter stroke, no stalling
+                new = prev + (1 if new > prev else -1) * fredorch.fit(abs(new - prev), int(duration_ms), self.fred_limits)
+            _speed, duration_ms = fredorch.pick(abs(new - prev), int(duration_ms), self.fred_factors)
             self._fred_step = new
+            pos = fredorch.wire(new)
         vectors = [{"Index": i, "Duration": max(0, int(duration_ms)), "Position": round(pos, 4)}
                    for i in range(dev.linear_features)]
         # fire and forget: waiting for "Ok" would add a full round trip of latency

@@ -213,6 +213,20 @@ EN: dict[str, str] = {
     "Korrektur aus: wieder wie Intiface.": "Correction off: as Intiface again.",
     "Ergebnis kopieren": "Copy result",
     "Kein Gerät verbunden.": "No device connected.",
+    "Tempo-Test": "Tempo test",
+    "Tempo-Test…": "Tempo test…",
+    "Wie schnell der F21S bei welcher Tiefe noch sauber fährt; schnellere Stellen werden dann kürzer statt zu zappeln":
+        "How fast the F21S still runs cleanly at which depth; faster parts are then made shorter instead of juddering",
+    "Hubbereich 0 bis 100 einstellen, Tiefe wählen, Start. Das Gerät fährt immer schneller; drück die Leertaste, sobald es zappelt oder nicht mehr ganz durchfährt. Das letzte saubere Tempo wird gespeichert, schnellere Stellen fährt es danach kürzer.":
+        "Set the stroke range to 0 to 100, pick a depth, Start. The device gets faster and faster; press Space as soon as it judders or no longer goes all the way. The last clean tempo is saved, faster parts are then driven shorter.",
+    "Tiefe {0} % ({1} Stufen)": "Depth {0} % ({1} steps)",
+    "Zappelt (Leertaste)": "Juddering (Space)",
+    "Grenzen zurücksetzen": "Reset limits",
+    "Wieder nur die schnellste Stufe der Intiface-Tabelle als Grenze": "Back to just the fastest step of the Intiface table as the limit",
+    "{0} Hübe/min: Leertaste, sobald es zappelt": "{0} strokes/min: Space as soon as it judders",
+    "Gespeichert: höchstens {0} Hübe/min bei dieser Tiefe. Nächste Tiefe wählen und Start.":
+        "Saved: at most {0} strokes/min at this depth. Pick the next depth and Start.",
+    "Grenzen zurückgesetzt: wieder wie die Intiface-Tabelle.": "Limits reset: back to the Intiface table.",
     "Langsame Hübe": "Slow strokes",
     "Schnelle Hübe": "Fast strokes",
     "Nur Hübe bis 1 s: sagt sie so viel länger an. Hilft, wenn das Gerät am Ende schneller Hübe kurz stehen bleibt (der F21S nimmt sonst die nächst schnellere Stufe)":

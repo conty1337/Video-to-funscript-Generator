@@ -202,7 +202,7 @@ def test_buttplug_connect_scan_move_stop(intiface):
     assert wait_for(lambda: any(n == "StopDeviceCmd" for n, _ in intiface.received))
     linear = [b for n, b in intiface.received if n == "LinearCmd"][-1]
     assert linear["DeviceIndex"] == 3
-    assert linear["Vectors"] == [{"Index": 0, "Duration": 400, "Position": 0.75}]
+    assert linear["Vectors"] == [{"Index": 0, "Duration": 400, "Position": round(11.5 / 15, 4)}]  # F21S: step 12 exactly
     dev.disconnect()
     assert not dev.connected
     assert any("Fredorch Device" in m for m in msgs)

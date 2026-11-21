@@ -584,6 +584,16 @@ Einstellungen im Gerätefenster:
   Intifaces Werten zum Vergleich. Neu gemessene Stufen ersetzen beim Übernehmen nur ihre eigenen Werte (Stufe 10 oder 9
   dann wieder mitmessen). **Korrektur aus** stellt auf Intifaces Wahl zurück (die Messwerte bleiben). „Ergebnis kopieren“ gibt Messwerte, Reaktionszeit,
   Faktoren und die gewählte Stufe für Hübe von 0,5 bis 6 s als Text.
+- **Tempo-Test…**: wie schnell der F21S bei welcher Tiefe (100, 75, 50, 25 %) noch
+  sauber fährt. Das Gerät wird stufenweise schneller; Leertaste drücken, sobald es
+  zappelt oder nicht mehr ganz durchfährt, das letzte saubere Tempo wird gespeichert.
+  Abspielen, Muster und alles andere verlangen danach nie mehr: Ein zu schneller Hub
+  wird stattdessen kürzer gefahren. Ohne Test gilt die schnellste Stufe der
+  Intiface-Tabelle (voller Hub in 200 ms, 150 Hübe/min). **Grenzen zurücksetzen** stellt
+  das wieder her.
+- **F21S-Positionen**: Das Gerät kennt nur 16 Positionen. Hübe werden nach außen
+  gerundet (nach oben auf-, nach unten abgerundet), damit sie ihr Ende erreichen;
+  Bewegungen unter etwa 3 % bleiben stehen, damit Zittern keine Hübe wird.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt
 das Gerät sofort. Nach Start oder Spulen fährt es zuerst langsam zur aktuellen

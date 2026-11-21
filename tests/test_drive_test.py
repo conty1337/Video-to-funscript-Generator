@@ -94,3 +94,35 @@ def test_correction_is_off_while_measuring(tmp_path, monkeypatch):
     assert dev.fred_factors == factors                                      # back on
     d.done(0)
     app.processEvents()
+
+
+def test_tempo_test_saves_last_clean_tempo(tmp_path):
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    from vtf.device import SimulatedDevice
+    from vtf.device.sync import ScriptSync
+    from vtf.gui.drive_test import PER_LEVEL, TEMPO_START, TEMPO_STEP, TempoTestDialog, limits_report
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    class Ctl:
+        device = SimulatedDevice()
+        sync = ScriptSync()
+        saved: dict = {8: 200.0}
+
+        def fred_limits(self):
+            return dict(self.saved)
+
+        def set_fred_limits(self, f):
+            Ctl.saved = dict(f)
+    Ctl.device.connect()
+    d = TempoTestDialog(Ctl())
+    d.depth.setCurrentIndex(d.depth.findData(15))
+    d.start()
+    for _ in range(2 * PER_LEVEL + 1):          # two levels, then the third starts
+        d._stroke()
+    assert d.bpm == TEMPO_START + 2 * TEMPO_STEP
+    assert [round(c[0]) for c in Ctl.device.commands[:3]] == [0, 100, 0]
+    d.tap()                                     # juddering now: the level before was clean
+    assert Ctl.saved == {8: 200.0, 15: 30_000 / (TEMPO_START + TEMPO_STEP)} and d.depth.currentData() == 11
+    assert " 70" in d.summary.toPlainText() and "150" in limits_report({})
+    d.done(0)
+    app.processEvents()
