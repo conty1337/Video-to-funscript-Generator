@@ -78,6 +78,18 @@ def test_slow_strokes_announced_shorter():
     assert abs(dev.commands[-1][1] - 490) <= 1
 
 
+def test_fast_strokes_announced_longer():
+    sync, dev, clock = make(STROKES, max_speed=0, stretch_pct=20)
+    play(sync, 0, 480)
+    sync.tick(510, True)                 # 490 ms -> told 588
+    assert abs(dev.commands[-1][1] - 588) <= 2
+    slow = [Action(0, 0), Action(3000, 100), Action(6000, 0)]
+    sync, dev, clock = make(slow, max_speed=0, stretch_pct=20)
+    play(sync, 0, 2980)
+    sync.tick(3010, True)                # slow strokes untouched
+    assert abs(dev.commands[-1][1] - 2990) <= 2
+
+
 def test_offset_sends_earlier():
     sync, dev, clock = make(STROKES, max_speed=0, offset_ms=100)
     play(sync, 0, 880)                  # t = media + 100

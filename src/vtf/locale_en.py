@@ -214,6 +214,9 @@ EN: dict[str, str] = {
     "Ergebnis kopieren": "Copy result",
     "Kein Gerät verbunden.": "No device connected.",
     "Langsame Hübe": "Slow strokes",
+    "Schnelle Hübe": "Fast strokes",
+    "Nur Hübe bis 1 s: sagt sie so viel länger an. Hilft, wenn das Gerät am Ende schneller Hübe kurz stehen bleibt (der F21S nimmt sonst die nächst schnellere Stufe)":
+        "Only strokes up to 1 s: announces them this much longer. Helps when the device stops briefly at the end of fast strokes (the F21S takes the next faster step otherwise)",
     "Nur Hübe über 1 s: + sagt sie kürzer an, wenn das Gerät dort hinterherhängt (der F21S ist in langsamen Stufen langsamer als Intiface annimmt), − länger, wenn es zu früh ist":
         "Only strokes over 1 s: + announces them shorter when the device lags there (the F21S is slower in its slow steps than Intiface assumes), − longer when it is early",
     "Stil: {0}": "Style: {0}",
@@ -1917,8 +1920,8 @@ EN: dict[str, str] = {
         "Timeline",
     "Zeitversatz":
         "Time offset",
-    "Zeitversatz, Tempo, langsame Hübe, Hubbereich, Richtung und Vibration auf Standard":
-        "Time offset, tempo, slow strokes, stroke range, direction and vibration to default",
+    "Zeitversatz, Tempo, langsame und schnelle Hübe, Hubbereich, Richtung und Vibration auf Standard":
+        "Time offset, tempo, slow and fast strokes, stroke range, direction and vibration to default",
     "Ziel":
         "Target",
     "Zittern":

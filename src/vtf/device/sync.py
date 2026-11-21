@@ -33,6 +33,8 @@ class SyncSettings:
     invert: bool = False
     max_speed: float = 500.0   # position units per second (F21S: 100 in ~200 ms)
     slow_pct: int = 0          # >0: slow strokes announced shorter (device slower than told), <0 longer
+    stretch_pct: int = 0       # fast strokes (up to SLOW_FROM_MS) announced this much longer: devices
+                               # with speed steps (F21S) take the next faster one and wait otherwise
 
     def map(self, pos: float) -> float:
         p = 100 - pos if self.invert else pos
@@ -123,6 +125,8 @@ class ScriptSync:
         duration = max(1, int(target.at - t))
         if s.slow_pct and duration > SLOW_FROM_MS:
             duration = SLOW_FROM_MS + (duration - SLOW_FROM_MS) * (100 - s.slow_pct) // 100
+        elif s.stretch_pct and duration <= SLOW_FROM_MS:
+            duration = duration * (100 + s.stretch_pct) // 100
         self._command(s.map(self._shape(target.pos, t)), duration)
 
     # ------------------------------------------------------------ helpers

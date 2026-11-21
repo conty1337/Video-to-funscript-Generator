@@ -571,6 +571,8 @@ Einstellungen im Gerätefenster:
   annimmt. Mit − länger, falls ein Gerät dort zu früh ist. Eine kleine Pause am
   Hubende ist beim F21S normal (nur 20 Geschwindigkeitsstufen).
 - **Richtung umkehren**.
+- **Schnelle Hübe** (0–30 %, Standard 0): gilt nur für Hübe bis 1 s und sagt sie so viel
+  länger an. Gegen die kurze Pause am Ende schneller Hübe beim F21S (etwa 10 %).
 - **Fahrtest…**: Stoppuhr für die Geschwindigkeitsstufen des F21S. Eine Stufe
   wählen, das Gerät fährt volle Hübe, und bei jeder Ankunft die Leertaste drücken;
   am besten alle Stufen von 10 bis 1. Stufe 10 und 9 dienen als Vergleich (dort stimmt
@@ -578,8 +580,9 @@ Einstellungen im Gerätefenster:
   berechnet pro Stufe, wie viel langsamer sie in echt ist, und speichert das. Beim
   Abspielen nimmt die App dann für jeden Hub die langsamste Stufe, die laut echter
   Zeit noch rechtzeitig ankommt, damit langsame Hübe nicht mehr nachhängen.
-  Neu gemessene Stufen ersetzen beim Übernehmen nur ihre eigenen Werte (Stufe 10 oder 9
-  dann wieder mitmessen). **Korrektur aus** stellt zurück. „Ergebnis kopieren“ gibt Messwerte, Reaktionszeit,
+  Die Messwerte bleiben gespeichert und stehen beim nächsten Öffnen wieder da, neben
+  Intifaces Werten zum Vergleich. Neu gemessene Stufen ersetzen beim Übernehmen nur ihre eigenen Werte (Stufe 10 oder 9
+  dann wieder mitmessen). **Korrektur aus** stellt auf Intifaces Wahl zurück (die Messwerte bleiben). „Ergebnis kopieren“ gibt Messwerte, Reaktionszeit,
   Faktoren und die gewählte Stufe für Hübe von 0,5 bis 6 s als Text.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt

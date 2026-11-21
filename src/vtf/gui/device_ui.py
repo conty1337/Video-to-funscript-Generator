@@ -82,7 +82,7 @@ class DeviceController(QObject):
     def _load_sync(self) -> SyncSettings:
         s = SyncSettings()
         for key, typ in (("offset_ms", int), ("pos_min", int), ("pos_max", int), ("max_speed", float),
-                         ("slow_pct", int)):
+                         ("slow_pct", int), ("stretch_pct", int)):
             v = self.qs.value(f"device/{key}")
             if v is not None:
                 try:
@@ -154,7 +154,7 @@ class DeviceController(QObject):
 
     def save_sync(self) -> None:
         s = self.sync.settings
-        for key in ("offset_ms", "pos_min", "pos_max", "max_speed", "slow_pct", "invert"):
+        for key in ("offset_ms", "pos_min", "pos_max", "max_speed", "slow_pct", "stretch_pct", "invert"):
             self.qs.setValue(f"device/{key}", getattr(s, key))
 
     # ------------------------------------------------------------ connection
@@ -234,7 +234,7 @@ class DeviceController(QObject):
             main = self.sync.settings
             for sync in self.axis_syncs.values():
                 sync.settings.offset_ms, sync.settings.max_speed = main.offset_ms, main.max_speed
-                sync.settings.slow_pct = main.slow_pct
+                sync.settings.slow_pct, sync.settings.stretch_pct = main.slow_pct, main.stretch_pct
                 sync.tick(media_ms, playing)
         except DeviceError as e:
             self.message.emit(tr("Fehler: {0}", e))
@@ -381,7 +381,7 @@ class DeviceDialog(QDialog):
 
         lay.addSpacing(16)
         lay.addWidget(theme.section_title(tr("Wiedergabe"), self.reset_playback,
-                                          tr("Zeitversatz, Tempo, langsame Hübe, Hubbereich, Richtung und Vibration auf Standard")))
+                                          tr("Zeitversatz, Tempo, langsame und schnelle Hübe, Hubbereich, Richtung und Vibration auf Standard")))
         f = QFormLayout()
         f.setHorizontalSpacing(12)
         f.setVerticalSpacing(12)
@@ -395,6 +395,9 @@ class DeviceDialog(QDialog):
         self.slow = self._slider(-50, 50, s.slow_pct, " %")
         self.slow[1].setToolTip(tr("Nur Hübe über 1 s: + sagt sie kürzer an, wenn das Gerät dort hinterherhängt (der F21S ist in langsamen Stufen langsamer als Intiface annimmt), − länger, wenn es zu früh ist"))
         f.addRow(self._label(tr("Langsame Hübe")), self.slow[0])
+        self.stretch = self._slider(0, 30, s.stretch_pct, " %")
+        self.stretch[1].setToolTip(tr("Nur Hübe bis 1 s: sagt sie so viel länger an. Hilft, wenn das Gerät am Ende schneller Hübe kurz stehen bleibt (der F21S nimmt sonst die nächst schnellere Stufe)"))
+        f.addRow(self._label(tr("Schnelle Hübe")), self.stretch[0])
         rng = QWidget()
         rl = QHBoxLayout(rng)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -474,8 +477,9 @@ class DeviceDialog(QDialog):
         self.up_btn.clicked.connect(lambda: ctl.test_move(100))
         self.down_btn.clicked.connect(lambda: ctl.test_move(0))
         self.stop_btn.clicked.connect(ctl.emergency_stop)
-        for w in (self.offset[1], self.speed[1], self.slow[1]):
+        for w in (self.offset[1], self.speed[1], self.slow[1], self.stretch[1]):
             w.valueChanged.connect(self._apply)
+        theme.double_click_reset(self.stretch[1], SyncSettings().stretch_pct)
         theme.double_click_reset(self.slow[1], SyncSettings().slow_pct)
         theme.double_click_reset(self.offset[1], SyncSettings().offset_ms)
         theme.double_click_reset(self.speed[1], int(SyncSettings().max_speed))
@@ -541,7 +545,7 @@ class DeviceDialog(QDialog):
     def reset_playback(self):
         d = SyncSettings()
         for w, v in ((self.offset[1], d.offset_ms), (self.speed[1], int(d.max_speed)),
-                     (self.slow[1], d.slow_pct), (self.pmin, d.pos_min),
+                     (self.slow[1], d.slow_pct), (self.stretch[1], d.stretch_pct), (self.pmin, d.pos_min),
                      (self.pmax, d.pos_max)):
             w.setValue(v)
         self.invert.setChecked(d.invert)
@@ -553,6 +557,7 @@ class DeviceDialog(QDialog):
         s.offset_ms = self.offset[1].value()
         s.max_speed = float(self.speed[1].value())
         s.slow_pct = self.slow[1].value()
+        s.stretch_pct = self.stretch[1].value()
         s.pos_min, s.pos_max = self.pmin.value(), self.pmax.value()
         s.invert = self.invert.isChecked()
         self.ctl.save_sync()

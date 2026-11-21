@@ -534,14 +534,18 @@ Settings in the device window:
   longer, if a device is early there. A short pause at the end of a stroke is
   normal on the F21S (only 20 speed steps).
 - **Reverse direction**.
+- **Fast strokes** (0–30 %, default 0): only for strokes up to 1 s, announces them
+  this much longer. Against the short pause at the end of fast strokes on the F21S
+  (about 10 %).
 - **Drive test…**: stopwatch for the F21S speed steps. Pick a step, the device
   drives full strokes, and press Space at every arrival; ideally all steps from 10
   to 1. Steps 10 and 9 serve as reference (Intiface's table is right there), and the
   reaction time is taken off. **Apply** works out how much slower each step really
   is and saves it. Playback then takes, for every stroke, the slowest step that
   still arrives in time by its real speed, so slow strokes no longer lag.
-  Steps measured again replace only their own values on Apply (measure step 10 or 9
-  along again). **Correction off** goes back. “Copy result” gives measurements, reaction time,
+  The measurements are saved and show again next time, next to Intiface's values
+  for comparison. Steps measured again replace only their own values on Apply (measure step 10 or 9
+  along again). **Correction off** goes back to Intiface's choice (the measurements stay). “Copy result” gives measurements, reaction time,
   factors and the step picked for strokes of 0.5 to 6 s as text.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
