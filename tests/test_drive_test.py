@@ -1,24 +1,24 @@
-"""Drive test: the planned strokes and the copied report."""
+"""Drive test (stopwatch): the step asked for and the copied report."""
 import pytest
 
 
-def test_plan_and_report():
+def test_sent_duration_picks_the_step_and_report():
     pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
-    from vtf.gui.drive_test import LEAD_MS, STROKES, plan, report
-    p = plan(1000, 2000)
-    assert p[0][1] == 0 and len(p) == STROKES + 1
-    assert [x[1] for x in p[1:]] == [100.0, 0.0] * (STROKES // 2)
-    assert all(x[2] == 2000 for x in p[1:])
-    assert [x[0] for x in p[1:3]] == [1000 + LEAD_MS, 1000 + LEAD_MS + 2000]
-    assert report({2000: ("früh", True), 500: ("ok", False)}) == \
-        "500 ms: ok, NICHT ganz durch\n2000 ms: früh, ganz durch"
+    from vtf.gui.drive_test import FULL_STROKE_MS, report, sent_ms
+    times = sorted(FULL_STROKE_MS.values(), reverse=True)
+    for step, t in FULL_STROKE_MS.items():
+        # the driver takes the slowest step whose table time is below the duration
+        assert next(tt for tt in times if tt < sent_ms(step)) == t
+    assert report({6: [2900, 3100], 9: [1000.4]}) == (
+        "Stufe 9: Intiface 878 ms, gemessen 1000 ms (1000)\n"
+        "Stufe 6: Intiface 1930 ms, gemessen 3000 ms (2900, 3100)")
 
 
-def test_dialog_drives_the_device():
+def test_dialog_measures_taps():
     QtWidgets = pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from vtf.device import SimulatedDevice
     from vtf.device.sync import ScriptSync
-    from vtf.gui.drive_test import DriveTestDialog
+    from vtf.gui.drive_test import ROUNDS, DriveTestDialog, sent_ms
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     class Ctl:
@@ -26,14 +26,17 @@ def test_dialog_drives_the_device():
         sync = ScriptSync()
     Ctl.device.connect()
     d = DriveTestDialog(Ctl())
-    d.duration.setCurrentIndex(0)                 # 0.5 s
+    d.step.setCurrentIndex(d.step.findData(6))
     d.start()
-    d._todo = [(t - 10**6, p, ms) for t, p, ms in d._todo]   # all due now
-    d._tick()
-    assert [round(c[0]) for c in Ctl.device.commands] == [0, 100, 0, 100, 0, 100, 0]
-    d.verdict.setCurrentIndex(1)
-    d.full.setChecked(False)
-    d.take()
-    assert d.results == {500: ("früh", False)} and d.duration.currentData() == 1000
+    d.tap()                                   # not running yet: ignored
+    assert d._times == []
+    d.lead.stop()
+    d._stroke()
+    for _ in range(ROUNDS):
+        d.tap()
+    assert len(d.results[6]) == ROUNDS and d.step.currentData() == 5
+    cmds = Ctl.device.commands
+    assert [round(c[0]) for c in cmds] == [0, 100, 0, 100, 0]
+    assert all(c[1] >= sent_ms(6) for c in cmds[1:])
     d.done(0)
     app.processEvents()
