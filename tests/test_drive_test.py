@@ -52,11 +52,45 @@ def test_dialog_measures_taps(tmp_path):
     assert all(c[1] >= sent_ms(6) for c in cmds[1:])
     Ctl.saved = {4: 1.3, 6: 9.9}               # from an earlier session
     d.take()                                  # no reference step yet: still a factor from 0 reaction
-    assert Ctl.saved[4] == 1.3 and Ctl.saved[6] != 9.9 and "Übernommen: 4:1.30, 6:" in d.summary.text()
+    assert Ctl.saved[4] == 1.3 and Ctl.saved[6] != 9.9 and "Übernommen: 4:1.30, 6:" in d.summary.toPlainText()
     d.clear()
-    assert Ctl.saved == {} and "Übernommen: nein" in d.summary.text()
+    assert Ctl.saved == {} and "Übernommen: nein" in d.summary.toPlainText()
     d.done(0)
     again = DriveTestDialog(Ctl())               # measurements come back next time
-    assert set(again.results) == {6} and "Stufe" in again.summary.text()
+    assert set(again.results) == {6} and "Stufe" in again.summary.toPlainText()
     again.done(0)
+    app.processEvents()
+
+
+def test_correction_is_off_while_measuring(tmp_path, monkeypatch):
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+    from PySide6 import QtCore, QtWidgets
+    from vtf.device.buttplug import ButtplugDevice, RemoteDevice
+    from vtf.device.sync import ScriptSync
+    from vtf.gui.drive_test import DriveTestDialog, sent_ms
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    dev = ButtplugDevice()
+    sent = []
+    dev._device = lambda: RemoteDevice(3, "Fredorch Device", 1, 15)
+    dev._send = sent.append
+    monkeypatch.setattr(ButtplugDevice, "connected", property(lambda self: True))
+    factors = {s: 1.5 for s in range(1, 9)}
+    dev.fred_factors = dict(factors)
+
+    class Ctl:
+        device = dev
+        sync = ScriptSync()
+        qs = QtCore.QSettings(str(tmp_path / "s.ini"), QtCore.QSettings.IniFormat)
+
+        def fred_factors(self):
+            return dict(factors)
+    d = DriveTestDialog(Ctl())
+    d.step.setCurrentIndex(d.step.findData(6))
+    d.start()
+    d.lead.stop()
+    d._stroke()
+    assert sent[-1]["LinearCmd"]["Vectors"][0]["Duration"] == sent_ms(6)   # plain step 6
+    d.stop()
+    assert dev.fred_factors == factors                                      # back on
+    d.done(0)
     app.processEvents()

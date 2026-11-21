@@ -10,7 +10,8 @@ from statistics import mean
 
 from PySide6.QtCore import QElapsedTimer, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
+                               QVBoxLayout)
 
 from ..device import fredorch
 from ..i18n import dec, tr
@@ -56,6 +57,7 @@ class DriveTestDialog(QDialog):
         super().__init__(parent)
         self.ctl = ctl
         self.setWindowTitle(tr("Fahrtest"))
+        self.resize(760, 820)
         self.results = self._load()           # earlier measurements stay for comparison
         lay = QVBoxLayout(self)
         lay.setContentsMargins(24, 20, 24, 20)
@@ -77,16 +79,17 @@ class DriveTestDialog(QDialog):
         row.addWidget(stop)
         lay.addLayout(row)
         self.tap_btn = QPushButton(tr("Angekommen (Leertaste)"))
-        self.tap_btn.setStyleSheet("min-height: 120px; font-size: 16px;")   # big target to hit
+        self.tap_btn.setStyleSheet("min-height: 80px; font-size: 16px;")   # big target to hit
         self.tap_btn.clicked.connect(self.tap)
-        lay.addWidget(self.tap_btn, 1)
+        lay.addWidget(self.tap_btn)
         QShortcut(QKeySequence(Qt.Key_Space), self, self.tap)
         self.state = QLabel()
         self.state.setObjectName("meta")
         lay.addWidget(self.state)
-        self.summary = QLabel()
+        self.summary = QPlainTextEdit(readOnly=True)       # scrolls, and the text can be selected
         self.summary.setFont(theme.mono_font(12))
-        lay.addWidget(self.summary)
+        self.summary.setMinimumHeight(300)
+        lay.addWidget(self.summary, 2)
         btns = QHBoxLayout()
         take = QPushButton(tr("Übernehmen"))
         take.setToolTip(tr("Aus den Messungen eine Korrektur pro Stufe berechnen, speichern und beim Abspielen nutzen"))
@@ -106,7 +109,7 @@ class DriveTestDialog(QDialog):
         self._times: list[float] = []
         self._pos = 0.0
         if self.results:
-            self.summary.setText(self._report())
+            self.summary.setPlainText(self._report())
 
     @property
     def device(self):
@@ -122,6 +125,8 @@ class DriveTestDialog(QDialog):
             self.state.setText(tr("Kein Gerät verbunden."))
             return
         self.ctl.sync.stop()
+        if hasattr(self.device, "fred_factors"):
+            self.device.fred_factors = {}          # measure the plain steps, not the correction
         self._times, self._pos, self._sent_at = [], 0.0, None
         self._move(0.0, LEAD_MS - 1000)
         self.state.setText(tr("Fährt nach unten…"))
@@ -144,7 +149,7 @@ class DriveTestDialog(QDialog):
             return
         self.results[self.step.currentData()] = self._times
         self._save()
-        self.summary.setText(self._report())
+        self.summary.setPlainText(self._report())
         self.state.setText(tr("Fertig. Nächste Stufe wählen und Start."))
         self.step.setCurrentIndex(min(self.step.count() - 1, self.step.currentIndex() + 1))
 
@@ -172,16 +177,18 @@ class DriveTestDialog(QDialog):
             return
         saved = self.ctl.fred_factors() if hasattr(self.ctl, "fred_factors") else {}
         self.ctl.set_fred_factors({**saved, **factors})     # steps measured again replace only their own
-        self.summary.setText(self._report())
+        self.summary.setPlainText(self._report())
         self.state.setText(tr("Korrektur übernommen, gilt ab jetzt beim Abspielen."))
 
     def clear(self):
         self.ctl.set_fred_factors({})
-        self.summary.setText(self._report())
+        self.summary.setPlainText(self._report())
         self.state.setText(tr("Korrektur aus: wieder wie Intiface."))
 
     def stop(self):
         self.lead.stop()
+        if hasattr(self.device, "fred_factors") and hasattr(self.ctl, "fred_factors"):
+            self.device.fred_factors = self.ctl.fred_factors()      # correction back on
         self._sent_at = None
         self.state.setText("")
         if self.device is not None:
