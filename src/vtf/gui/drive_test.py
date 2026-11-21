@@ -153,7 +153,8 @@ class DriveTestDialog(QDialog):
         if not factors:
             self.state.setText(tr("Erst langsame Stufen messen (und Stufe 10 oder 9 als Vergleich)."))
             return
-        self.ctl.set_fred_factors(factors)
+        saved = self.ctl.fred_factors() if hasattr(self.ctl, "fred_factors") else {}
+        self.ctl.set_fred_factors({**saved, **factors})     # steps measured again replace only their own
         self.summary.setText(self._report())
         self.state.setText(tr("Korrektur übernommen, gilt ab jetzt beim Abspielen."))
 

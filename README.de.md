@@ -578,7 +578,8 @@ Einstellungen im Gerätefenster:
   berechnet pro Stufe, wie viel langsamer sie in echt ist, und speichert das. Beim
   Abspielen nimmt die App dann für jeden Hub die langsamste Stufe, die laut echter
   Zeit noch rechtzeitig ankommt, damit langsame Hübe nicht mehr nachhängen.
-  **Korrektur aus** stellt zurück. „Ergebnis kopieren“ gibt Messwerte, Reaktionszeit,
+  Neu gemessene Stufen ersetzen beim Übernehmen nur ihre eigenen Werte (Stufe 10 oder 9
+  dann wieder mitmessen). **Korrektur aus** stellt zurück. „Ergebnis kopieren“ gibt Messwerte, Reaktionszeit,
   Faktoren und die gewählte Stufe für Hübe von 0,5 bis 6 s als Text.
 
 **Sicherheit:** Bei Pause, Spulen, Schließen und mit **Esc (Not-Aus)** stoppt

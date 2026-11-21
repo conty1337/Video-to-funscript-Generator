@@ -47,8 +47,9 @@ def test_dialog_measures_taps():
     cmds = Ctl.device.commands
     assert [round(c[0]) for c in cmds] == [0, 100, 0, 100, 0]
     assert all(c[1] >= sent_ms(6) for c in cmds[1:])
+    Ctl.saved = {4: 1.3, 6: 9.9}               # from an earlier session
     d.take()                                  # no reference step yet: still a factor from 0 reaction
-    assert set(Ctl.saved) == {6} and "Übernommen: 6:" in d.summary.text()
+    assert Ctl.saved[4] == 1.3 and Ctl.saved[6] != 9.9 and "Übernommen: 4:1.30, 6:" in d.summary.text()
     d.clear()
     assert Ctl.saved == {} and "Übernommen: nein" in d.summary.text()
     d.done(0)
