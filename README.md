@@ -557,6 +557,11 @@ Settings in the device window:
   (up rounds up, down rounds down) so they reach their ends; moves up to the
   **F21S threshold** (Playback, default 3 %) stay put so jitter does not become
   strokes. Lower follows small moves too (may judder), higher is calmer.
+- **Shorten, don't wait** (Playback, 0 to 4 steps, default off): with only 20 speeds a
+  slow stroke often arrives early and stands still at the end. The app then drives
+  it up to this many steps (about 6.7 % each) shorter at a slower step that fits
+  the time better, so it keeps moving. It only shortens when that saves real
+  waiting; for some stroke lengths no slower step fits either way.
 
 **Safety:** on pause, seeking, closing and with **Esc (emergency stop)** the
 device stops at once. After a start or a seek it first moves slowly to the

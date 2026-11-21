@@ -81,3 +81,23 @@ def test_buttplug_limits_and_rounds(monkeypatch):
     dev.fred_limits = None                                     # tempo test: no limit
     dev.move(0, 50)
     assert dev._fred_step == 0
+
+
+def test_shorten_instead_of_wait():
+    f = {8: 1.02, 7: 1.23, 6: 1.47, 5: 1.23, 4: 1.03, 3: 1.04, 2: 0.81, 1: 0.96}   # the user's F21S
+    assert round(fredorch.wait_ms(15, 2200, f)) == 650                    # step 8, then it stands
+    assert fredorch.shorten(15, 2200, f, 2) == 14                         # step 7 fits: 41 ms left
+    assert fredorch.shorten(15, 2200, f, 0) == 15                         # off
+    assert fredorch.shorten(15, 1600, f, 4) == 15                         # 50 ms wait: not worth depth
+    assert fredorch.shorten(1, 5000, f, 4) == 1                           # never below one step
+
+
+def test_buttplug_shortens(monkeypatch):
+    from vtf.device.buttplug import ButtplugDevice, RemoteDevice
+    dev = ButtplugDevice()
+    monkeypatch.setattr(dev, "_device", lambda: RemoteDevice(3, "Fredorch Device", 1, 15))
+    monkeypatch.setattr(dev, "_send", lambda m: None)
+    dev.fred_factors = {8: 1.02, 7: 1.23}
+    dev.fred_shorten = 2
+    dev.move(100, 2200)
+    assert dev._fred_step == 14

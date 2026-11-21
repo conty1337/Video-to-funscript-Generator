@@ -26,6 +26,7 @@ from statistics import mean
 
 POSITIONS = 15            # steps 0..15
 REFERENCE_STEPS = (10, 9)  # the table is right for these (drive test): they show the reaction time
+SHORTEN_COST_MS = 50       # "shorten instead of wait": a step less must save at least this much waiting
 HOLD_PCT = 3               # default: moves up to this (% of the range) stay put, so jitter does not become strokes
 
 # travel time in ms per distance (1..15 steps, rows) and speed (1..20, columns)
@@ -110,6 +111,26 @@ def factors_from(measured: dict[int, list[float]]) -> tuple[float, dict[int, flo
 
 def real_ms(distance: int, speed: int, factors: dict[int, float]) -> float:
     return SPEED_MATRIX[distance - 1][speed - 1] * factors.get(speed, 1.0)
+
+
+def wait_ms(distance: int, duration_ms: int, factors: dict[int, float]) -> float:
+    """How long the device stands at the end: duration minus the slowest real time that fits
+    (0 if none fits, then it goes flat out)."""
+    fits = [t for t in (real_ms(distance, s, factors) for s in range(1, 21)) if t <= duration_ms]
+    return duration_ms - max(fits) if fits else 0.0
+
+
+def shorten(distance: int, duration_ms: int, factors: dict[int, float], max_steps: int) -> int:
+    """Distance to drive: up to `max_steps` shorter if a slower speed then arrives with less
+    standing still (each step less costs SHORTEN_COST_MS, so depth is not given up for nothing)."""
+    best, score = distance, wait_ms(distance, duration_ms, factors) if distance else 0.0
+    for d in range(distance - 1, max(0, distance - max_steps) - 1, -1):
+        if d < 1:
+            break
+        s = wait_ms(d, duration_ms, factors) + SHORTEN_COST_MS * (distance - d)
+        if s < score:
+            best, score = d, s
+    return best
 
 
 def pick(distance: int, duration_ms: int, factors: dict[int, float]) -> tuple[int, int]:
