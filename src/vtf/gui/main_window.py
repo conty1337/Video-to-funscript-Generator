@@ -1421,6 +1421,8 @@ class MainWindow(QMainWindow):
             self.pause()
             self._video_ended()
             return
+        if self.timer.isActive():             # device first: decoding below would delay its command
+            self.devices.tick(media_ms, True)
         behind = target - self._cur_idx
         if behind > 30:                       # far behind (slow decoder): jump
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, target)
@@ -1432,7 +1434,6 @@ class MainWindow(QMainWindow):
             self._read_frame()
         if self.timer.isActive():
             self.audio.sync(media_ms)
-            self.devices.tick(media_ms, True)
             self.rail.set_device_position(self.devices.device_position())
 
     def toggle_play(self):
