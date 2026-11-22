@@ -15,6 +15,8 @@ Hubbereich frei, Hand am Schalter. Abbruch jederzeit mit Strg+C.
     python tools/f21s_raw_test.py --demo        # feste Folge: 0, 150, 70, 80, 75, 73, 77, 0
     python tools/f21s_raw_test.py               # selbst eingeben: "75 5" = Position 75, Stufe 5
                                                 # "r 6b 5" = 5 Register ab 0x6B lesen (Rückmeldung?)
+                                                # "scan" = Register 0x00..0x7F lesen; bei zwei Positionen
+                                                # vergleichen: was sich ändert, könnte die echte Position sein
 """
 
 from __future__ import annotations
@@ -85,11 +87,14 @@ async def run(args) -> None:
             while not answers.empty():
                 answers.get_nowait()
             await client.write_gatt_char(TX, data, response=False)
-            try:
+            ans = b""
+            try:          # Bluetooth liefert höchstens 20 Bytes am Stück: alle Teile einsammeln
                 ans = await asyncio.wait_for(answers.get(), 0.5)
-                print(f"  {label}: gesendet {data.hex(' ')}  Antwort {ans.hex(' ')}")
+                while True:
+                    ans += await asyncio.wait_for(answers.get(), 0.15)
             except asyncio.TimeoutError:
-                print(f"  {label}: gesendet {data.hex(' ')}  (keine Antwort)")
+                pass
+            print(f"  {label}: gesendet {data.hex(' ')}  " + (f"Antwort {ans.hex(' ')}" if ans else "(keine Antwort)"))
 
         for label, data in INIT:
             await send(label, frame(data))
@@ -100,7 +105,7 @@ async def run(args) -> None:
                 print(f"    → steht er bei {pos / 1.5:.0f} % des Wegs? ({DEMO_PAUSE_S:.0f} s)")
                 await asyncio.sleep(DEMO_PAUSE_S)
             return
-        print('Eingabe: "Position Stufe" (z.B. 75 5), "r REG ANZAHL" (hex REG, z.B. r 6b 5), q = Ende')
+        print('Eingabe: "Position Stufe" (z.B. 75 5), "r REG ANZAHL" (hex REG, z.B. r 6b 5), "scan", q = Ende')
         loop = asyncio.get_running_loop()
         while True:
             line = (await loop.run_in_executor(None, input, "> ")).strip().lower()
@@ -108,7 +113,10 @@ async def run(args) -> None:
                 break
             try:
                 parts = line.split()
-                if parts[0] == "r":
+                if parts[0] == "scan":
+                    for reg in range(0, 0x80, 8):
+                        await send(f"Register {reg:02x}", read(reg, 8))
+                elif parts[0] == "r":
                     await send("Lesen", read(int(parts[1], 16), int(parts[2]) if len(parts) > 2 else 1))
                 else:
                     await send("Fahren", move(int(parts[0]), int(parts[1]) if len(parts) > 1 else DEMO_SPEED))
