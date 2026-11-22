@@ -17,6 +17,8 @@ Hubbereich frei, Hand am Schalter. Abbruch jederzeit mit Strg+C.
                                                 # "r 6b 5" = 5 Register ab 0x6B lesen (Rückmeldung?)
                                                 # "scan" = Register 0x00..0x7F lesen; bei zwei Positionen
                                                 # vergleichen: was sich ändert, könnte die echte Position sein
+                                                # "w 150 5" = fahren und dabei Register 0x58 (Zähler, wohl die
+                                                # echte Position) und 0x54 (unten?) laufend mitlesen
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ TX = "0000ffb1-0000-1000-8000-00805f9b34fb"     # schreiben
 RX = "0000ffb2-0000-1000-8000-00805f9b34fb"     # Antworten (Benachrichtigungen)
 DEMO = (0, 150, 70, 80, 75, 73, 77, 0)
 DEMO_SPEED, DEMO_PAUSE_S = 5, 4.0
+POS_REG, HOME_REG = 0x58, 0x54      # aus dem Scan: Zähler wächst mit dem Weg / 1 nur unten
+WATCH_S = 8.0
 
 INIT = (   # wie Intiface beim Verbinden
     ("Programm-Modus", [0x01, 0x06, 0x00, 0x64, 0x00, 0x01]),
@@ -96,6 +100,28 @@ async def run(args) -> None:
                 pass
             print(f"  {label}: gesendet {data.hex(' ')}  " + (f"Antwort {ans.hex(' ')}" if ans else "(keine Antwort)"))
 
+        async def regs(reg: int, count: int) -> list[int] | None:
+            """Register schnell lesen (für das Mitlesen während der Fahrt)."""
+            while not answers.empty():
+                answers.get_nowait()
+            await client.write_gatt_char(TX, read(reg, count), response=False)
+            ans, need = b"", 5 + 2 * count
+            try:
+                while len(ans) < need:
+                    ans += await asyncio.wait_for(answers.get(), 0.3)
+            except asyncio.TimeoutError:
+                return None
+            return [int.from_bytes(ans[3 + 2 * i:5 + 2 * i], "big") for i in range(count)]
+
+        async def watch(pos: int, speed: int) -> None:
+            await send(f"Fahren {pos}, Stufe {speed}", move(pos, speed))
+            t0 = loop.time()
+            print("    Zeit ms   0x58   0x54")
+            while loop.time() - t0 < WATCH_S:
+                p, h = await regs(POS_REG, 1), await regs(HOME_REG, 1)
+                print(f"    {(loop.time() - t0) * 1000:7.0f}  {p[0] if p else '?':>5}  {h[0] if h else '?':>5}")
+
+        loop = asyncio.get_running_loop()
         for label, data in INIT:
             await send(label, frame(data))
         await asyncio.sleep(3)              # zur Position 0
@@ -105,15 +131,17 @@ async def run(args) -> None:
                 print(f"    → steht er bei {pos / 1.5:.0f} % des Wegs? ({DEMO_PAUSE_S:.0f} s)")
                 await asyncio.sleep(DEMO_PAUSE_S)
             return
-        print('Eingabe: "Position Stufe" (z.B. 75 5), "r REG ANZAHL" (hex REG, z.B. r 6b 5), "scan", q = Ende')
-        loop = asyncio.get_running_loop()
+        print('Eingabe: "Position Stufe" (z.B. 75 5), "r REG ANZAHL" (hex REG, z.B. r 6b 5), "scan", '
+              '"w Position Stufe" (fahren und mitlesen), q = Ende')
         while True:
             line = (await loop.run_in_executor(None, input, "> ")).strip().lower()
             if line in ("q", "quit", "exit", ""):
                 break
             try:
                 parts = line.split()
-                if parts[0] == "scan":
+                if parts[0] == "w":
+                    await watch(int(parts[1]), int(parts[2]) if len(parts) > 2 else DEMO_SPEED)
+                elif parts[0] == "scan":
                     for reg in range(0, 0x80, 8):
                         await send(f"Register {reg:02x}", read(reg, 8))
                 elif parts[0] == "r":
