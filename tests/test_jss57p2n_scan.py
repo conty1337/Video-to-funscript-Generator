@@ -81,8 +81,26 @@ def test_parse_checks_everything():
     assert "Länge" in scan.parse(good, 1, 3, 3).error
     assert scan.parse(b"", 1, 3, 1).error == "keine Antwort"
     exc = bytes((1, 0x83, 2))
-    r = scan.parse(exc + scan.crc16(exc), 1, 3, 1)
+    ok = exc + scan.crc16(exc)
+    r = scan.parse(ok, 1, 3, 1)
     assert r.exception == 2 and r.answered
+
+
+def test_error_reply_counts_only_when_valid():
+    """Only a correct Modbus error reply counts as "found" in the search, not any bytes."""
+    def answered(raw, slave=1, func=3):
+        return scan.parse(raw, slave, func, 1).answered
+    exc = bytes((1, 0x83, 2))
+    ok = exc + scan.crc16(exc)
+    assert answered(ok)
+    assert not answered(ok[:-1] + bytes((ok[-1] ^ 1,)))       # CRC wrong
+    assert not answered(ok + b"\x00")                         # extra byte
+    assert not answered(ok[:4])                                # cut off
+    assert not answered(ok, slave=2)                           # other slave
+    assert not answered(ok, func=4)                            # error for another function
+    other = bytes((1, 0x84, 2))
+    assert not answered(other + scan.crc16(other), func=3)
+    assert not answered(bytes((0xFF, 0x00, 0x13, 0x37, 0x42)))  # line noise
 
 
 def test_search_scan_and_compare_read_only():

@@ -92,7 +92,10 @@ def parse(raw: bytes, slave: int, func: int, count: int) -> Reply:
     """Antwort prüfen: Adresse, Funktion, Länge und CRC."""
     if not raw:
         return Reply(error="keine Antwort")
-    if len(raw) >= 5 and raw[0] == slave and raw[1] == func | 0x80:
+    if len(raw) >= 2 and raw[0] == slave and raw[1] == func | 0x80:
+        # Fehlerantwort: genau Adresse, Funktion|0x80, Fehlercode, CRC (5 Bytes), sonst kein Treffer
+        if len(raw) != 5:
+            return Reply(error=f"Fehlerantwort mit falscher Länge ({len(raw)} statt 5 Bytes)")
         if crc16(raw[:3]) != raw[3:5]:
             return Reply(error="Fehlerantwort mit falscher CRC")
         return Reply(exception=raw[2])
